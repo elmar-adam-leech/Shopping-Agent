@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Store, ArrowRight, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { StoreDomainInput } from "@/components/ui/store-domain-input";
 
 export default function InstallPage() {
   const [shop, setShop] = useState("");
@@ -52,16 +52,13 @@ export default function InstallPage() {
           <form onSubmit={handleInstall} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="shop">Shopify Store Domain</Label>
-              <div className="flex items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm overflow-hidden focus-within:ring-2 focus-within:ring-primary/20">
-                <Input
-                  id="shop"
-                  placeholder="your-store"
-                  value={shop}
-                  onChange={(e) => { setShop(e.target.value); setValidationError(""); }}
-                  className="border-0 pl-4 py-6 text-base bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
-                />
-                <span className="pr-4 text-muted-foreground text-sm font-medium whitespace-nowrap select-none">.myshopify.com</span>
-              </div>
+              <StoreDomainInput
+                id="shop"
+                value={shop}
+                onChange={(e) => { setShop(e.target.value); setValidationError(""); }}
+                className="border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm focus-within:ring-primary/20"
+                inputClassName="pl-4 py-6 text-base"
+              />
               {validationError && (
                 <p className="text-sm text-red-500">{validationError}</p>
               )}

@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { Store as StoreIcon, Plus, ArrowRight, Settings, MessageSquare, Activity, LogIn } from "lucide-react";
 import { useListStores } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { StoreDomainInput } from "@/components/ui/store-domain-input";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
@@ -85,16 +86,12 @@ export default function HomePage() {
               Enter your store domain to access the admin dashboard.
             </p>
             <form onSubmit={handleLogin} className="w-full space-y-4">
-              <div className="flex items-center w-full rounded-xl border border-border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-primary/50">
-                <input
-                  type="text"
-                  value={loginDomain}
-                  onChange={e => setLoginDomain(e.target.value)}
-                  placeholder="your-store"
-                  className="flex-1 px-4 py-3 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none border-0"
-                />
-                <span className="pr-4 text-muted-foreground text-sm font-medium whitespace-nowrap select-none">.myshopify.com</span>
-              </div>
+              <StoreDomainInput
+                value={loginDomain}
+                onChange={e => setLoginDomain(e.target.value)}
+                className="w-full border-border bg-background focus-within:ring-primary/50"
+                inputClassName="text-foreground placeholder:text-muted-foreground"
+              />
               {loginError && (
                 <p className="text-sm text-red-500">{loginError}</p>
               )}
