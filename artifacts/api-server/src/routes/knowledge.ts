@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, shopKnowledgeTable } from "@workspace/db";
+import type { ShopKnowledge } from "@workspace/db/schema";
 import {
   CreateKnowledgeBody,
   CreateKnowledgeParams,
@@ -16,6 +17,8 @@ import { validateStoreDomain } from "../services/tenant-validator";
 
 const router: IRouter = Router();
 
+type KnowledgeCategory = ShopKnowledge["category"];
+
 router.get("/stores/:storeDomain/knowledge", validateStoreDomain, async (req, res): Promise<void> => {
   const params = ListKnowledgeParams.safeParse(req.params);
   if (!params.success) {
@@ -25,12 +28,10 @@ router.get("/stores/:storeDomain/knowledge", validateStoreDomain, async (req, re
 
   const query = ListKnowledgeQueryParams.safeParse(req.query);
 
-  let conditions = eq(shopKnowledgeTable.storeDomain, params.data.storeDomain);
-
   const entries = await db
     .select()
     .from(shopKnowledgeTable)
-    .where(conditions)
+    .where(eq(shopKnowledgeTable.storeDomain, params.data.storeDomain))
     .orderBy(shopKnowledgeTable.sortOrder);
 
   const filtered = query.success && query.data.category
@@ -57,7 +58,7 @@ router.post("/stores/:storeDomain/knowledge", validateStoreDomain, async (req, r
     .insert(shopKnowledgeTable)
     .values({
       storeDomain: params.data.storeDomain,
-      category: parsed.data.category as any,
+      category: parsed.data.category as KnowledgeCategory,
       title: parsed.data.title,
       content: parsed.data.content,
       sortOrder: parsed.data.sortOrder ?? 0,
@@ -80,8 +81,8 @@ router.patch("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain,
     return;
   }
 
-  const updateData: any = {};
-  if (parsed.data.category !== undefined) updateData.category = parsed.data.category;
+  const updateData: Partial<Pick<ShopKnowledge, "category" | "title" | "content" | "sortOrder">> = {};
+  if (parsed.data.category !== undefined) updateData.category = parsed.data.category as KnowledgeCategory;
   if (parsed.data.title !== undefined) updateData.title = parsed.data.title;
   if (parsed.data.content !== undefined) updateData.content = parsed.data.content;
   if (parsed.data.sortOrder !== undefined) updateData.sortOrder = parsed.data.sortOrder;

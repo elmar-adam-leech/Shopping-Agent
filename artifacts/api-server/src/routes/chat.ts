@@ -1,13 +1,23 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, storesTable, conversationsTable, shopKnowledgeTable, analyticsLogsTable } from "@workspace/db";
+import type { Conversation } from "@workspace/db/schema";
 import { SendChatParams, SendChatBody } from "@workspace/api-zod";
-import { streamChatWithProvider } from "../services/llm-service";
-import { listTools, callTool } from "../services/mcp-client";
+import { streamChatWithProvider, type LLMStreamEvent } from "../services/llm-service";
+import { listTools, callTool, type MCPTool } from "../services/mcp-client";
 import { buildSystemPrompt } from "../services/system-prompt";
 import { validateStoreDomain } from "../services/tenant-validator";
 
 const router: IRouter = Router();
+
+interface ChatMessageRecord {
+  role: "user" | "assistant" | "tool";
+  content: string;
+  toolCallId?: string;
+  toolCalls?: Array<{ id: string; name: string; arguments: string }>;
+  toolResults?: Array<{ toolCallId: string; content: string }>;
+  timestamp: string;
+}
 
 router.post("/stores/:storeDomain/chat", validateStoreDomain, async (req, res): Promise<void> => {
   const params = SendChatParams.safeParse(req.params);
@@ -22,7 +32,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, async (req, res): 
     return;
   }
 
-  const store = (req as any).store as typeof storesTable.$inferSelect;
+  const store = req.store!;
 
   if (!store.apiKey) {
     res.status(400).json({ error: "Store has no LLM API key configured. Please add one in settings." });
@@ -48,8 +58,8 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, async (req, res): 
 
     const systemPrompt = buildSystemPrompt(store.storeDomain, knowledge);
 
-    let conversation: any = null;
-    let existingMessages: any[] = [];
+    let conversation: Conversation | null = null;
+    let existingMessages: ChatMessageRecord[] = [];
 
     if (parsed.data.conversationId) {
       const [conv] = await db
@@ -64,7 +74,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, async (req, res): 
         );
       if (conv) {
         conversation = conv;
-        existingMessages = (conv.messages as any[]) || [];
+        existingMessages = (conv.messages as ChatMessageRecord[]) || [];
       }
     }
 
@@ -82,8 +92,8 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, async (req, res): 
       conversation = newConv;
     }
 
-    const userMessage = {
-      role: "user" as const,
+    const userMessage: ChatMessageRecord = {
+      role: "user",
       content: parsed.data.message,
       timestamp: new Date().toISOString(),
     };
@@ -92,22 +102,22 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, async (req, res): 
 
     res.write(`data: ${JSON.stringify({ type: "conversation_id", data: conversation.id })}\n\n`);
 
-    let tools: any[] = [];
+    let tools: MCPTool[] = [];
     try {
       tools = await listTools(store.storeDomain, store.storefrontToken);
     } catch {
       // tools will be empty, chat continues without MCP tools
     }
 
-    const llmMessages = existingMessages.map((m: any) => ({
+    const llmMessages = existingMessages.map((m) => ({
       role: m.role,
       content: m.content,
       tool_call_id: m.toolCallId,
     }));
 
     let fullAssistantContent = "";
-    const toolCalls: any[] = [];
-    const toolResults: any[] = [];
+    const toolCalls: Array<{ id: string; name: string; arguments: string }> = [];
+    const toolResults: Array<{ toolCallId: string; content: string }> = [];
 
     const stream = streamChatWithProvider(
       store.provider,
@@ -116,7 +126,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, async (req, res): 
       systemPrompt,
       llmMessages,
       tools,
-      async (toolName, args) => {
+      async (toolName: string, args: Record<string, unknown>) => {
         return callTool(store.storeDomain, store.storefrontToken!, toolName, args);
       }
     );
@@ -127,14 +137,14 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, async (req, res): 
       if (event.type === "text") {
         fullAssistantContent += event.data;
       } else if (event.type === "tool_call") {
-        toolCalls.push(event.data);
+        toolCalls.push(event.data as { id: string; name: string; arguments: string });
       } else if (event.type === "tool_result") {
-        toolResults.push(event.data);
+        toolResults.push(event.data as { toolCallId: string; content: string });
       }
     }
 
-    const assistantMessage = {
-      role: "assistant" as const,
+    const assistantMessage: ChatMessageRecord = {
+      role: "assistant",
       content: fullAssistantContent,
       toolCalls,
       toolResults,
@@ -154,7 +164,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, async (req, res): 
       query: parsed.data.message.slice(0, 500),
       sessionId: parsed.data.sessionId,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Chat error:", err);
     res.write(`data: ${JSON.stringify({ type: "error", data: "An error occurred processing your message" })}\n\n`);
   } finally {

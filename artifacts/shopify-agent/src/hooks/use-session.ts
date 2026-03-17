@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import { useCreateSession } from '@workspace/api-client-react';
 
 export function useSession(storeDomain: string) {
@@ -11,22 +10,23 @@ export function useSession(storeDomain: string) {
 
     const initSession = async () => {
       const storageKey = `shopify_agent_session_${storeDomain}`;
-      let currentSessionId = localStorage.getItem(storageKey);
+      const currentSessionId = localStorage.getItem(storageKey);
 
-      if (!currentSessionId) {
-        currentSessionId = uuidv4();
-        try {
-          await createSessionApi({ data: { storeDomain } });
-          localStorage.setItem(storageKey, currentSessionId);
-          setSessionId(currentSessionId);
-        } catch (error) {
-          console.error('[Session] Failed to register session with backend', error);
-          // Fallback to local session if backend fails
-          localStorage.setItem(storageKey, currentSessionId);
-          setSessionId(currentSessionId);
-        }
-      } else {
+      if (currentSessionId) {
         setSessionId(currentSessionId);
+        return;
+      }
+
+      try {
+        const response = await createSessionApi({ data: { storeDomain } });
+        const newSessionId = (response as { sessionId: string }).sessionId;
+        localStorage.setItem(storageKey, newSessionId);
+        setSessionId(newSessionId);
+      } catch (error) {
+        console.error('[Session] Failed to create session', error);
+        const fallbackId = crypto.randomUUID();
+        localStorage.setItem(storageKey, fallbackId);
+        setSessionId(fallbackId);
       }
     };
 

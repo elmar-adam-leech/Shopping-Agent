@@ -13,6 +13,8 @@ const SCOPES = "unauthenticated_read_product_listings,unauthenticated_read_colle
 const pendingStates = new Map<string, { shop: string; createdAt: number }>();
 const STATE_TTL_MS = 10 * 60 * 1000;
 
+const SHOPIFY_DOMAIN_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$/;
+
 function cleanExpiredStates() {
   const now = Date.now();
   for (const [key, value] of pendingStates) {
@@ -30,8 +32,13 @@ router.get("/auth/install", async (req, res): Promise<void> => {
     return;
   }
 
-  if (!SHOPIFY_API_KEY || !APP_URL) {
-    res.status(500).json({ error: "Shopify app not configured. Set SHOPIFY_API_KEY and APP_URL." });
+  if (!SHOPIFY_DOMAIN_PATTERN.test(shop)) {
+    res.status(400).json({ error: "Invalid shop domain. Must be a valid .myshopify.com domain." });
+    return;
+  }
+
+  if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET || !APP_URL) {
+    res.status(500).json({ error: "Shopify app not configured. Set SHOPIFY_API_KEY, SHOPIFY_API_SECRET, and APP_URL." });
     return;
   }
 
@@ -53,6 +60,16 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!SHOPIFY_DOMAIN_PATTERN.test(shop)) {
+    res.status(400).json({ error: "Invalid shop domain format" });
+    return;
+  }
+
+  if (!SHOPIFY_API_SECRET) {
+    res.status(500).json({ error: "SHOPIFY_API_SECRET is required for OAuth callback" });
+    return;
+  }
+
   const pendingState = pendingStates.get(state);
   if (!pendingState || pendingState.shop !== shop) {
     res.status(403).json({ error: "Invalid or expired OAuth state" });
@@ -60,25 +77,27 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
   }
   pendingStates.delete(state);
 
-  if (SHOPIFY_API_SECRET) {
-    const params = { ...req.query } as Record<string, string>;
-    delete params.hmac;
-    const sortedParams = Object.keys(params)
-      .sort()
-      .map((key) => `${key}=${params[key]}`)
-      .join("&");
-    const digest = crypto
-      .createHmac("sha256", SHOPIFY_API_SECRET)
-      .update(sortedParams)
-      .digest("hex");
+  const params = { ...req.query } as Record<string, string>;
+  delete params.hmac;
+  const sortedParams = Object.keys(params)
+    .sort()
+    .map((key) => `${key}=${params[key]}`)
+    .join("&");
+  const digest = crypto
+    .createHmac("sha256", SHOPIFY_API_SECRET)
+    .update(sortedParams)
+    .digest("hex");
 
-    if (digest !== hmac) {
-      res.status(403).json({ error: "HMAC verification failed" });
-      return;
-    }
+  if (digest !== hmac) {
+    res.status(403).json({ error: "HMAC verification failed" });
+    return;
   }
 
   try {
+    interface TokenResponse {
+      access_token: string;
+    }
+
     const tokenResponse = await fetch(`https://${shop}/admin/oauth/access_token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -94,7 +113,7 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
       return;
     }
 
-    const tokenData = (await tokenResponse.json()) as { access_token: string };
+    const tokenData = (await tokenResponse.json()) as TokenResponse;
 
     const existing = await db
       .select()
@@ -115,8 +134,8 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
       });
     }
 
-    res.redirect(`/?installed=${encodeURIComponent(shop)}`);
-  } catch (err: any) {
+    res.redirect(`/${encodeURIComponent(shop)}/settings`);
+  } catch (err: unknown) {
     console.error("OAuth callback error:", err);
     res.status(500).json({ error: "OAuth callback failed" });
   }

@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import { db, storesTable } from "@workspace/db";
+import type { Store } from "@workspace/db/schema";
 import {
   CreateStoreBody,
   UpdateStoreBody,
@@ -14,7 +15,9 @@ import {
 
 const router: IRouter = Router();
 
-function storeToResponse(store: typeof storesTable.$inferSelect) {
+type ProviderValue = "openai" | "anthropic" | "xai";
+
+function storeToResponse(store: Store) {
   return {
     storeDomain: store.storeDomain,
     storefrontToken: store.storefrontToken,
@@ -52,7 +55,7 @@ router.post("/stores", async (req, res): Promise<void> => {
     .values({
       storeDomain: parsed.data.storeDomain,
       storefrontToken: parsed.data.storefrontToken,
-      provider: parsed.data.provider as any,
+      provider: parsed.data.provider as ProviderValue,
       model: parsed.data.model,
       apiKey: parsed.data.apiKey,
     })
@@ -94,9 +97,9 @@ router.patch("/stores/:storeDomain", async (req, res): Promise<void> => {
     return;
   }
 
-  const updateData: any = {};
+  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey">> = {};
   if (parsed.data.storefrontToken !== undefined) updateData.storefrontToken = parsed.data.storefrontToken;
-  if (parsed.data.provider !== undefined) updateData.provider = parsed.data.provider;
+  if (parsed.data.provider !== undefined) updateData.provider = parsed.data.provider as ProviderValue;
   if (parsed.data.model !== undefined) updateData.model = parsed.data.model;
   if (parsed.data.apiKey !== undefined) updateData.apiKey = parsed.data.apiKey;
 

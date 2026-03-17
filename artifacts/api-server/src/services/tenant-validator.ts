@@ -1,6 +1,15 @@
 import type { Request, Response, NextFunction } from "express";
 import { db, storesTable } from "@workspace/db";
+import type { Store } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
+
+declare global {
+  namespace Express {
+    interface Request {
+      store?: Store;
+    }
+  }
+}
 
 export async function validateStoreDomain(
   req: Request,
@@ -32,6 +41,6 @@ export async function validateStoreDomain(
     return;
   }
 
-  (req as any).store = store;
+  req.store = store;
   next();
 }
