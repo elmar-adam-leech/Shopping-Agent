@@ -1,3 +1,4 @@
+import React from "react";
 import { Sparkles } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import ReactMarkdown from 'react-markdown';
@@ -14,7 +15,7 @@ export interface ChatMessageDisplay {
   toolResults?: Array<{ toolCallId: string; content: string }>;
 }
 
-export function MessageBubble({ message }: { message: ChatMessageDisplay }) {
+function MessageBubbleInner({ message }: { message: ChatMessageDisplay }) {
   const isUser = message.role === 'user';
   
   return (
@@ -69,3 +70,33 @@ export function MessageBubble({ message }: { message: ChatMessageDisplay }) {
     </div>
   );
 }
+
+export const MessageBubble = React.memo(MessageBubbleInner, (prevProps, nextProps) => {
+  const prev = prevProps.message;
+  const next = nextProps.message;
+  if (
+    prev.role !== next.role ||
+    prev.content !== next.content ||
+    prev.timestamp !== next.timestamp ||
+    prev.toolCalls?.length !== next.toolCalls?.length ||
+    prev.toolResults?.length !== next.toolResults?.length
+  ) {
+    return false;
+  }
+  if (prev.toolCalls && next.toolCalls) {
+    for (let i = 0; i < prev.toolCalls.length; i++) {
+      const p = prev.toolCalls[i];
+      const n = next.toolCalls[i];
+      if (p.id !== n.id || p.name !== n.name || p.arguments !== n.arguments) return false;
+    }
+  }
+  if (prev.toolResults && next.toolResults) {
+    for (let i = 0; i < prev.toolResults.length; i++) {
+      if (
+        prev.toolResults[i].toolCallId !== next.toolResults[i].toolCallId ||
+        prev.toolResults[i].content !== next.toolResults[i].content
+      ) return false;
+    }
+  }
+  return true;
+});

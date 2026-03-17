@@ -1,19 +1,21 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Loader2 } from "lucide-react";
 
-import HomePage from "./pages/home";
-import InstallPage from "./pages/install";
-import SettingsPage from "./pages/settings";
-import ChatPage from "./pages/chat";
-import AnalyticsPage from "./pages/analytics";
-import ShopForMePage from "./pages/shop-for-me";
-import EmbedChatPage from "./pages/embed-chat";
-import EmbedSearchPage from "./pages/embed-search";
-import EmbedAssistantPage from "./pages/embed-assistant";
-import EmbedProductPage from "./pages/embed-product";
-import NotFound from "./pages/not-found";
+const HomePage = lazy(() => import("./pages/home"));
+const InstallPage = lazy(() => import("./pages/install"));
+const SettingsPage = lazy(() => import("./pages/settings"));
+const ChatPage = lazy(() => import("./pages/chat"));
+const AnalyticsPage = lazy(() => import("./pages/analytics"));
+const ShopForMePage = lazy(() => import("./pages/shop-for-me"));
+const EmbedChatPage = lazy(() => import("./pages/embed-chat"));
+const EmbedSearchPage = lazy(() => import("./pages/embed-search"));
+const EmbedAssistantPage = lazy(() => import("./pages/embed-assistant"));
+const EmbedProductPage = lazy(() => import("./pages/embed-product"));
+const NotFound = lazy(() => import("./pages/not-found"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,21 +27,31 @@ const queryClient = new QueryClient({
   },
 });
 
+function PageLoader() {
+  return (
+    <div className="flex h-screen items-center justify-center">
+      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+    </div>
+  );
+}
+
 function Router() {
   return (
-    <Switch>
-      <Route path="/embed/:storeDomain/chat" component={EmbedChatPage} />
-      <Route path="/embed/:storeDomain/search" component={EmbedSearchPage} />
-      <Route path="/embed/:storeDomain/assistant" component={EmbedAssistantPage} />
-      <Route path="/embed/:storeDomain/product/:productHandle" component={EmbedProductPage} />
-      <Route path="/" component={HomePage} />
-      <Route path="/install" component={InstallPage} />
-      <Route path="/:storeDomain/settings" component={SettingsPage} />
-      <Route path="/:storeDomain/chat" component={ChatPage} />
-      <Route path="/:storeDomain/analytics" component={AnalyticsPage} />
-      <Route path="/shop/:storeDomain" component={ShopForMePage} />
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<PageLoader />}>
+      <Switch>
+        <Route path="/embed/:storeDomain/chat" component={EmbedChatPage} />
+        <Route path="/embed/:storeDomain/search" component={EmbedSearchPage} />
+        <Route path="/embed/:storeDomain/assistant" component={EmbedAssistantPage} />
+        <Route path="/embed/:storeDomain/product/:productHandle" component={EmbedProductPage} />
+        <Route path="/" component={HomePage} />
+        <Route path="/install" component={InstallPage} />
+        <Route path="/:storeDomain/settings" component={SettingsPage} />
+        <Route path="/:storeDomain/chat" component={ChatPage} />
+        <Route path="/:storeDomain/analytics" component={AnalyticsPage} />
+        <Route path="/shop/:storeDomain" component={ShopForMePage} />
+        <Route component={NotFound} />
+      </Switch>
+    </Suspense>
   );
 }
 

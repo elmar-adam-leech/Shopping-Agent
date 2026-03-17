@@ -55,7 +55,7 @@
   var currentAbortController = null;
   var destroyed = false;
 
-  var SESSION_KEY = "mcp_chat_session_" + config.storeDomain;
+  var SESSION_KEY = "shopify_agent_session_" + config.storeDomain;
   var CONV_KEY = "mcp_chat_conv_" + config.storeDomain;
 
   function applyThemeColor(color) {
@@ -82,8 +82,10 @@
       var stored = localStorage.getItem(SESSION_KEY);
       if (stored) {
         var parsed = JSON.parse(stored);
-        if (parsed.sessionId && parsed.expiresAt && new Date(parsed.expiresAt) > new Date()) {
+        if (parsed.sessionId && parsed.createdAt && (Date.now() - parsed.createdAt) < 24 * 60 * 60 * 1000) {
           state.sessionId = parsed.sessionId;
+        } else {
+          localStorage.removeItem(SESSION_KEY);
         }
       }
       var convId = localStorage.getItem(CONV_KEY);
@@ -100,7 +102,7 @@
       if (state.sessionId) {
         localStorage.setItem(SESSION_KEY, JSON.stringify({
           sessionId: state.sessionId,
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          createdAt: Date.now()
         }));
       }
       if (state.conversationId) {

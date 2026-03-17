@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { CartPanel } from "@/components/chat/cart-panel";
@@ -44,29 +44,29 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handlePrefChange = async (key: string, value: string) => {
+  const handlePrefChange = useCallback(async (key: string, value: string) => {
     if (!sessionId) return;
     await updatePrefs({ storeDomain, data: { sessionId, prefs: { ...userPrefs, [key]: value } } });
-  };
+  }, [sessionId, storeDomain, updatePrefs, userPrefs]);
 
-  const handleSubmit = (e?: React.FormEvent) => {
+  const handleSubmit = useCallback((e?: React.FormEvent) => {
     e?.preventDefault();
     if (!input.trim() || isLoading) return;
     sendMessage(input);
     setInput("");
-  };
+  }, [input, isLoading, sendMessage]);
 
-  const startNewConversation = () => {
+  const startNewConversation = useCallback(() => {
     setActiveConversationId(null);
     loadMessages([]);
-  };
+  }, [loadMessages]);
 
-  const selectConversation = (conv: { id: number; messages: ChatMessageDisplay[] }) => {
+  const selectConversation = useCallback((conv: { id: number; messages: ChatMessageDisplay[] }) => {
     setActiveConversationId(conv.id);
     loadMessages(conv.messages || []);
-  };
+  }, [loadMessages]);
 
-  const handleDeleteConversation = async (convId: number) => {
+  const handleDeleteConversation = useCallback(async (convId: number) => {
     try {
       await deleteConversation(storeDomain, convId, {
         headers: { 'x-session-id': sessionId || '' },
@@ -76,7 +76,7 @@ export default function ChatPage() {
     } catch (err) {
       console.error("Failed to delete conversation", err);
     }
-  };
+  }, [storeDomain, sessionId, activeConversationId, startNewConversation, refetchConversations]);
 
   if (!sessionId) {
     return (

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import type { ChatMessage, ToolCall, ToolResult } from '@workspace/api-client-react';
 import { useCartStore } from '@/store/use-cart-store';
 import { readSSEStream } from '@/lib/sse-parser';
@@ -26,8 +26,18 @@ export function useChatStream({ storeDomain, sessionId, conversationId, context,
   const abortControllerRef = useRef<AbortController | null>(null);
   const cartStore = useCartStore();
 
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+    };
+  }, []);
+
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || !sessionId || !storeDomain) return;
+
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
 
     const userMessage: ChatMessage = {
       role: 'user',
@@ -39,7 +49,8 @@ export function useChatStream({ storeDomain, sessionId, conversationId, context,
     setIsLoading(true);
     setError(null);
 
-    abortControllerRef.current = new AbortController();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -56,7 +67,7 @@ export function useChatStream({ storeDomain, sessionId, conversationId, context,
           message: content,
           ...(context ? { context } : {}),
         }),
-        signal: abortControllerRef.current.signal
+        signal: controller.signal
       });
 
       if (!response.ok) {
@@ -115,7 +126,7 @@ export function useChatStream({ storeDomain, sessionId, conversationId, context,
             return newMessages;
           });
         },
-        abortControllerRef.current.signal
+        controller.signal
       );
       
       onSuccess?.();
@@ -128,8 +139,10 @@ export function useChatStream({ storeDomain, sessionId, conversationId, context,
         console.error('Chat error:', err);
       }
     } finally {
-      setIsLoading(false);
-      abortControllerRef.current = null;
+      if (abortControllerRef.current === controller) {
+        setIsLoading(false);
+        abortControllerRef.current = null;
+      }
     }
   }, [storeDomain, sessionId, conversationId, context, cartStore, onConversationId, onSuccess]);
 

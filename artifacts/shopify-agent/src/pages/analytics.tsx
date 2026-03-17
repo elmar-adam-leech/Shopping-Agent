@@ -4,21 +4,21 @@ import { useGetAnalytics } from "@workspace/api-client-react";
 import { MessageSquare, Users, TrendingUp, Loader2 } from "lucide-react";
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
 
+const emptyChartData = [
+  { date: 'Mon', count: 0 },
+  { date: 'Tue', count: 0 },
+  { date: 'Wed', count: 0 },
+  { date: 'Thu', count: 0 },
+  { date: 'Fri', count: 0 },
+  { date: 'Sat', count: 0 },
+  { date: 'Sun', count: 0 },
+];
+
 export default function AnalyticsPage() {
   const [, params] = useRoute("/:storeDomain/analytics");
   const storeDomain = params?.storeDomain || "";
   
   const { data, isLoading } = useGetAnalytics(storeDomain, { days: 7 });
-
-  const emptyChartData = [
-    { date: 'Mon', count: 0 },
-    { date: 'Tue', count: 0 },
-    { date: 'Wed', count: 0 },
-    { date: 'Thu', count: 0 },
-    { date: 'Fri', count: 0 },
-    { date: 'Sat', count: 0 },
-    { date: 'Sun', count: 0 },
-  ];
 
   if (isLoading) {
     return (
