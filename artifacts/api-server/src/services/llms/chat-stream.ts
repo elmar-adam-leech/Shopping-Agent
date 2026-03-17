@@ -1,36 +1,116 @@
-import OpenAI from "openai";
 import type { LLMMessage, LLMStreamEvent, MCPToolDef } from "./types";
 
-export async function* streamChatWithOpenAISDK(
+export interface SSEEvent {
+  event?: string;
+  data: string;
+  id?: string;
+}
+
+export async function* parseSSE(
+  stream: ReadableStream<Uint8Array>
+): AsyncGenerator<SSEEvent> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  let currentEvent: string | undefined;
+  let currentData: string[] = [];
+  let currentId: string | undefined;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      buffer = buffer.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line === "") {
+          if (currentData.length > 0) {
+            yield {
+              event: currentEvent,
+              data: currentData.join("\n"),
+              id: currentId,
+            };
+          }
+          currentEvent = undefined;
+          currentData = [];
+          currentId = undefined;
+        } else if (line.startsWith("event:")) {
+          currentEvent = line.slice(6).trim();
+        } else if (line.startsWith("data:")) {
+          const value = line.slice(5);
+          currentData.push(value.startsWith(" ") ? value.slice(1) : value);
+        } else if (line.startsWith("id:")) {
+          currentId = line.slice(3).trim();
+        }
+      }
+    }
+    if (currentData.length > 0) {
+      yield {
+        event: currentEvent,
+        data: currentData.join("\n"),
+        id: currentId,
+      };
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+export interface ProviderRequest {
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
+export interface ProviderAdapter {
+  formatRequest(
+    apiKey: string,
+    model: string,
+    systemPrompt: string,
+    messages: unknown[],
+    tools: MCPToolDef[]
+  ): ProviderRequest;
+
+  parseSSEEvent(event: SSEEvent): LLMStreamEvent[] | null;
+
+  isDone(event: SSEEvent): boolean;
+
+  formatMessages(
+    systemPrompt: string,
+    messages: LLMMessage[]
+  ): unknown[];
+
+  appendAssistantAndToolResults(
+    allMessages: unknown[],
+    assistantState: unknown,
+    toolResults: Array<{ id: string; content: string; error: boolean }>
+  ): void;
+
+  createAssistantState(): unknown;
+
+  accumulateAssistantState(state: unknown, event: SSEEvent): void;
+
+  getToolCalls(
+    state: unknown
+  ): Array<{ id: string; name: string; arguments: string }>;
+}
+
+export async function* streamChat(
+  adapter: ProviderAdapter,
   apiKey: string,
   model: string,
   systemPrompt: string,
   messages: LLMMessage[],
   tools: MCPToolDef[],
   onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>,
-  baseURL?: string,
   signal?: AbortSignal
 ): AsyncGenerator<LLMStreamEvent> {
-  const client = new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
-
-  const openaiTools = tools.map((t) => ({
-    type: "function" as const,
-    function: {
-      name: t.name,
-      description: t.description,
-      parameters: t.inputSchema,
-    },
-  }));
-
-  const allMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-    { role: "system", content: systemPrompt },
-    ...messages.map((m) => {
-      if (m.role === "tool") {
-        return { role: "tool" as const, content: m.content, tool_call_id: m.tool_call_id || "" };
-      }
-      return { role: m.role as "user" | "assistant", content: m.content };
-    }),
-  ];
+  const allMessages = adapter.formatMessages(systemPrompt, messages);
 
   let continueLoop = true;
 
@@ -38,64 +118,53 @@ export async function* streamChatWithOpenAISDK(
     if (signal?.aborted) return;
     continueLoop = false;
 
-    const stream = await client.chat.completions.create({
-      model,
-      messages: allMessages,
-      tools: openaiTools.length > 0 ? openaiTools : undefined,
-      stream: true,
-    }, { signal });
+    const req = adapter.formatRequest(apiKey, model, systemPrompt, allMessages, tools);
 
-    interface ToolCallAccumulator {
-      id: string;
-      function: { name: string; arguments: string };
+    const response = await fetch(req.url, {
+      method: "POST",
+      headers: req.headers,
+      body: req.body,
+      signal,
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      yield { type: "error", data: `API error ${response.status}: ${errorBody}` };
+      return;
     }
 
-    const currentToolCalls: ToolCallAccumulator[] = [];
-    let assistantContent = "";
+    if (!response.body) {
+      yield { type: "error", data: "No response body from API" };
+      return;
+    }
 
-    for await (const chunk of stream) {
+    const assistantState = adapter.createAssistantState();
+
+    for await (const sseEvent of parseSSE(response.body)) {
       if (signal?.aborted) return;
-      const delta = chunk.choices[0]?.delta;
-      if (!delta) continue;
+      if (adapter.isDone(sseEvent)) break;
 
-      if (delta.content) {
-        assistantContent += delta.content;
-        yield { type: "text", data: delta.content };
-      }
+      adapter.accumulateAssistantState(assistantState, sseEvent);
 
-      if (delta.tool_calls) {
-        for (const tc of delta.tool_calls) {
-          if (tc.index !== undefined) {
-            if (!currentToolCalls[tc.index]) {
-              currentToolCalls[tc.index] = { id: "", function: { name: "", arguments: "" } };
-            }
-            if (tc.id) currentToolCalls[tc.index].id = tc.id;
-            if (tc.function?.name) currentToolCalls[tc.index].function.name += tc.function.name;
-            if (tc.function?.arguments) currentToolCalls[tc.index].function.arguments += tc.function.arguments;
-          }
+      const events = adapter.parseSSEEvent(sseEvent);
+      if (events) {
+        for (const evt of events) {
+          yield evt;
         }
       }
     }
 
-    if (currentToolCalls.length > 0) {
-      allMessages.push({
-        role: "assistant",
-        content: assistantContent || null,
-        tool_calls: currentToolCalls.map((tc) => ({
-          id: tc.id,
-          type: "function" as const,
-          function: { name: tc.function.name, arguments: tc.function.arguments },
-        })),
-      });
+    const toolCalls = adapter.getToolCalls(assistantState);
 
-      for (const tc of currentToolCalls) {
-        yield { type: "tool_call", data: { id: tc.id, name: tc.function.name, arguments: tc.function.arguments } };
+    if (toolCalls.length > 0) {
+      for (const tc of toolCalls) {
+        yield { type: "tool_call", data: { id: tc.id, name: tc.name, arguments: tc.arguments } };
       }
 
-      const toolResultPromises = currentToolCalls.map(async (tc) => {
+      const toolResultPromises = toolCalls.map(async (tc) => {
         try {
-          const args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
-          const result = await onToolCall(tc.function.name, args);
+          const args = JSON.parse(tc.arguments) as Record<string, unknown>;
+          const result = await onToolCall(tc.name, args);
           return { id: tc.id, content: result, error: false };
         } catch (err: unknown) {
           const errorMsg = `Error: ${err instanceof Error ? err.message : "Unknown error"}`;
@@ -107,9 +176,9 @@ export async function* streamChatWithOpenAISDK(
 
       for (const result of toolResults) {
         yield { type: "tool_result", data: { toolCallId: result.id, content: result.content } };
-        allMessages.push({ role: "tool", tool_call_id: result.id, content: result.content });
       }
 
+      adapter.appendAssistantAndToolResults(allMessages, assistantState, toolResults);
       continueLoop = true;
     }
   }
