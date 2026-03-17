@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, desc } from "drizzle-orm";
-import { db, conversationsTable } from "@workspace/db";
+import { db, conversationsTable, sessionsTable } from "@workspace/db";
 import {
   ListConversationsParams,
   ListConversationsQueryParams,
@@ -24,6 +24,14 @@ function convToResponse(conv: typeof conversationsTable.$inferSelect) {
     createdAt: conv.createdAt,
     updatedAt: conv.updatedAt,
   };
+}
+
+function extractSessionId(req: import("express").Request): string | undefined {
+  return (
+    (req.query.sessionId as string | undefined) ||
+    (req.body?.sessionId as string | undefined) ||
+    (req.headers["x-session-id"] as string | undefined)
+  );
 }
 
 router.get("/stores/:storeDomain/conversations", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
@@ -60,6 +68,8 @@ router.get("/stores/:storeDomain/conversations/:conversationId", validateStoreDo
     return;
   }
 
+  const sessionId = extractSessionId(req);
+
   const [conv] = await db
     .select()
     .from(conversationsTable)
@@ -75,6 +85,27 @@ router.get("/stores/:storeDomain/conversations/:conversationId", validateStoreDo
     return;
   }
 
+  if (sessionId && conv.sessionId !== sessionId) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+
+  if (!sessionId) {
+    const [validSession] = await db
+      .select()
+      .from(sessionsTable)
+      .where(
+        and(
+          eq(sessionsTable.id, conv.sessionId),
+          eq(sessionsTable.storeDomain, params.data.storeDomain)
+        )
+      );
+    if (!validSession) {
+      res.status(403).json({ error: "Access denied" });
+      return;
+    }
+  }
+
   res.json(GetConversationResponse.parse(convToResponse(conv)));
 });
 
@@ -85,14 +116,31 @@ router.delete("/stores/:storeDomain/conversations/:conversationId", validateStor
     return;
   }
 
-  await db
-    .delete(conversationsTable)
+  const sessionId = extractSessionId(req);
+
+  const [conv] = await db
+    .select()
+    .from(conversationsTable)
     .where(
       and(
         eq(conversationsTable.id, params.data.conversationId),
         eq(conversationsTable.storeDomain, params.data.storeDomain)
       )
     );
+
+  if (!conv) {
+    res.status(404).json({ error: "Conversation not found" });
+    return;
+  }
+
+  if (sessionId && conv.sessionId !== sessionId) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
+
+  await db
+    .delete(conversationsTable)
+    .where(eq(conversationsTable.id, params.data.conversationId));
 
   res.sendStatus(204);
 });

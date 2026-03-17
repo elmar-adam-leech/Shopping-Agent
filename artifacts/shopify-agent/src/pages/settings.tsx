@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useRoute } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useGetStore, useUpdateStore, useListKnowledge, useCreateKnowledge, useDeleteKnowledge, useUpdateKnowledge } from "@workspace/api-client-react";
-import { Save, Key, Database, BookOpen, Trash2, Plus, GripVertical, Edit2, Check, X, Globe } from "lucide-react";
+import { Save, Key, Database, BookOpen, Trash2, Plus, ArrowUp, ArrowDown, Edit2, Check, X, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -242,11 +242,39 @@ function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
     }
   };
 
+  const handleReorder = async (categoryId: string, entryId: number, direction: 'up' | 'down') => {
+    const items = entriesByCategory[categoryId];
+    if (!items) return;
+    const idx = items.findIndex(i => i.id === entryId);
+    if (idx < 0) return;
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= items.length) return;
+
+    try {
+      await updateKnowledge({
+        storeDomain,
+        knowledgeId: entryId,
+        data: { sortOrder: items[swapIdx].sortOrder }
+      });
+      await updateKnowledge({
+        storeDomain,
+        knowledgeId: items[swapIdx].id,
+        data: { sortOrder: items[idx].sortOrder }
+      });
+      refetch();
+    } catch {
+      toast({ title: "Failed to reorder", variant: "destructive" });
+    }
+  };
+
   const entriesByCategory: Record<string, KnowledgeEntry[]> = {};
   if (knowledgeList) {
     for (const entry of knowledgeList as KnowledgeEntry[]) {
       if (!entriesByCategory[entry.category]) entriesByCategory[entry.category] = [];
       entriesByCategory[entry.category].push(entry);
+    }
+    for (const cat of Object.keys(entriesByCategory)) {
+      entriesByCategory[cat].sort((a, b) => a.sortOrder - b.sortOrder);
     }
   }
 
@@ -324,10 +352,23 @@ function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
                 </div>
                 
                 <div className="grid gap-3">
-                  {items.map((item) => (
+                  {items.map((item, itemIdx) => (
                     <div key={item.id} className="group flex gap-4 p-4 rounded-xl bg-secondary/20 border border-border/50 hover:border-primary/30 transition-colors">
-                      <div className="mt-1 cursor-grab text-muted-foreground/30 group-hover:text-muted-foreground transition-colors">
-                        <GripVertical className="w-5 h-5" />
+                      <div className="flex flex-col gap-0.5 mt-0.5">
+                        <button
+                          disabled={itemIdx === 0}
+                          onClick={() => handleReorder(cat.id, item.id, 'up')}
+                          className="p-0.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          disabled={itemIdx === items.length - 1}
+                          onClick={() => handleReorder(cat.id, item.id, 'down')}
+                          className="p-0.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                       <div className="flex-1">
                         {editingId === item.id ? (

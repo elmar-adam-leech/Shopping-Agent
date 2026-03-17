@@ -4,8 +4,8 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { CartPanel } from "@/components/chat/cart-panel";
 import { useSession } from "@/hooks/use-session";
 import { useChatStream } from "@/hooks/use-chat-stream";
-import { useListConversations, useDeleteConversation } from "@workspace/api-client-react";
-import { Send, Sparkles, Loader2, RefreshCw, ShoppingBag, MessageSquare, Plus, Trash2, Search, Tag, Package } from "lucide-react";
+import { useListConversations, useGetPreferences, useUpdatePreferences } from "@workspace/api-client-react";
+import { Send, Sparkles, Loader2, RefreshCw, ShoppingBag, MessageSquare, Plus, Trash2, Search, Tag, Package, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar } from "@/components/ui/avatar";
@@ -48,14 +48,31 @@ export default function ChatPage() {
   const conversations = sessionId ? conversationsResult.data : undefined;
   const refetchConversations = conversationsResult.refetch;
 
-  const { mutateAsync: deleteConversation } = useDeleteConversation();
-
   const { messages, isLoading, sendMessage, loadMessages } = useChatStream({
     storeDomain,
     sessionId: sessionId || "",
     conversationId: activeConversationId,
     onSuccess: () => refetchConversations()
   });
+
+  const [showPrefs, setShowPrefs] = useState(false);
+
+  const { data: prefsData } = useGetPreferences(
+    storeDomain,
+    { sessionId: sessionId || "" }
+  );
+  const { mutateAsync: updatePrefs } = useUpdatePreferences();
+
+  const userPrefs = (prefsData?.prefs || {}) as Record<string, string>;
+
+  const handlePrefChange = async (key: string, value: string) => {
+    if (!sessionId) return;
+    const updated = { ...userPrefs, [key]: value };
+    await updatePrefs({
+      storeDomain,
+      data: { sessionId, prefs: updated }
+    });
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -91,7 +108,10 @@ export default function ChatPage() {
 
   const handleDeleteConversation = async (convId: number) => {
     try {
-      await deleteConversation({ storeDomain, conversationId: convId });
+      await fetch(`/api/stores/${storeDomain}/conversations/${convId}`, {
+        method: 'DELETE',
+        headers: { 'x-session-id': sessionId || '' },
+      });
       if (activeConversationId === convId) {
         startNewConversation();
       }
@@ -155,14 +175,72 @@ export default function ChatPage() {
         <div className="flex-1 flex flex-col h-full bg-background/50 relative z-10">
           
           {/* Header */}
-          <div className="h-16 border-b border-border/50 flex items-center px-6 bg-background/80 backdrop-blur-md sticky top-0 z-20">
+          <div className="h-16 border-b border-border/50 flex items-center justify-between px-6 bg-background/80 backdrop-blur-md sticky top-0 z-20">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
                 <Sparkles className="w-4 h-4" />
               </div>
               <h2 className="font-bold text-sm">Shopping Assistant</h2>
             </div>
+            <Button variant="ghost" size="icon" onClick={() => setShowPrefs(!showPrefs)} className="rounded-lg" title="Preferences">
+              <Settings2 className="w-4 h-4" />
+            </Button>
           </div>
+
+          {showPrefs && (
+            <div className="border-b border-border/50 bg-card/80 backdrop-blur-sm px-6 py-4 space-y-3 animate-in slide-in-from-top-2 duration-200">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <Settings2 className="w-4 h-4 text-primary" /> Your Preferences
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Display Name</label>
+                  <input
+                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                    placeholder="Your name"
+                    defaultValue={userPrefs.displayName || ''}
+                    onBlur={(e) => handlePrefChange('displayName', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Preferred Units</label>
+                  <select
+                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                    defaultValue={userPrefs.units || 'imperial'}
+                    onChange={(e) => handlePrefChange('units', e.target.value)}
+                  >
+                    <option value="imperial">Imperial (ft, lbs)</option>
+                    <option value="metric">Metric (m, kg)</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Budget Range</label>
+                  <select
+                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                    defaultValue={userPrefs.budget || ''}
+                    onChange={(e) => handlePrefChange('budget', e.target.value)}
+                  >
+                    <option value="">No preference</option>
+                    <option value="budget">Budget-friendly</option>
+                    <option value="mid">Mid-range</option>
+                    <option value="premium">Premium</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Communication Style</label>
+                  <select
+                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                    defaultValue={userPrefs.style || 'friendly'}
+                    onChange={(e) => handlePrefChange('style', e.target.value)}
+                  >
+                    <option value="friendly">Friendly & Casual</option>
+                    <option value="professional">Professional</option>
+                    <option value="concise">Brief & Concise</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Messages Scroll Area */}
           <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-32">

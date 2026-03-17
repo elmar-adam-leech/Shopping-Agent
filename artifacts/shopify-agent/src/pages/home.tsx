@@ -26,10 +26,10 @@ export default function HomePage() {
             />
           </div>
           <h1 className="text-5xl md:text-6xl font-display font-extrabold tracking-tight text-foreground mb-6 animate-in slide-in-from-bottom-6 duration-700 fade-in">
-            Your Stores, <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">Supercharged</span>
+            Your Store, <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">Supercharged</span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 animate-in slide-in-from-bottom-8 duration-1000 fade-in">
-            Manage your AI Shopping Agents across multiple storefronts. Inject domain expertise and let AI drive your conversions.
+            Manage your AI Shopping Agents in your store. Inject domain expertise and let AI drive more conversions.
           </p>
           <div className="flex items-center justify-center gap-4 animate-in slide-in-from-bottom-10 duration-1000 fade-in">
             <Link href="/install">
