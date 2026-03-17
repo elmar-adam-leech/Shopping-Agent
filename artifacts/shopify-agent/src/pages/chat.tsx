@@ -52,6 +52,7 @@ export default function ChatPage() {
     storeDomain,
     sessionId: sessionId || "",
     conversationId: activeConversationId,
+    onConversationId: (id) => setActiveConversationId(id),
     onSuccess: () => refetchConversations()
   });
 

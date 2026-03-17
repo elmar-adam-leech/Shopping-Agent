@@ -71,7 +71,7 @@ export default function InstallPage() {
 
           <div className="pt-6 border-t border-border/50 flex items-center gap-3 text-xs text-muted-foreground">
             <ShieldCheck className="w-4 h-4 text-emerald-500" />
-            <span>Secure OAuth connection. We never store your Shopify password.</span>
+            <span>Secure OAuth connection; no password needed.</span>
           </div>
         </div>
       </div>

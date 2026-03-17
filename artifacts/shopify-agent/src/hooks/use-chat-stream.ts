@@ -6,10 +6,11 @@ interface UseChatStreamProps {
   storeDomain: string;
   sessionId: string;
   conversationId?: number | null;
+  onConversationId?: (id: number) => void;
   onSuccess?: () => void;
 }
 
-export function useChatStream({ storeDomain, sessionId, conversationId, onSuccess }: UseChatStreamProps) {
+export function useChatStream({ storeDomain, sessionId, conversationId, onConversationId, onSuccess }: UseChatStreamProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,8 +56,8 @@ export function useChatStream({ storeDomain, sessionId, conversationId, onSucces
       let assistantMessage = '';
       let currentToolCalls: ToolCall[] = [];
       let currentToolResults: ToolResult[] = [];
+      let sseBuffer = '';
 
-      // Add placeholder assistant message
       setMessages(prev => [
         ...prev, 
         { role: 'assistant', content: '', timestamp: new Date().toISOString() }
@@ -66,8 +67,9 @@ export function useChatStream({ storeDomain, sessionId, conversationId, onSucces
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
         if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
+          sseBuffer += decoder.decode(value, { stream: true });
+          const lines = sseBuffer.split('\n');
+          sseBuffer = lines.pop() || '';
           
           for (const line of lines) {
             if (line.startsWith('data: ')) {
@@ -80,7 +82,7 @@ export function useChatStream({ storeDomain, sessionId, conversationId, onSucces
                 if (event.type === 'text') {
                   assistantMessage += event.data;
                 } else if (event.type === 'conversation_id') {
-                  // conversation ID received from backend
+                  onConversationId?.(event.data);
                 } else if (event.type === 'tool_call') {
                   currentToolCalls.push({
                     id: event.data.id,
@@ -108,7 +110,6 @@ export function useChatStream({ storeDomain, sessionId, conversationId, onSucces
                   });
                 }
                 
-                // Update the last message
                 setMessages(prev => {
                   const newMessages = [...prev];
                   const lastIndex = newMessages.length - 1;
@@ -120,10 +121,37 @@ export function useChatStream({ storeDomain, sessionId, conversationId, onSucces
                   };
                   return newMessages;
                 });
-              } catch (e) {
-                console.warn('Failed to parse SSE line:', dataStr);
+              } catch {
+                // incomplete JSON line — will be handled in next chunk via buffer
               }
             }
+          }
+        }
+      }
+
+      if (sseBuffer.trim().startsWith('data: ')) {
+        const dataStr = sseBuffer.trim().substring(6).trim();
+        if (dataStr && dataStr !== '[DONE]') {
+          try {
+            const event = JSON.parse(dataStr);
+            if (event.type === 'text') {
+              assistantMessage += event.data;
+            } else if (event.type === 'conversation_id') {
+              onConversationId?.(event.data);
+            }
+            setMessages(prev => {
+              const newMessages = [...prev];
+              const lastIndex = newMessages.length - 1;
+              newMessages[lastIndex] = {
+                ...newMessages[lastIndex],
+                content: assistantMessage,
+                toolCalls: currentToolCalls.length > 0 ? [...currentToolCalls] : undefined,
+                toolResults: currentToolResults.length > 0 ? [...currentToolResults] : undefined
+              };
+              return newMessages;
+            });
+          } catch {
+            // ignore unparseable remainder
           }
         }
       }
@@ -141,7 +169,7 @@ export function useChatStream({ storeDomain, sessionId, conversationId, onSucces
       setIsLoading(false);
       abortControllerRef.current = null;
     }
-  }, [storeDomain, sessionId, conversationId, cartStore, onSuccess]);
+  }, [storeDomain, sessionId, conversationId, cartStore, onConversationId, onSuccess]);
 
   const stopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
@@ -151,7 +179,6 @@ export function useChatStream({ storeDomain, sessionId, conversationId, onSucces
     }
   }, []);
 
-  // Hydrate initial messages
   const loadMessages = useCallback((initialMessages: ChatMessage[]) => {
     setMessages(initialMessages);
   }, []);
