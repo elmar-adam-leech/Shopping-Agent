@@ -32,7 +32,7 @@ export default function InstallPage() {
             <Store className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="font-display font-bold text-2xl leading-none">Shopify Storefront Agent</h1>
+            <h1 className="font-display font-bold text-2xl leading-none">Storefront Shopping Agent</h1>
             <p className="text-muted-foreground text-sm font-medium">for Shopify</p>
           </div>
         </div>
