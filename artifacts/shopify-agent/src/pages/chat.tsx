@@ -4,8 +4,8 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { CartPanel } from "@/components/chat/cart-panel";
 import { useSession } from "@/hooks/use-session";
 import { useChatStream } from "@/hooks/use-chat-stream";
-import { useListConversations } from "@workspace/api-client-react";
-import { Send, Sparkles, Loader2, RefreshCw, ShoppingBag } from "lucide-react";
+import { useListConversations, useDeleteConversation } from "@workspace/api-client-react";
+import { Send, Sparkles, Loader2, RefreshCw, ShoppingBag, MessageSquare, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar } from "@/components/ui/avatar";
@@ -18,18 +18,43 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+interface ToolCallDisplay {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+interface ChatMessageDisplay {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+  toolCalls?: ToolCallDisplay[];
+  toolResults?: Array<{ toolCallId: string; content: string }>;
+}
+
 export default function ChatPage() {
   const [, params] = useRoute("/:storeDomain/chat");
   const storeDomain = params?.storeDomain || "";
   const sessionId = useSession(storeDomain);
   
   const [input, setInput] = useState("");
+  const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { messages, isLoading, sendMessage } = useChatStream({
+  const conversationsResult = useListConversations(
+    storeDomain,
+    { sessionId: sessionId || "" }
+  );
+  const conversations = sessionId ? conversationsResult.data : undefined;
+  const refetchConversations = conversationsResult.refetch;
+
+  const { mutateAsync: deleteConversation } = useDeleteConversation();
+
+  const { messages, isLoading, sendMessage, loadMessages } = useChatStream({
     storeDomain,
     sessionId: sessionId || "",
-    conversationId: null // For MVP, we'll just use null for a single continuous session, real app would handle specific conversations
+    conversationId: activeConversationId,
+    onSuccess: () => refetchConversations()
   });
 
   const scrollToBottom = () => {
@@ -54,6 +79,28 @@ export default function ChatPage() {
     }
   };
 
+  const startNewConversation = () => {
+    setActiveConversationId(null);
+    loadMessages([]);
+  };
+
+  const selectConversation = (conv: { id: number; messages: ChatMessageDisplay[] }) => {
+    setActiveConversationId(conv.id);
+    loadMessages(conv.messages || []);
+  };
+
+  const handleDeleteConversation = async (convId: number) => {
+    try {
+      await deleteConversation({ storeDomain, conversationId: convId });
+      if (activeConversationId === convId) {
+        startNewConversation();
+      }
+      refetchConversations();
+    } catch {
+      console.error("Failed to delete conversation");
+    }
+  };
+
   if (!sessionId) {
     return (
       <AppLayout storeDomain={storeDomain}>
@@ -67,6 +114,43 @@ export default function ChatPage() {
   return (
     <AppLayout storeDomain={storeDomain}>
       <div className="flex h-full relative overflow-hidden">
+        {/* Conversation Sidebar */}
+        <div className="w-64 border-r border-border/50 bg-card/50 flex flex-col h-full hidden md:flex">
+          <div className="p-4 border-b border-border/50">
+            <Button onClick={startNewConversation} className="w-full rounded-xl" variant="outline" size="sm">
+              <Plus className="w-4 h-4 mr-2" /> New Chat
+            </Button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {conversations && (conversations as Array<{ id: number; title: string; messages: ChatMessageDisplay[]; updatedAt: string }>).map((conv) => (
+              <div
+                key={conv.id}
+                className={cn(
+                  "group flex items-center gap-2 p-3 rounded-xl cursor-pointer transition-colors text-sm",
+                  activeConversationId === conv.id
+                    ? "bg-primary/10 text-primary border border-primary/20"
+                    : "hover:bg-secondary/50 text-muted-foreground"
+                )}
+                onClick={() => selectConversation(conv)}
+              >
+                <MessageSquare className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate flex-1">{conv.title}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeleteConversation(conv.id); }}
+                  className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+            {(!conversations || (conversations as Array<unknown>).length === 0) && (
+              <div className="text-center py-8 text-muted-foreground text-xs">
+                No conversations yet
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col h-full bg-background/50 relative z-10">
           
@@ -89,13 +173,13 @@ export default function ChatPage() {
                 </div>
                 <h3 className="text-2xl font-display font-bold mb-2 text-foreground">How can I help you today?</h3>
                 <p className="text-muted-foreground max-w-sm mb-8">
-                  I'm an AI assistant trained on {storeDomain}'s products and policies. Ask me anything!
+                  I'm an AI assistant for {storeDomain}. Ask me anything about products, sizing, or policies!
                 </p>
                 <div className="flex flex-wrap justify-center gap-2 max-w-lg">
                   {["Recommend a 9K BTU Mini Split", "What are your return policies?", "Find matching accessories"].map(preset => (
                     <button 
                       key={preset}
-                      onClick={() => { setInput(preset); setTimeout(handleSubmit, 100); }}
+                      onClick={() => { setInput(preset); }}
                       className="px-4 py-2 rounded-full bg-secondary/50 border border-border/50 text-sm hover:bg-secondary hover:text-foreground text-muted-foreground transition-colors"
                     >
                       {preset}
@@ -106,7 +190,7 @@ export default function ChatPage() {
             ) : (
               <div className="max-w-4xl mx-auto space-y-6">
                 {messages.map((msg, i) => (
-                  <MessageBubble key={i} message={msg} />
+                  <MessageBubble key={i} message={msg as ChatMessageDisplay} />
                 ))}
                 {isLoading && (
                   <div className="flex gap-4 max-w-[85%]">
@@ -163,7 +247,7 @@ export default function ChatPage() {
   );
 }
 
-function MessageBubble({ message }: { message: any }) {
+function MessageBubble({ message }: { message: ChatMessageDisplay }) {
   const isUser = message.role === 'user';
   
   return (
@@ -197,11 +281,9 @@ function MessageBubble({ message }: { message: any }) {
           </div>
         )}
 
-        {/* Render tool calls nicely if they exist */}
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="flex flex-col gap-2 w-full mt-2">
-            {message.toolCalls.map((tc: any, idx: number) => {
-              // Only render specific tools visually
+            {message.toolCalls.map((tc, idx) => {
               if (tc.name === 'add_to_cart') {
                 return (
                   <div key={idx} className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 flex items-center gap-3 text-sm text-emerald-800 dark:text-emerald-300">

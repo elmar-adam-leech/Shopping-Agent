@@ -1,20 +1,34 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { LLMStreamEvent, LLMMessage } from "./openai";
+import type { LLMStreamEvent, LLMMessage, MCPToolDef } from "./openai";
+
+interface ToolUseBlock {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+interface TextBlock {
+  type: "text";
+  text: string;
+}
+
+type ContentBlock = ToolUseBlock | TextBlock;
 
 export async function* streamChat(
   apiKey: string,
   model: string,
   systemPrompt: string,
   messages: LLMMessage[],
-  tools: any[],
-  onToolCall: (name: string, args: any) => Promise<string>
+  tools: MCPToolDef[],
+  onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>
 ): AsyncGenerator<LLMStreamEvent> {
   const client = new Anthropic({ apiKey });
 
   const anthropicTools = tools.map((t) => ({
     name: t.name,
     description: t.description,
-    input_schema: t.inputSchema,
+    input_schema: { type: "object" as const, ...t.inputSchema },
   }));
 
   const anthropicMessages: Anthropic.MessageParam[] = messages
@@ -50,7 +64,7 @@ export async function* streamChat(
 
     let currentToolUse: { id: string; name: string; input: string } | null = null;
     let assistantText = "";
-    const contentBlocks: any[] = [];
+    const contentBlocks: ContentBlock[] = [];
 
     for await (const event of stream) {
       if (event.type === "content_block_start") {
@@ -70,7 +84,7 @@ export async function* streamChat(
             type: "tool_use",
             id: currentToolUse.id,
             name: currentToolUse.name,
-            input: JSON.parse(currentToolUse.input || "{}"),
+            input: JSON.parse(currentToolUse.input || "{}") as Record<string, unknown>,
           });
           currentToolUse = null;
         } else if (assistantText) {
@@ -81,12 +95,12 @@ export async function* streamChat(
       }
     }
 
-    const toolUseBlocks = contentBlocks.filter((b) => b.type === "tool_use");
+    const toolUseBlocks = contentBlocks.filter((b): b is ToolUseBlock => b.type === "tool_use");
 
     if (toolUseBlocks.length > 0) {
       anthropicMessages.push({ role: "assistant", content: contentBlocks });
 
-      const toolResults: any[] = [];
+      const toolResults: Array<{ type: "tool_result"; tool_use_id: string; content: string }> = [];
       for (const tu of toolUseBlocks) {
         yield { type: "tool_call", data: { id: tu.id, name: tu.name, arguments: JSON.stringify(tu.input) } };
 
@@ -94,8 +108,8 @@ export async function* streamChat(
           const result = await onToolCall(tu.name, tu.input);
           yield { type: "tool_result", data: { toolCallId: tu.id, content: result } };
           toolResults.push({ type: "tool_result", tool_use_id: tu.id, content: result });
-        } catch (err: any) {
-          const errorMsg = `Error: ${err.message}`;
+        } catch (err: unknown) {
+          const errorMsg = `Error: ${err instanceof Error ? err.message : "Unknown error"}`;
           toolResults.push({ type: "tool_result", tool_use_id: tu.id, content: errorMsg });
           yield { type: "tool_result", data: { toolCallId: tu.id, content: errorMsg } };
         }

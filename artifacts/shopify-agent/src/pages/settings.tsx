@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
 import { useRoute } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetStore, useUpdateStore, useListKnowledge, useCreateKnowledge, useDeleteKnowledge } from "@workspace/api-client-react";
-import { Save, Key, Database, BookOpen, Trash2, Plus, GripVertical } from "lucide-react";
+import { useGetStore, useUpdateStore, useListKnowledge, useCreateKnowledge, useDeleteKnowledge, useUpdateKnowledge } from "@workspace/api-client-react";
+import { Save, Key, Database, BookOpen, Trash2, Plus, GripVertical, Edit2, Check, X, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+
+type ProviderValue = "openai" | "anthropic" | "xai";
 
 export default function SettingsPage() {
   const [, params] = useRoute("/:storeDomain/settings");
@@ -19,14 +20,18 @@ export default function SettingsPage() {
   const { mutateAsync: updateStore, isPending: updating } = useUpdateStore();
   const { toast } = useToast();
 
-  const [provider, setProvider] = useState<any>("openai");
+  const [provider, setProvider] = useState<ProviderValue>("openai");
   const [model, setModel] = useState("gpt-4o");
   const [apiKey, setApiKey] = useState("");
+  const [storefrontToken, setStorefrontToken] = useState("");
 
   useEffect(() => {
     if (store) {
-      setProvider(store.provider);
+      setProvider(store.provider as ProviderValue);
       setModel(store.model);
+      if (store.storefrontToken) {
+        setStorefrontToken(store.storefrontToken);
+      }
     }
   }, [store]);
 
@@ -37,13 +42,15 @@ export default function SettingsPage() {
         data: {
           provider,
           model,
+          storefrontToken: storefrontToken || undefined,
           ...(apiKey ? { apiKey } : {})
         }
       });
       toast({ title: "Settings saved successfully", variant: "default" });
-      setApiKey(""); // clear after save
-    } catch (e: any) {
-      toast({ title: "Failed to save", description: e.message, variant: "destructive" });
+      setApiKey("");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      toast({ title: "Failed to save", description: message, variant: "destructive" });
     }
   };
 
@@ -54,6 +61,34 @@ export default function SettingsPage() {
           <h1 className="text-3xl font-display font-bold mb-2">Agent Settings</h1>
           <p className="text-muted-foreground text-lg">Configure the brain behind your AI shopping assistant.</p>
         </div>
+
+        {/* Storefront Token Section */}
+        <section className="bg-card border border-border/50 rounded-3xl p-6 md:p-8 shadow-sm">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-emerald-500/10 text-emerald-600 rounded-xl">
+              <Globe className="w-5 h-5" />
+            </div>
+            <h2 className="text-xl font-bold font-display">Shopify Connection</h2>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="space-y-3">
+              <Label>Storefront Access Token</Label>
+              <div className="relative">
+                <Input 
+                  value={storefrontToken} 
+                  onChange={(e) => setStorefrontToken(e.target.value)}
+                  placeholder="Enter your Storefront Access Token"
+                  className="rounded-xl h-12 bg-secondary/20 pl-10"
+                />
+                <Key className="w-4 h-4 text-muted-foreground absolute left-4 top-4" />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Required for product search, cart management, and checkout. Find this in your Shopify Admin under Apps &gt; Develop apps &gt; Storefront API.
+              </p>
+            </div>
+          </div>
+        </section>
 
         {/* LLM Config Section */}
         <section className="bg-card border border-border/50 rounded-3xl p-6 md:p-8 shadow-sm">
@@ -67,7 +102,7 @@ export default function SettingsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div className="space-y-3">
               <Label>AI Provider</Label>
-              <Select value={provider} onValueChange={setProvider}>
+              <Select value={provider} onValueChange={(v) => setProvider(v as ProviderValue)}>
                 <SelectTrigger className="rounded-xl h-12 bg-secondary/20">
                   <SelectValue placeholder="Select Provider" />
                 </SelectTrigger>
@@ -94,12 +129,12 @@ export default function SettingsPage() {
                   type="password" 
                   value={apiKey} 
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={store?.hasApiKey ? "•••••••••••••••• (Key is set, enter new to replace)" : "Enter API Key"}
+                  placeholder={store?.hasApiKey ? "Key is set. Enter new to replace." : "Enter API Key"}
                   className="rounded-xl h-12 bg-secondary/20 pl-10"
                 />
                 <Key className="w-4 h-4 text-muted-foreground absolute left-4 top-4" />
               </div>
-              <p className="text-xs text-muted-foreground">We encrypt and store your key securely. It is only used to power your store's agent.</p>
+              <p className="text-xs text-muted-foreground">Your key is stored securely and only used to power your store's agent.</p>
             </div>
           </div>
           
@@ -118,28 +153,53 @@ export default function SettingsPage() {
   );
 }
 
+interface KnowledgeEntry {
+  id: number;
+  storeDomain: string;
+  category: string;
+  title: string;
+  content: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const CATEGORIES = [
+  { id: 'general', label: 'General Info', desc: 'Brand voice, tone, company history' },
+  { id: 'sizing', label: 'Sizing & Recommendations', desc: 'Rules for recommending products' },
+  { id: 'compatibility', label: 'Compatibility Rules', desc: 'What works with what' },
+  { id: 'required_accessories', label: 'Required Accessories', desc: 'Must-have add-ons' },
+  { id: 'restrictions', label: 'Restrictions', desc: 'Regional or product restrictions' },
+  { id: 'policies', label: 'Store Policies', desc: 'Returns, shipping, warranties' },
+  { id: 'custom', label: 'Custom', desc: 'Other knowledge' },
+];
+
 function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
   const { data: knowledgeList, refetch } = useListKnowledge(storeDomain);
   const { mutateAsync: createKnowledge, isPending: creating } = useCreateKnowledge();
   const { mutateAsync: deleteKnowledge } = useDeleteKnowledge();
+  const { mutateAsync: updateKnowledge } = useUpdateKnowledge();
   const { toast } = useToast();
 
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
-  const [category, setCategory] = useState<any>("general");
+  const [category, setCategory] = useState<string>("general");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
 
   const handleAdd = async () => {
     if (!newTitle || !newContent) return;
     try {
       await createKnowledge({
         storeDomain,
-        data: { title: newTitle, content: newContent, category, sortOrder: 0 }
+        data: { title: newTitle, content: newContent, category: category as "general" | "sizing" | "compatibility" | "required_accessories" | "restrictions" | "policies" | "custom", sortOrder: 0 }
       });
       setNewTitle("");
       setNewContent("");
       refetch();
       toast({ title: "Knowledge entry added" });
-    } catch (e) {
+    } catch {
       toast({ title: "Failed to add", variant: "destructive" });
     }
   };
@@ -154,19 +214,41 @@ function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
     }
   };
 
-  // Group by category for rendering
-  const entriesByCategory = knowledgeList?.reduce((acc: any, entry) => {
-    if (!acc[entry.category]) acc[entry.category] = [];
-    acc[entry.category].push(entry);
-    return acc;
-  }, {}) || {};
+  const startEdit = (item: KnowledgeEntry) => {
+    setEditingId(item.id);
+    setEditTitle(item.title);
+    setEditContent(item.content);
+  };
 
-  const categories = [
-    { id: 'general', label: 'General Info', desc: 'Brand voice, tone, company history' },
-    { id: 'sizing', label: 'Sizing & Recommendations', desc: 'Rules for recommending products' },
-    { id: 'compatibility', label: 'Compatibility Rules', desc: 'What works with what' },
-    { id: 'policies', label: 'Store Policies', desc: 'Returns, shipping, warranties' },
-  ];
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditTitle("");
+    setEditContent("");
+  };
+
+  const saveEdit = async () => {
+    if (!editingId || !editTitle || !editContent) return;
+    try {
+      await updateKnowledge({
+        storeDomain,
+        knowledgeId: editingId,
+        data: { title: editTitle, content: editContent }
+      });
+      cancelEdit();
+      refetch();
+      toast({ title: "Updated" });
+    } catch {
+      toast({ title: "Failed to update", variant: "destructive" });
+    }
+  };
+
+  const entriesByCategory: Record<string, KnowledgeEntry[]> = {};
+  if (knowledgeList) {
+    for (const entry of knowledgeList as KnowledgeEntry[]) {
+      if (!entriesByCategory[entry.category]) entriesByCategory[entry.category] = [];
+      entriesByCategory[entry.category].push(entry);
+    }
+  }
 
   return (
     <section className="bg-card border border-border/50 rounded-3xl overflow-hidden shadow-sm">
@@ -194,7 +276,7 @@ function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map(c => (
+                  {CATEGORIES.map(c => (
                     <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -228,7 +310,7 @@ function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
 
         {/* Render Entries by Category */}
         <div className="space-y-8">
-          {categories.map(cat => {
+          {CATEGORIES.map(cat => {
             const items = entriesByCategory[cat.id] || [];
             if (items.length === 0) return null;
             return (
@@ -242,23 +324,60 @@ function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
                 </div>
                 
                 <div className="grid gap-3">
-                  {items.map((item: any) => (
+                  {items.map((item) => (
                     <div key={item.id} className="group flex gap-4 p-4 rounded-xl bg-secondary/20 border border-border/50 hover:border-primary/30 transition-colors">
                       <div className="mt-1 cursor-grab text-muted-foreground/30 group-hover:text-muted-foreground transition-colors">
                         <GripVertical className="w-5 h-5" />
                       </div>
                       <div className="flex-1">
-                        <h5 className="font-semibold text-sm mb-1">{item.title}</h5>
-                        <p className="text-sm text-muted-foreground leading-relaxed">{item.content}</p>
+                        {editingId === item.id ? (
+                          <div className="space-y-3">
+                            <Input
+                              value={editTitle}
+                              onChange={(e) => setEditTitle(e.target.value)}
+                              className="rounded-lg"
+                            />
+                            <Textarea
+                              value={editContent}
+                              onChange={(e) => setEditContent(e.target.value)}
+                              className="rounded-lg min-h-[80px]"
+                            />
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={saveEdit} className="rounded-lg">
+                                <Check className="w-3 h-3 mr-1" /> Save
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={cancelEdit} className="rounded-lg">
+                                <X className="w-3 h-3 mr-1" /> Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <h5 className="font-semibold text-sm mb-1">{item.title}</h5>
+                            <p className="text-sm text-muted-foreground leading-relaxed">{item.content}</p>
+                          </>
+                        )}
                       </div>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        onClick={() => handleDelete(item.id)}
-                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-1 -mr-1 opacity-0 group-hover:opacity-100 transition-all"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      {editingId !== item.id && (
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => startEdit(item)}
+                            className="text-muted-foreground hover:text-primary hover:bg-primary/10 -mt-1"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleDelete(item.id)}
+                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-1"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

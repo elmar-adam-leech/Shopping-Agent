@@ -1,6 +1,6 @@
-import type { LLMStreamEvent, LLMMessage } from "./llms/openai";
+import type { LLMStreamEvent, LLMMessage, MCPToolDef } from "./llms/openai";
 
-export type { LLMStreamEvent, LLMMessage };
+export type { LLMStreamEvent, LLMMessage, MCPToolDef };
 
 export async function* streamChatWithProvider(
   provider: "openai" | "anthropic" | "xai",
@@ -8,8 +8,8 @@ export async function* streamChatWithProvider(
   model: string,
   systemPrompt: string,
   messages: LLMMessage[],
-  tools: any[],
-  onToolCall: (name: string, args: any) => Promise<string>
+  tools: MCPToolDef[],
+  onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>
 ): AsyncGenerator<LLMStreamEvent> {
   let streamFn: typeof import("./llms/openai").streamChat;
 

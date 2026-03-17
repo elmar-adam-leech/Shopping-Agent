@@ -3,13 +3,25 @@ import OpenAI from "openai";
 export interface LLMMessage {
   role: "user" | "assistant" | "system" | "tool";
   content: string;
-  tool_calls?: any[];
+  tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }>;
   tool_call_id?: string;
 }
 
+export type LLMStreamEventData =
+  | string
+  | { id: string; name: string; arguments: string }
+  | { toolCallId: string; content: string }
+  | null;
+
 export interface LLMStreamEvent {
   type: "text" | "tool_call" | "tool_result" | "done" | "error";
-  data: any;
+  data: LLMStreamEventData;
+}
+
+export interface MCPToolDef {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
 }
 
 export async function* streamChat(
@@ -17,8 +29,8 @@ export async function* streamChat(
   model: string,
   systemPrompt: string,
   messages: LLMMessage[],
-  tools: any[],
-  onToolCall: (name: string, args: any) => Promise<string>
+  tools: MCPToolDef[],
+  onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>
 ): AsyncGenerator<LLMStreamEvent> {
   const client = new OpenAI({ apiKey });
 
@@ -53,7 +65,12 @@ export async function* streamChat(
       stream: true,
     });
 
-    let currentToolCalls: any[] = [];
+    interface ToolCallAccumulator {
+      id: string;
+      function: { name: string; arguments: string };
+    }
+
+    const currentToolCalls: ToolCallAccumulator[] = [];
     let assistantContent = "";
 
     for await (const chunk of stream) {
@@ -94,7 +111,7 @@ export async function* streamChat(
         yield { type: "tool_call", data: { id: tc.id, name: tc.function.name, arguments: tc.function.arguments } };
 
         try {
-          const args = JSON.parse(tc.function.arguments);
+          const args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
           const result = await onToolCall(tc.function.name, args);
           yield { type: "tool_result", data: { toolCallId: tc.id, content: result } };
 
@@ -103,8 +120,8 @@ export async function* streamChat(
             tool_call_id: tc.id,
             content: result,
           });
-        } catch (err: any) {
-          const errorMsg = `Error: ${err.message}`;
+        } catch (err: unknown) {
+          const errorMsg = `Error: ${err instanceof Error ? err.message : "Unknown error"}`;
           allMessages.push({ role: "tool", tool_call_id: tc.id, content: errorMsg });
           yield { type: "tool_result", data: { toolCallId: tc.id, content: errorMsg } };
         }

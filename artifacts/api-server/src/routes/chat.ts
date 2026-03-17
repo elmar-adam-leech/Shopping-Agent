@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, storesTable, conversationsTable, shopKnowledgeTable, analyticsLogsTable } from "@workspace/db";
+import { db, conversationsTable, shopKnowledgeTable, analyticsLogsTable } from "@workspace/db";
 import type { Conversation } from "@workspace/db/schema";
 import { SendChatParams, SendChatBody } from "@workspace/api-zod";
-import { streamChatWithProvider, type LLMStreamEvent } from "../services/llm-service";
+import { streamChatWithProvider } from "../services/llm-service";
 import { listTools, callTool, type MCPTool } from "../services/mcp-client";
+import { fetchBlogs, fetchCollections } from "../services/graphql-client";
 import { buildSystemPrompt } from "../services/system-prompt";
 import { validateStoreDomain } from "../services/tenant-validator";
 
@@ -17,6 +18,34 @@ interface ChatMessageRecord {
   toolCalls?: Array<{ id: string; name: string; arguments: string }>;
   toolResults?: Array<{ toolCallId: string; content: string }>;
   timestamp: string;
+}
+
+async function executeToolWithFallback(
+  storeDomain: string,
+  storefrontToken: string,
+  toolName: string,
+  args: Record<string, unknown>
+): Promise<string> {
+  try {
+    const result = await callTool(storeDomain, storefrontToken, toolName, args);
+    const parsed = JSON.parse(result);
+    if (parsed.error) {
+      throw new Error(parsed.error);
+    }
+    return result;
+  } catch {
+    if (toolName === "get_collections" || toolName === "list_collections") {
+      const limit = typeof args.limit === "number" ? args.limit : 10;
+      const data = await fetchCollections(storeDomain, storefrontToken, limit);
+      return JSON.stringify(data);
+    }
+    if (toolName === "get_blogs" || toolName === "list_blogs") {
+      const limit = typeof args.limit === "number" ? args.limit : 5;
+      const data = await fetchBlogs(storeDomain, storefrontToken, limit);
+      return JSON.stringify(data);
+    }
+    return JSON.stringify({ error: `Tool ${toolName} failed and no fallback available` });
+  }
 }
 
 router.post("/stores/:storeDomain/chat", validateStoreDomain, async (req, res): Promise<void> => {
@@ -127,7 +156,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, async (req, res): 
       llmMessages,
       tools,
       async (toolName: string, args: Record<string, unknown>) => {
-        return callTool(store.storeDomain, store.storefrontToken!, toolName, args);
+        return executeToolWithFallback(store.storeDomain, store.storefrontToken!, toolName, args);
       }
     );
 
