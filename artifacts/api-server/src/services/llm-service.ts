@@ -17,7 +17,7 @@ export async function* streamChatWithProvider(
 ): AsyncGenerator<LLMStreamEvent> {
   switch (provider) {
     case "openai":
-      yield* streamOpenAIChat(apiKey, model, systemPrompt, messages, tools, onToolCall, undefined, signal);
+      yield* streamOpenAIChat(apiKey, model, systemPrompt, messages, tools, onToolCall, signal);
       break;
     case "anthropic":
       yield* streamAnthropicChat(apiKey, model, systemPrompt, messages, tools, onToolCall, signal);

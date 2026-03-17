@@ -42,9 +42,10 @@ artifacts-monorepo/
 │   │       │   │   │   ├── llm-stream-event.ts
 │   │       │   │   │   ├── mcp-tool-def.ts
 │   │       │   │   │   └── index.ts
-│   │       │   │   ├── openai.ts   # OpenAI SDK streaming + tool calling
+│   │       │   │   ├── chat-stream.ts # Shared OpenAI-SDK streaming + tool calling
+│   │       │   │   ├── openai.ts   # OpenAI provider (delegates to chat-stream)
 │   │       │   │   ├── anthropic.ts# Anthropic SDK streaming + tool calling
-│   │       │   │   └── xai.ts      # xAI/Grok via OpenAI SDK (baseURL override)
+│   │       │   │   └── xai.ts      # xAI provider (delegates to chat-stream with custom baseURL)
 │   │       │   ├── llm-service.ts  # Tiny factory: reads provider → returns correct LLM
 │   │       │   ├── mcp-client.ts   # JSON-RPC client for Shopify Storefront MCP
 │   │       │   ├── graphql-client.ts# Shopify Storefront GraphQL for blogs/collections
@@ -98,9 +99,10 @@ artifacts-monorepo/
 
 ### LLM Provider System
 - Shared types (`LLMMessage`, `LLMStreamEvent`, `LLMStreamEventData`, `MCPToolDef`) live in `src/services/llms/types/` — one file per type with a barrel `index.ts`
-- Each provider has its own file in `src/services/llms/` with identical interface, importing types from `./types`
+- Shared OpenAI-SDK streaming logic lives in `src/services/llms/chat-stream.ts` — used by both `openai.ts` and `xai.ts`
+- Each provider has its own file in `src/services/llms/` with identical interface, fully decoupled from each other
 - `llm-service.ts` is a tiny factory that imports the correct provider via static imports
-- xAI reuses the OpenAI streaming implementation via a `baseURL` parameter
+- xAI reuses the OpenAI SDK via `chat-stream.ts` with `baseURL: "https://api.x.ai/v1"`
 - API keys stored server-side only in the database, never exposed to the frontend
 
 ### Shop Knowledge
