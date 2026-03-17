@@ -24,41 +24,45 @@ router.get("/stores/:storeDomain/analytics", validateStoreDomain, validateMercha
   const since = new Date();
   since.setDate(since.getDate() - days);
 
-  const logs = await db
-    .select()
+  const baseCondition = and(
+    eq(analyticsLogsTable.storeDomain, params.data.storeDomain),
+    gte(analyticsLogsTable.createdAt, since)
+  );
+
+  const [chatCountResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
     .from(analyticsLogsTable)
-    .where(
-      and(
-        eq(analyticsLogsTable.storeDomain, params.data.storeDomain),
-        gte(analyticsLogsTable.createdAt, since)
-      )
-    );
+    .where(and(baseCondition, eq(analyticsLogsTable.eventType, "chat")));
+  const totalChats = chatCountResult?.count ?? 0;
 
-  const totalChats = logs.filter((l) => l.eventType === "chat").length;
+  const [sessionCountResult] = await db
+    .select({ count: sql<number>`count(distinct ${analyticsLogsTable.sessionId})::int` })
+    .from(analyticsLogsTable)
+    .where(baseCondition);
+  const totalSessions = sessionCountResult?.count ?? 0;
 
-  const sessionSet = new Set(logs.map((l) => l.sessionId).filter(Boolean));
-  const totalSessions = sessionSet.size;
+  const topQueriesResult = await db
+    .select({
+      query: sql<string>`lower(trim(${analyticsLogsTable.query}))`,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(analyticsLogsTable)
+    .where(and(baseCondition, sql`${analyticsLogsTable.query} is not null`))
+    .groupBy(sql`lower(trim(${analyticsLogsTable.query}))`)
+    .orderBy(sql`count(*) desc`)
+    .limit(10);
+  const topQueries = topQueriesResult.map(r => ({ query: r.query, count: r.count }));
 
-  const queryCounts = new Map<string, number>();
-  for (const log of logs) {
-    if (log.query) {
-      const q = log.query.toLowerCase().trim();
-      queryCounts.set(q, (queryCounts.get(q) || 0) + 1);
-    }
-  }
-  const topQueries = Array.from(queryCounts.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([query, count]) => ({ query, count }));
-
-  const dailyCounts = new Map<string, number>();
-  for (const log of logs) {
-    const date = log.createdAt.toISOString().split("T")[0];
-    dailyCounts.set(date, (dailyCounts.get(date) || 0) + 1);
-  }
-  const dailyChats = Array.from(dailyCounts.entries())
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([date, count]) => ({ date, count }));
+  const dailyChatsResult = await db
+    .select({
+      date: sql<string>`${analyticsLogsTable.createdAt}::date::text`,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(analyticsLogsTable)
+    .where(baseCondition)
+    .groupBy(sql`${analyticsLogsTable.createdAt}::date`)
+    .orderBy(sql`${analyticsLogsTable.createdAt}::date asc`);
+  const dailyChats = dailyChatsResult.map(r => ({ date: r.date, count: r.count }));
 
   res.json(
     GetAnalyticsResponse.parse({

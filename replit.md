@@ -93,7 +93,7 @@ artifacts-monorepo/
 ### LLM Provider System
 - Each provider has its own file in `src/services/llms/` with identical interface
 - `llm-service.ts` is a tiny factory that dynamically imports the correct provider
-- xAI uses the OpenAI SDK with `baseURL: "https://api.x.ai/v1"`
+- xAI reuses the OpenAI streaming implementation via a `baseURL` parameter
 - API keys stored server-side only in the database, never exposed to the frontend
 
 ### Shop Knowledge
@@ -112,7 +112,12 @@ artifacts-monorepo/
   - `POST /auth/login` (dev-only, disabled in production) allows login by store domain
   - `POST /stores` enforces tenant binding: merchant can only create stores for their own domain
   - `GET /stores` scoped to authenticated merchant's domain only
-- Rate limiting: 10 req/min per session on chat endpoint
+- Rate limiting: 10 req/min per IP/session on chat endpoint (uses `x-session-id` header or IP, not user-controlled body)
+- HMAC verification uses timing-safe comparison
+- Request body size limited to 1MB
+- CORS origin configurable via `ALLOWED_ORIGINS` env var (comma-separated)
+- Global Express error handler catches unhandled exceptions
+- SSE streaming handles client disconnects gracefully
 - API keys and tokens stored server-side only
 - Cookie-parser middleware added to app.ts; custom fetch includes `credentials: 'include'`
 - Auto-migration runs on server startup (`drizzle-kit push`)
@@ -217,6 +222,7 @@ Chat requests accept an optional `context` object with `productHandle`, `collect
 - `SHOPIFY_API_KEY` — Shopify app API key (optional, for OAuth flow)
 - `SHOPIFY_API_SECRET` — Shopify app API secret (optional, for OAuth flow)
 - `APP_URL` — Public URL of the app (optional, for OAuth callbacks)
+- `ALLOWED_ORIGINS` — Comma-separated list of allowed CORS origins (optional, defaults to all)
 
 ## Commands
 

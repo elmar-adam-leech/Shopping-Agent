@@ -24,9 +24,7 @@ export function useSession(storeDomain: string) {
         setSessionId(newSessionId);
       } catch (error) {
         console.error('[Session] Failed to create session', error);
-        const fallbackId = crypto.randomUUID();
-        localStorage.setItem(storageKey, fallbackId);
-        setSessionId(fallbackId);
+        setSessionId(null);
       }
     };
 

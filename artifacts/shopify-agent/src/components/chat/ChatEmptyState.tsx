@@ -16,7 +16,7 @@ export function ChatEmptyState({ storeDomain, onPresetClick }: ChatEmptyStatePro
         I'm an AI assistant for {storeDomain}. Ask me anything about products, sizing, or policies!
       </p>
       <div className="flex flex-wrap justify-center gap-2 max-w-lg">
-        {["Recommend a 9K BTU Mini Split", "What are your return policies?", "Find matching accessories"].map(preset => (
+        {["Show me your best sellers", "What are your return policies?", "Find matching accessories"].map(preset => (
           <button 
             key={preset}
             onClick={() => onPresetClick(preset)}

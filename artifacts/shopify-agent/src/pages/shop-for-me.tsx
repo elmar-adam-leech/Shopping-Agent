@@ -3,7 +3,8 @@ import { useRoute, useSearch } from "wouter";
 import { Send, Sparkles, Loader2, ShoppingBag, Package, Tag, Search } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { ChatMessage, ToolCall, ToolResult } from "@workspace/api-client-react";
+import type { ToolCall } from "@workspace/api-client-react";
+import { useChatStream } from "@/hooks/use-chat-stream";
 
 const TOOL_LABELS: Record<string, string> = {
   search_products: "Searching products",
@@ -66,12 +67,6 @@ function useShopForMeSession(storeDomain: string) {
       });
   }, [storeDomain]);
 
-  const refreshSession = useCallback(() => {
-    const key = `shop_for_me_session_${storeDomain}`;
-    localStorage.removeItem(key);
-    return createNewSession(key);
-  }, [storeDomain, createNewSession]);
-
   useEffect(() => {
     if (!storeDomain) return;
     const key = `shop_for_me_session_${storeDomain}`;
@@ -91,121 +86,7 @@ function useShopForMeSession(storeDomain: string) {
     createNewSession(key);
   }, [storeDomain, createNewSession]);
 
-  return { sessionId, chatDisabled, refreshSession };
-}
-
-function useShopForMeChatStream(storeDomain: string, sessionId: string | null, onSessionExpired?: () => Promise<string | null>) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [conversationId, setConversationId] = useState<number | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const sessionIdRef = useRef(sessionId);
-  sessionIdRef.current = sessionId;
-
-  const sendMessage = useCallback(
-    async (content: string, retryCount = 0) => {
-      const currentSessionId = sessionIdRef.current;
-      if (!content.trim() || !currentSessionId || !storeDomain) return;
-
-      if (retryCount === 0) {
-        const userMsg: ChatMessage = {
-          role: "user",
-          content,
-          timestamp: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, userMsg]);
-      }
-      setIsLoading(true);
-      abortRef.current = new AbortController();
-
-      try {
-        const res = await fetch(`/api/stores/${storeDomain}/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId: currentSessionId, conversationId, message: content }),
-          signal: abortRef.current.signal,
-        });
-
-        if ((res.status === 401 || res.status === 403) && retryCount < 1 && onSessionExpired) {
-          const newSessionId = await onSessionExpired();
-          if (newSessionId) {
-            setConversationId(null);
-            return sendMessage(content, retryCount + 1);
-          }
-        }
-
-        if (!res.ok || !res.body) throw new Error("Chat request failed");
-
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        let done = false;
-        let assistantContent = "";
-        let toolCalls: ToolCall[] = [];
-        let toolResults: ToolResult[] = [];
-        let sseBuffer = "";
-
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: "", timestamp: new Date().toISOString() },
-        ]);
-
-        while (!done) {
-          const { value, done: readerDone } = await reader.read();
-          done = readerDone;
-          if (value) {
-            sseBuffer += decoder.decode(value, { stream: true });
-            const lines = sseBuffer.split("\n");
-            sseBuffer = lines.pop() || "";
-
-            for (const line of lines) {
-              if (!line.startsWith("data: ")) continue;
-              const dataStr = line.substring(6).trim();
-              if (dataStr === "[DONE]") continue;
-
-              try {
-                const event = JSON.parse(dataStr);
-                if (event.type === "text") {
-                  assistantContent += event.data;
-                } else if (event.type === "conversation_id") {
-                  setConversationId(event.data);
-                } else if (event.type === "tool_call") {
-                  toolCalls = [...toolCalls, { id: event.data.id, name: event.data.name, arguments: event.data.arguments }];
-                } else if (event.type === "tool_result") {
-                  toolResults = [...toolResults, { toolCallId: event.data.toolCallId, content: event.data.content }];
-                }
-
-                setMessages((prev) => {
-                  const newMsgs = [...prev];
-                  newMsgs[newMsgs.length - 1] = {
-                    ...newMsgs[newMsgs.length - 1],
-                    content: assistantContent,
-                    toolCalls: toolCalls.length > 0 ? [...toolCalls] : undefined,
-                    toolResults: toolResults.length > 0 ? [...toolResults] : undefined,
-                  };
-                  return newMsgs;
-                });
-              } catch {
-                /* incomplete JSON */
-              }
-            }
-          }
-        }
-      } catch (err: unknown) {
-        if (err instanceof Error && err.name !== "AbortError") {
-          setMessages((prev) => [
-            ...prev,
-            { role: "assistant", content: "Sorry, something went wrong. Please try again.", timestamp: new Date().toISOString() },
-          ]);
-        }
-      } finally {
-        setIsLoading(false);
-        abortRef.current = null;
-      }
-    },
-    [storeDomain, conversationId, onSessionExpired]
-  );
-
-  return { messages, isLoading, sendMessage };
+  return { sessionId, chatDisabled };
 }
 
 function formatStoreName(domain: string): string {
@@ -232,8 +113,15 @@ export default function ShopForMePage() {
 
   const [storeInfo, setStoreInfo] = useState<StorePublicInfo | null>(null);
   const [storeNotFound, setStoreNotFound] = useState(false);
-  const { sessionId, chatDisabled, refreshSession } = useShopForMeSession(storeDomain);
-  const { messages, isLoading, sendMessage } = useShopForMeChatStream(storeDomain, sessionId, refreshSession);
+  const [conversationId, setConversationId] = useState<number | null>(null);
+  const { sessionId, chatDisabled } = useShopForMeSession(storeDomain);
+
+  const { messages, isLoading, sendMessage } = useChatStream({
+    storeDomain,
+    sessionId: sessionId || "",
+    conversationId,
+    onConversationId: setConversationId,
+  });
 
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -255,7 +143,7 @@ export default function ShopForMePage() {
   }, [messages, isLoading]);
 
   const handleSend = () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || !sessionId) return;
     const msg = input;
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
@@ -333,7 +221,7 @@ export default function ShopForMePage() {
               <div key={i}>
                 {msg.toolCalls && msg.toolCalls.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-2">
-                    {msg.toolCalls.map((tc) => (
+                    {msg.toolCalls.map((tc: ToolCall) => (
                       <ToolBadge key={tc.id} name={tc.name} />
                     ))}
                   </div>
@@ -394,7 +282,7 @@ export default function ShopForMePage() {
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim() || isLoading}
+              disabled={!input.trim() || isLoading || !sessionId}
               className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
             >
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

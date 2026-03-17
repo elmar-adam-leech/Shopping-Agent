@@ -80,11 +80,6 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     return;
   }
 
-  if (!store.chatEnabled) {
-    res.status(403).json({ error: "Chat is disabled for this store." });
-    return;
-  }
-
   const isEmbedRequest = req.headers['x-embed-mode'] === 'true' || parsed.data.context?.searchMode;
   if (isEmbedRequest && !store.embedEnabled) {
     res.status(403).json({ error: "Theme embed mode is not enabled for this store." });
@@ -96,6 +91,14 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders();
+
+  let clientDisconnected = false;
+  req.on("close", () => { clientDisconnected = true; });
+
+  function safeSend(data: string): boolean {
+    if (clientDisconnected) return false;
+    try { res.write(data); return true; } catch { return false; }
+  }
 
   try {
     const knowledge = await db
@@ -145,7 +148,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
 
     existingMessages.push(userMessage);
 
-    res.write(`data: ${JSON.stringify({ type: "conversation_id", data: conversation.id })}\n\n`);
+    safeSend(`data: ${JSON.stringify({ type: "conversation_id", data: conversation.id })}\n\n`);
 
     // UCP compliance added per ucp.dev
     const ucpEnabled = store.ucpCompliant !== false;
@@ -191,7 +194,8 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     );
 
     for await (const event of stream) {
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
+      if (clientDisconnected) break;
+      safeSend(`data: ${JSON.stringify(event)}\n\n`);
 
       if (event.type === "text") {
         fullAssistantContent += event.data;
@@ -225,7 +229,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     });
   } catch (err: unknown) {
     console.error("Chat error:", err);
-    res.write(`data: ${JSON.stringify({ type: "error", data: "An error occurred processing your message" })}\n\n`);
+    safeSend(`data: ${JSON.stringify({ type: "error", data: "An error occurred processing your message" })}\n\n`);
   } finally {
     res.end();
   }

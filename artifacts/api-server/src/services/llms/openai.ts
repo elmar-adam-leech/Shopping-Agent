@@ -30,9 +30,10 @@ export async function* streamChat(
   systemPrompt: string,
   messages: LLMMessage[],
   tools: MCPToolDef[],
-  onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>
+  onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>,
+  baseURL?: string
 ): AsyncGenerator<LLMStreamEvent> {
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
 
   const openaiTools = tools.map((t) => ({
     type: "function" as const,

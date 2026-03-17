@@ -25,22 +25,13 @@ export async function createMerchantSession(storeDomain: string): Promise<string
   return token;
 }
 
-export async function validateMerchantAuth(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
+function extractToken(req: Request): string | undefined {
   const authHeader = req.headers.authorization;
   const cookieToken = req.cookies?.merchant_token;
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : cookieToken;
+  return authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : cookieToken;
+}
 
-  if (!token || !token.startsWith(MERCHANT_TOKEN_PREFIX)) {
-    res.status(401).json({ error: "Merchant authentication required" });
-    return;
-  }
-
-  const storeDomain = req.params.storeDomain;
-
+async function lookupValidSession(token: string) {
   const [session] = await db
     .select()
     .from(sessionsTable)
@@ -50,12 +41,29 @@ export async function validateMerchantAuth(
         gt(sessionsTable.expiresAt, new Date())
       )
     );
+  return session ?? null;
+}
+
+export async function validateMerchantAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  const token = extractToken(req);
+
+  if (!token || !token.startsWith(MERCHANT_TOKEN_PREFIX)) {
+    res.status(401).json({ error: "Merchant authentication required" });
+    return;
+  }
+
+  const session = await lookupValidSession(token);
 
   if (!session) {
     res.status(401).json({ error: "Invalid or expired merchant session" });
     return;
   }
 
+  const storeDomain = req.params.storeDomain;
   if (storeDomain && session.storeDomain !== storeDomain) {
     res.status(403).json({ error: "Access denied: token does not match store" });
     return;
@@ -69,24 +77,14 @@ export async function validateMerchantAuthForStoreList(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  const authHeader = req.headers.authorization;
-  const cookieToken = req.cookies?.merchant_token;
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : cookieToken;
+  const token = extractToken(req);
 
   if (!token || !token.startsWith(MERCHANT_TOKEN_PREFIX)) {
     res.status(401).json({ error: "Merchant authentication required" });
     return;
   }
 
-  const [session] = await db
-    .select()
-    .from(sessionsTable)
-    .where(
-      and(
-        eq(sessionsTable.id, token),
-        gt(sessionsTable.expiresAt, new Date())
-      )
-    );
+  const session = await lookupValidSession(token);
 
   if (!session) {
     res.status(401).json({ error: "Invalid or expired merchant session" });

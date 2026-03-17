@@ -29,17 +29,18 @@ router.get("/stores/:storeDomain/knowledge", validateStoreDomain, validateMercha
 
   const query = ListKnowledgeQueryParams.safeParse(req.query);
 
+  const conditions = [eq(shopKnowledgeTable.storeDomain, params.data.storeDomain)];
+  if (query.success && query.data.category) {
+    conditions.push(eq(shopKnowledgeTable.category, query.data.category as KnowledgeCategory));
+  }
+
   const entries = await db
     .select()
     .from(shopKnowledgeTable)
-    .where(eq(shopKnowledgeTable.storeDomain, params.data.storeDomain))
+    .where(and(...conditions))
     .orderBy(shopKnowledgeTable.sortOrder);
 
-  const filtered = query.success && query.data.category
-    ? entries.filter((e) => e.category === query.data.category)
-    : entries;
-
-  res.json(ListKnowledgeResponse.parse(filtered));
+  res.json(ListKnowledgeResponse.parse(entries));
 });
 
 router.post("/stores/:storeDomain/knowledge", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {

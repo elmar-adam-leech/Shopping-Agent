@@ -132,7 +132,12 @@ router.delete("/stores/:storeDomain/conversations/:conversationId", validateStor
 
   await db
     .delete(conversationsTable)
-    .where(eq(conversationsTable.id, params.data.conversationId));
+    .where(
+      and(
+        eq(conversationsTable.id, params.data.conversationId),
+        eq(conversationsTable.sessionId, sessionId)
+      )
+    );
 
   res.sendStatus(204);
 });

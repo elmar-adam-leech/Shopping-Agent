@@ -89,7 +89,15 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
     .update(sortedParams)
     .digest("hex");
 
-  if (digest !== hmac) {
+  if (!hmac || !/^[0-9a-f]+$/i.test(hmac)) {
+    res.status(403).json({ error: "HMAC verification failed" });
+    return;
+  }
+
+  const digestBuf = Buffer.from(digest, "hex");
+  const hmacBuf = Buffer.from(hmac, "hex");
+
+  if (digestBuf.length !== hmacBuf.length || !crypto.timingSafeEqual(digestBuf, hmacBuf)) {
     res.status(403).json({ error: "HMAC verification failed" });
     return;
   }
