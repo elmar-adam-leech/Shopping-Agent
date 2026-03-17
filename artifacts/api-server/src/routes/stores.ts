@@ -27,6 +27,7 @@ function storeToResponse(store: Store) {
     hasApiKey: !!store.apiKey,
     ucpCompliant: store.ucpCompliant,
     chatEnabled: store.chatEnabled,
+    embedEnabled: store.embedEnabled,
     createdAt: store.createdAt,
   };
 }
@@ -109,13 +110,14 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
     return;
   }
 
-  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey" | "ucpCompliant" | "chatEnabled">> = {};
+  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey" | "ucpCompliant" | "chatEnabled" | "embedEnabled">> = {};
   if (parsed.data.storefrontToken !== undefined) updateData.storefrontToken = parsed.data.storefrontToken;
   if (parsed.data.provider !== undefined) updateData.provider = parsed.data.provider as ProviderValue;
   if (parsed.data.model !== undefined) updateData.model = parsed.data.model;
   if (parsed.data.apiKey !== undefined) updateData.apiKey = parsed.data.apiKey;
   if (parsed.data.ucpCompliant !== undefined) updateData.ucpCompliant = parsed.data.ucpCompliant;
   if (parsed.data.chatEnabled !== undefined) updateData.chatEnabled = parsed.data.chatEnabled;
+  if (parsed.data.embedEnabled !== undefined) updateData.embedEnabled = parsed.data.embedEnabled;
 
   const [store] = await db
     .update(storesTable)

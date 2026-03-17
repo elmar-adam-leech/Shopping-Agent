@@ -30,6 +30,7 @@ export interface Store {
   hasApiKey: boolean;
   ucpCompliant: boolean;
   chatEnabled: boolean;
+  embedEnabled: boolean;
   createdAt: string;
 }
 
@@ -71,6 +72,7 @@ export interface UpdateStoreBody {
   apiKey?: string;
   ucpCompliant?: boolean;
   chatEnabled?: boolean;
+  embedEnabled?: boolean;
 }
 
 export type KnowledgeEntryCategory =
@@ -137,11 +139,19 @@ export interface UpdateKnowledgeBody {
   sortOrder?: number;
 }
 
+export interface ChatContext {
+  productHandle?: string;
+  collectionHandle?: string;
+  cartToken?: string;
+  searchMode?: boolean;
+}
+
 export interface ChatRequest {
   sessionId: string;
   /** @nullable */
   conversationId?: number | null;
   message: string;
+  context?: ChatContext;
 }
 
 export type ChatMessageRole =

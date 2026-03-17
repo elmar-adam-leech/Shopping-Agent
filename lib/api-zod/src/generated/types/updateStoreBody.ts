@@ -14,4 +14,5 @@ export interface UpdateStoreBody {
   apiKey?: string;
   ucpCompliant?: boolean;
   chatEnabled?: boolean;
+  embedEnabled?: boolean;
 }

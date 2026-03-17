@@ -49,6 +49,7 @@ export const ListStoresResponseItem = zod.object({
   hasApiKey: zod.boolean(),
   ucpCompliant: zod.boolean(),
   chatEnabled: zod.boolean(),
+  embedEnabled: zod.boolean(),
   createdAt: zod.date(),
 });
 export const ListStoresResponse = zod.array(ListStoresResponseItem);
@@ -79,6 +80,7 @@ export const GetStoreResponse = zod.object({
   hasApiKey: zod.boolean(),
   ucpCompliant: zod.boolean(),
   chatEnabled: zod.boolean(),
+  embedEnabled: zod.boolean(),
   createdAt: zod.date(),
 });
 
@@ -96,6 +98,7 @@ export const UpdateStoreBody = zod.object({
   apiKey: zod.string().optional(),
   ucpCompliant: zod.boolean().optional(),
   chatEnabled: zod.boolean().optional(),
+  embedEnabled: zod.boolean().optional(),
 });
 
 export const UpdateStoreResponse = zod.object({
@@ -106,6 +109,7 @@ export const UpdateStoreResponse = zod.object({
   hasApiKey: zod.boolean(),
   ucpCompliant: zod.boolean(),
   chatEnabled: zod.boolean(),
+  embedEnabled: zod.boolean(),
   createdAt: zod.date(),
 });
 
@@ -240,10 +244,18 @@ export const SendChatParams = zod.object({
   storeDomain: zod.coerce.string(),
 });
 
+export const ChatContext = zod.object({
+  productHandle: zod.string().optional(),
+  collectionHandle: zod.string().optional(),
+  cartToken: zod.string().optional(),
+  searchMode: zod.boolean().optional(),
+});
+
 export const SendChatBody = zod.object({
   sessionId: zod.string(),
   conversationId: zod.number().nullish(),
   message: zod.string(),
+  context: ChatContext.optional(),
 });
 
 /**

@@ -16,5 +16,6 @@ export interface Store {
   hasApiKey: boolean;
   ucpCompliant: boolean;
   chatEnabled: boolean;
+  embedEnabled: boolean;
   createdAt: Date;
 }

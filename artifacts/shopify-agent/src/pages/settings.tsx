@@ -2,6 +2,7 @@ import { useRoute } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { LLMConfigForm } from "@/components/settings/LLMConfigForm";
 import { KnowledgeEditor } from "@/components/settings/KnowledgeEditor";
+import { ThemeIntegrationSettings } from "@/components/settings/ThemeIntegrationSettings";
 
 export default function SettingsPage() {
   const [, params] = useRoute("/:storeDomain/settings");
@@ -16,6 +17,8 @@ export default function SettingsPage() {
         </div>
 
         <LLMConfigForm storeDomain={storeDomain} />
+
+        <ThemeIntegrationSettings storeDomain={storeDomain} />
 
         <KnowledgeEditor storeDomain={storeDomain} />
       </div>

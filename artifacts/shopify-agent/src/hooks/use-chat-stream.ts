@@ -2,15 +2,23 @@ import { useState, useCallback, useRef } from 'react';
 import type { ChatMessage, ToolCall, ToolResult } from '@workspace/api-client-react';
 import { useCartStore } from '@/store/use-cart-store';
 
+interface ChatContext {
+  productHandle?: string;
+  collectionHandle?: string;
+  cartToken?: string;
+  searchMode?: boolean;
+}
+
 interface UseChatStreamProps {
   storeDomain: string;
   sessionId: string;
   conversationId?: number | null;
+  context?: ChatContext;
   onConversationId?: (id: number) => void;
   onSuccess?: () => void;
 }
 
-export function useChatStream({ storeDomain, sessionId, conversationId, onConversationId, onSuccess }: UseChatStreamProps) {
+export function useChatStream({ storeDomain, sessionId, conversationId, context, onConversationId, onSuccess }: UseChatStreamProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,13 +41,19 @@ export function useChatStream({ storeDomain, sessionId, conversationId, onConver
     abortControllerRef.current = new AbortController();
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (context) {
+        headers['x-embed-mode'] = 'true';
+      }
+
       const response = await fetch(`/api/stores/${storeDomain}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           sessionId,
           conversationId,
-          message: content
+          message: content,
+          ...(context ? { context } : {}),
         }),
         signal: abortControllerRef.current.signal
       });
@@ -169,7 +183,7 @@ export function useChatStream({ storeDomain, sessionId, conversationId, onConver
       setIsLoading(false);
       abortControllerRef.current = null;
     }
-  }, [storeDomain, sessionId, conversationId, cartStore, onConversationId, onSuccess]);
+  }, [storeDomain, sessionId, conversationId, context, cartStore, onConversationId, onSuccess]);
 
   const stopGeneration = useCallback(() => {
     if (abortControllerRef.current) {

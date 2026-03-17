@@ -539,6 +539,8 @@ components:
           type: boolean
         chatEnabled:
           type: boolean
+        embedEnabled:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -598,6 +600,8 @@ components:
         ucpCompliant:
           type: boolean
         chatEnabled:
+          type: boolean
+        embedEnabled:
           type: boolean
 
     KnowledgeEntry:
@@ -671,9 +675,23 @@ components:
           type: ["integer", "null"]
         message:
           type: string
+        context:
+          $ref: "#/components/schemas/ChatContext"
       required:
         - sessionId
         - message
+
+    ChatContext:
+      type: object
+      properties:
+        productHandle:
+          type: string
+        collectionHandle:
+          type: string
+        cartToken:
+          type: string
+        searchMode:
+          type: boolean
 
     Conversation:
       type: object

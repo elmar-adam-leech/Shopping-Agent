@@ -9,6 +9,10 @@ import SettingsPage from "./pages/settings";
 import ChatPage from "./pages/chat";
 import AnalyticsPage from "./pages/analytics";
 import ShopForMePage from "./pages/shop-for-me";
+import EmbedChatPage from "./pages/embed-chat";
+import EmbedSearchPage from "./pages/embed-search";
+import EmbedAssistantPage from "./pages/embed-assistant";
+import EmbedProductPage from "./pages/embed-product";
 import NotFound from "./pages/not-found";
 
 const queryClient = new QueryClient({
@@ -23,6 +27,10 @@ const queryClient = new QueryClient({
 function Router() {
   return (
     <Switch>
+      <Route path="/embed/:storeDomain/chat" component={EmbedChatPage} />
+      <Route path="/embed/:storeDomain/search" component={EmbedSearchPage} />
+      <Route path="/embed/:storeDomain/assistant" component={EmbedAssistantPage} />
+      <Route path="/embed/:storeDomain/product/:productHandle" component={EmbedProductPage} />
       <Route path="/" component={HomePage} />
       <Route path="/install" component={InstallPage} />
       <Route path="/:storeDomain/settings" component={SettingsPage} />

@@ -80,6 +80,17 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     return;
   }
 
+  if (!store.chatEnabled) {
+    res.status(403).json({ error: "Chat is disabled for this store." });
+    return;
+  }
+
+  const isEmbedRequest = req.headers['x-embed-mode'] === 'true' || parsed.data.context?.searchMode;
+  if (isEmbedRequest && !store.embedEnabled) {
+    res.status(403).json({ error: "Theme embed mode is not enabled for this store." });
+    return;
+  }
+
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
@@ -148,7 +159,14 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       // tools will be empty, chat continues without MCP tools
     }
 
-    const systemPrompt = buildSystemPrompt(store.storeDomain, knowledge, ucpDoc);
+    const chatContext = parsed.data.context ? {
+      productHandle: parsed.data.context.productHandle,
+      collectionHandle: parsed.data.context.collectionHandle,
+      cartToken: parsed.data.context.cartToken,
+      searchMode: parsed.data.context.searchMode,
+    } : undefined;
+
+    const systemPrompt = buildSystemPrompt(store.storeDomain, knowledge, ucpDoc, chatContext);
 
     const llmMessages = existingMessages.map((m) => ({
       role: m.role,

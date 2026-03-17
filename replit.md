@@ -48,9 +48,9 @@ artifacts-monorepo/
 │   │       └── app.ts             # Express app setup with rate limiting
 │   └── shopify-agent/             # React + Vite frontend
 │       └── src/
-│           ├── pages/             # Route pages (home, chat, settings, analytics, shop-for-me)
+│           ├── pages/             # Route pages (home, chat, settings, analytics, shop-for-me, embed-*)
 │           ├── components/        # Reusable UI components
-│           ├── hooks/             # Custom hooks (useSession, useChatStream)
+│           ├── hooks/             # Custom hooks (useSession, useChatStream, useEmbedMode)
 │           └── store/             # Zustand stores (cart)
 ├── lib/
 │   ├── api-spec/                  # OpenAPI 3.1 spec + Orval codegen config
@@ -81,7 +81,7 @@ artifacts-monorepo/
 
 ## Database Tables
 
-- **stores**: `store_domain` (PK), `storefront_token`, `access_token`, `provider` (enum: openai/anthropic/xai), `model`, `api_key`, `ucp_compliant` (boolean, default true), `chat_enabled` (boolean, default true), `created_at`
+- **stores**: `store_domain` (PK), `storefront_token`, `access_token`, `provider` (enum: openai/anthropic/xai), `model`, `api_key`, `ucp_compliant` (boolean, default true), `chat_enabled` (boolean, default true), `embed_enabled` (boolean, default false), `created_at`
 - **shop_knowledge**: `id`, `store_domain` (FK), `category` (enum: general/sizing/compatibility/required_accessories/restrictions/policies/custom), `title`, `content`, `sort_order`, timestamps
 - **conversations**: `id`, `store_domain` (FK), `session_id`, `title`, `messages` (JSONB), timestamps
 - **user_preferences**: `id`, `store_domain` (FK), `session_id`, `prefs` (JSONB), timestamps
@@ -154,6 +154,62 @@ ShopMCP is a fully UCP-compliant Shopify Agent. It uses the same Universal Comme
 ### UCP Spec Reference
 - Spec: https://ucp.dev/specification/overview/
 - Version: `2026-01-11`
+
+## Theme Embed Integration
+
+ShopMCP supports native Shopify theme integration via embed routes and a loader script.
+
+### Embed Modes
+- **Embed Chat** (`/embed/:storeDomain/chat`) — Full chromeless chat panel for theme sections
+- **AI Search** (`/embed/:storeDomain/search`) — AI-powered search bar streaming product results
+- **Contextual Assistant** (`/embed/:storeDomain/assistant`) — "Ask AI" button with pre-loaded context
+- **Product Assistant** (`/embed/:storeDomain/product/:productHandle`) — Inline collapsible AI panel for product pages
+
+### Embed Components
+- `EmbedChatPanel` — Reusable chat panel (no app chrome) accepting storeDomain + context props
+- `AISearchBar` — Search input streaming AI product results as ProductCard components
+- `ContextualAssistantButton` — Compact "Ask AI" button expanding to EmbedChatPanel
+- `ProductAssistant` — Collapsible product-specific AI assistant panel
+
+### Usage
+1. **Script Tag** (recommended): Add to `theme.liquid`:
+   ```html
+   <script src="https://YOUR_APP_URL/embed.js"
+     data-store-domain="{{ shop.permanent_domain }}"
+     data-mode="chat">
+   </script>
+   ```
+2. **Iframe Embed**: For custom sections / headless:
+   ```html
+   <iframe src="https://YOUR_APP_URL/embed/STORE.myshopify.com/chat?mode=embed"
+     style="width:100%;height:600px;border:none;border-radius:12px;">
+   </iframe>
+   ```
+3. **Product Pages**: Pass product context:
+   ```html
+   <script src="https://YOUR_APP_URL/embed.js"
+     data-store-domain="{{ shop.permanent_domain }}"
+     data-mode="product"
+     data-product-handle="{{ product.handle }}">
+   </script>
+   ```
+
+### Data Attributes
+- `data-store-domain` — Required. Shopify permanent domain
+- `data-mode` — `chat` | `search` | `assistant` | `product`
+- `data-position` — `bottom-right` | `bottom-left` | `top-right` | `top-left`
+- `data-product-handle` — Product handle for product mode
+- `data-collection-handle` — Collection handle for context
+- `data-cart-token` — Cart token for cart context
+- `data-width` / `data-height` — Custom dimensions
+- `data-container` — ID of existing DOM element to embed into
+
+### Store Controls
+- `chat_enabled` toggle (default: true) — When disabled, chat endpoints return 403
+- `embed_enabled` toggle (default: false) — Controls theme embed section in settings
+
+### Contextual Data
+Chat requests accept an optional `context` object with `productHandle`, `collectionHandle`, `cartToken`, and `searchMode`. Context is injected into the LLM system prompt.
 
 ## Environment Variables
 

@@ -11,7 +11,14 @@ const CATEGORY_LABELS: Record<string, string> = {
   custom: "Additional Information",
 };
 
-export function buildSystemPrompt(storeDomain: string, knowledge: ShopKnowledge[], ucpDoc?: UCPDiscoveryDocument | null): string {
+export interface ChatContext {
+  productHandle?: string;
+  collectionHandle?: string;
+  cartToken?: string;
+  searchMode?: boolean;
+}
+
+export function buildSystemPrompt(storeDomain: string, knowledge: ShopKnowledge[], ucpDoc?: UCPDiscoveryDocument | null, context?: ChatContext): string {
   let prompt = `You are a fully UCP-compliant Shopify Agent and helpful, knowledgeable shopping assistant for the store "${storeDomain}". Use the Universal Commerce Protocol primitives via MCP for all commerce actions (capability discovery, checkout negotiation, orders, post-purchase). Your job is to help customers find products, understand their options, and make informed purchasing decisions.
 
 ## Your Capabilities
@@ -52,6 +59,22 @@ Use these UCP tools for all checkout and order operations when available. They p
       for (const handler of ucpDoc.payment_handlers) {
         prompt += `\n- ${handler.type}${handler.supported_methods ? `: ${handler.supported_methods.join(", ")}` : ""}`;
       }
+    }
+  }
+
+  if (context) {
+    prompt += `\n\n## Current Customer Context`;
+    if (context.productHandle) {
+      prompt += `\nThe customer is currently viewing the product "${context.productHandle}". Help them with questions about this product. Use the get_product tool to fetch details about this product if needed.`;
+    }
+    if (context.collectionHandle) {
+      prompt += `\nThe customer is browsing the "${context.collectionHandle}" collection. Help them find products in this collection.`;
+    }
+    if (context.cartToken) {
+      prompt += `\nThe customer has an active cart (token: ${context.cartToken}). They may want help reviewing their cart or finding complementary products.`;
+    }
+    if (context.searchMode) {
+      prompt += `\nThe customer is using AI-powered search. Focus on finding and presenting relevant products. Use the search_products tool proactively.`;
     }
   }
 
