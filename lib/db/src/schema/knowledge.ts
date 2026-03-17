@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, pgEnum, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { storesTable } from "./stores";
@@ -24,7 +24,9 @@ export const shopKnowledgeTable = pgTable("shop_knowledge", {
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [
+  index("idx_shop_knowledge_store_category").on(table.storeDomain, table.category),
+]);
 
 export const insertKnowledgeSchema = createInsertSchema(shopKnowledgeTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertKnowledge = z.infer<typeof insertKnowledgeSchema>;

@@ -15,6 +15,7 @@ import {
 } from "@workspace/api-zod";
 import { validateStoreDomain } from "../services/tenant-validator";
 import { validateMerchantAuth } from "../services/merchant-auth";
+import { invalidateKnowledgeCache } from "./chat";
 
 const router: IRouter = Router();
 
@@ -67,6 +68,7 @@ router.post("/stores/:storeDomain/knowledge", validateStoreDomain, validateMerch
     })
     .returning();
 
+  invalidateKnowledgeCache(params.data.storeDomain);
   res.status(201).json(entry);
 });
 
@@ -105,6 +107,7 @@ router.patch("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain,
     return;
   }
 
+  invalidateKnowledgeCache(params.data.storeDomain);
   res.json(UpdateKnowledgeResponse.parse(entry));
 });
 
@@ -124,6 +127,7 @@ router.delete("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain
       )
     );
 
+  invalidateKnowledgeCache(params.data.storeDomain);
   res.sendStatus(204);
 });
 

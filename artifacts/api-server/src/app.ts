@@ -10,9 +10,15 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim())
   : undefined;
 
+const isProduction = process.env.NODE_ENV === "production";
+
 app.use(cors({
   credentials: true,
-  origin: allowedOrigins || true,
+  origin: allowedOrigins
+    ? allowedOrigins
+    : isProduction
+      ? false
+      : true,
 }));
 app.use(cookieParser());
 app.use(express.json({ limit: "1mb" }));

@@ -7,7 +7,8 @@ export async function* streamChat(
   systemPrompt: string,
   messages: LLMMessage[],
   tools: MCPToolDef[],
-  onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>
+  onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>,
+  signal?: AbortSignal
 ): AsyncGenerator<LLMStreamEvent> {
-  yield* streamOpenAIChat(apiKey, model, systemPrompt, messages, tools, onToolCall, "https://api.x.ai/v1");
+  yield* streamOpenAIChat(apiKey, model, systemPrompt, messages, tools, onToolCall, "https://api.x.ai/v1", signal);
 }

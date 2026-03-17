@@ -13,6 +13,7 @@ import {
   DeleteStoreParams,
 } from "@workspace/api-zod";
 import { validateMerchantAuth, validateMerchantAuthForStoreList } from "../services/merchant-auth";
+import { invalidateStoreCache } from "../services/tenant-validator";
 
 const router: IRouter = Router();
 
@@ -130,6 +131,7 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
     return;
   }
 
+  invalidateStoreCache(params.data.storeDomain);
   res.json(UpdateStoreResponse.parse(storeToResponse(store)));
 });
 
@@ -164,6 +166,7 @@ router.delete("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pr
   }
 
   await db.delete(storesTable).where(eq(storesTable.storeDomain, params.data.storeDomain));
+  invalidateStoreCache(params.data.storeDomain);
   res.sendStatus(204);
 });
 

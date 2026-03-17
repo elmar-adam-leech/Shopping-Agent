@@ -1,3 +1,6 @@
+import { streamChat as streamOpenAIChat } from "./llms/openai";
+import { streamChat as streamAnthropicChat } from "./llms/anthropic";
+import { streamChat as streamXAIChat } from "./llms/xai";
 import type { LLMStreamEvent, LLMMessage, MCPToolDef } from "./llms/openai";
 
 export type { LLMStreamEvent, LLMMessage, MCPToolDef };
@@ -9,29 +12,20 @@ export async function* streamChatWithProvider(
   systemPrompt: string,
   messages: LLMMessage[],
   tools: MCPToolDef[],
-  onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>
+  onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>,
+  signal?: AbortSignal
 ): AsyncGenerator<LLMStreamEvent> {
-  let streamFn: typeof import("./llms/openai").streamChat;
-
   switch (provider) {
-    case "openai": {
-      const mod = await import("./llms/openai");
-      streamFn = mod.streamChat;
+    case "openai":
+      yield* streamOpenAIChat(apiKey, model, systemPrompt, messages, tools, onToolCall, undefined, signal);
       break;
-    }
-    case "anthropic": {
-      const mod = await import("./llms/anthropic");
-      streamFn = mod.streamChat;
+    case "anthropic":
+      yield* streamAnthropicChat(apiKey, model, systemPrompt, messages, tools, onToolCall, signal);
       break;
-    }
-    case "xai": {
-      const mod = await import("./llms/xai");
-      streamFn = mod.streamChat;
+    case "xai":
+      yield* streamXAIChat(apiKey, model, systemPrompt, messages, tools, onToolCall, signal);
       break;
-    }
     default:
       throw new Error(`Unknown LLM provider: ${provider}`);
   }
-
-  yield* streamFn(apiKey, model, systemPrompt, messages, tools, onToolCall);
 }

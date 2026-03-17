@@ -21,7 +21,8 @@ export async function* streamChat(
   systemPrompt: string,
   messages: LLMMessage[],
   tools: MCPToolDef[],
-  onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>
+  onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>,
+  signal?: AbortSignal
 ): AsyncGenerator<LLMStreamEvent> {
   const client = new Anthropic({ apiKey });
 
@@ -52,6 +53,7 @@ export async function* streamChat(
   let continueLoop = true;
 
   while (continueLoop) {
+    if (signal?.aborted) return;
     continueLoop = false;
 
     const stream = client.messages.stream({
@@ -60,13 +62,14 @@ export async function* streamChat(
       system: systemPrompt,
       messages: anthropicMessages,
       tools: anthropicTools.length > 0 ? anthropicTools : undefined,
-    });
+    }, { signal });
 
     let currentToolUse: { id: string; name: string; input: string } | null = null;
     let assistantText = "";
     const contentBlocks: ContentBlock[] = [];
 
     for await (const event of stream) {
+      if (signal?.aborted) return;
       if (event.type === "content_block_start") {
         if (event.content_block.type === "tool_use") {
           currentToolUse = { id: event.content_block.id, name: event.content_block.name, input: "" };
@@ -100,22 +103,30 @@ export async function* streamChat(
     if (toolUseBlocks.length > 0) {
       anthropicMessages.push({ role: "assistant", content: contentBlocks });
 
-      const toolResults: Array<{ type: "tool_result"; tool_use_id: string; content: string }> = [];
       for (const tu of toolUseBlocks) {
         yield { type: "tool_call", data: { id: tu.id, name: tu.name, arguments: JSON.stringify(tu.input) } };
-
-        try {
-          const result = await onToolCall(tu.name, tu.input);
-          yield { type: "tool_result", data: { toolCallId: tu.id, content: result } };
-          toolResults.push({ type: "tool_result", tool_use_id: tu.id, content: result });
-        } catch (err: unknown) {
-          const errorMsg = `Error: ${err instanceof Error ? err.message : "Unknown error"}`;
-          toolResults.push({ type: "tool_result", tool_use_id: tu.id, content: errorMsg });
-          yield { type: "tool_result", data: { toolCallId: tu.id, content: errorMsg } };
-        }
       }
 
-      anthropicMessages.push({ role: "user", content: toolResults });
+      const toolResultPromises = toolUseBlocks.map(async (tu) => {
+        try {
+          const result = await onToolCall(tu.name, tu.input);
+          return { type: "tool_result" as const, tool_use_id: tu.id, content: result, error: false };
+        } catch (err: unknown) {
+          const errorMsg = `Error: ${err instanceof Error ? err.message : "Unknown error"}`;
+          return { type: "tool_result" as const, tool_use_id: tu.id, content: errorMsg, error: true };
+        }
+      });
+
+      const toolResults = await Promise.all(toolResultPromises);
+
+      for (const result of toolResults) {
+        yield { type: "tool_result", data: { toolCallId: result.tool_use_id, content: result.content } };
+      }
+
+      anthropicMessages.push({
+        role: "user",
+        content: toolResults.map(r => ({ type: "tool_result" as const, tool_use_id: r.tool_use_id, content: r.content })),
+      });
       continueLoop = true;
       assistantText = "";
     }

@@ -29,39 +29,40 @@ router.get("/stores/:storeDomain/analytics", validateStoreDomain, validateMercha
     gte(analyticsLogsTable.createdAt, since)
   );
 
-  const [chatCountResult] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(analyticsLogsTable)
-    .where(and(baseCondition, eq(analyticsLogsTable.eventType, "chat")));
-  const totalChats = chatCountResult?.count ?? 0;
+  const [countsResult, topQueriesResult, dailyChatsResult] = await Promise.all([
+    db
+      .select({
+        totalChats: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'chat')::int`,
+        totalSessions: sql<number>`count(distinct ${analyticsLogsTable.sessionId})::int`,
+      })
+      .from(analyticsLogsTable)
+      .where(baseCondition),
 
-  const [sessionCountResult] = await db
-    .select({ count: sql<number>`count(distinct ${analyticsLogsTable.sessionId})::int` })
-    .from(analyticsLogsTable)
-    .where(baseCondition);
-  const totalSessions = sessionCountResult?.count ?? 0;
+    db
+      .select({
+        query: sql<string>`lower(trim(${analyticsLogsTable.query}))`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(analyticsLogsTable)
+      .where(and(baseCondition, sql`${analyticsLogsTable.query} is not null`))
+      .groupBy(sql`lower(trim(${analyticsLogsTable.query}))`)
+      .orderBy(sql`count(*) desc`)
+      .limit(10),
 
-  const topQueriesResult = await db
-    .select({
-      query: sql<string>`lower(trim(${analyticsLogsTable.query}))`,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(analyticsLogsTable)
-    .where(and(baseCondition, sql`${analyticsLogsTable.query} is not null`))
-    .groupBy(sql`lower(trim(${analyticsLogsTable.query}))`)
-    .orderBy(sql`count(*) desc`)
-    .limit(10);
+    db
+      .select({
+        date: sql<string>`${analyticsLogsTable.createdAt}::date::text`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(analyticsLogsTable)
+      .where(baseCondition)
+      .groupBy(sql`${analyticsLogsTable.createdAt}::date`)
+      .orderBy(sql`${analyticsLogsTable.createdAt}::date asc`),
+  ]);
+
+  const totalChats = countsResult[0]?.totalChats ?? 0;
+  const totalSessions = countsResult[0]?.totalSessions ?? 0;
   const topQueries = topQueriesResult.map(r => ({ query: r.query, count: r.count }));
-
-  const dailyChatsResult = await db
-    .select({
-      date: sql<string>`${analyticsLogsTable.createdAt}::date::text`,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(analyticsLogsTable)
-    .where(baseCondition)
-    .groupBy(sql`${analyticsLogsTable.createdAt}::date`)
-    .orderBy(sql`${analyticsLogsTable.createdAt}::date asc`);
   const dailyChats = dailyChatsResult.map(r => ({ date: r.date, count: r.count }));
 
   res.json(

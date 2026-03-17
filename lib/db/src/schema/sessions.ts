@@ -7,6 +7,7 @@ export const sessionsTable = pgTable("sessions", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 }, (table) => [
   index("idx_sessions_expires_at").on(table.expiresAt),
+  index("idx_sessions_store_expires").on(table.storeDomain, table.expiresAt),
 ]);
 
 export type Session = typeof sessionsTable.$inferSelect;

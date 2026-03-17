@@ -56,6 +56,10 @@ router.get("/stores/:storeDomain/preferences", validateStoreDomain, validateSess
         sessionId: query.data.sessionId,
         prefs: {},
       })
+      .onConflictDoUpdate({
+        target: [userPreferencesTable.storeDomain, userPreferencesTable.sessionId],
+        set: { updatedAt: new Date() },
+      })
       .returning();
   }
 
@@ -75,33 +79,18 @@ router.put("/stores/:storeDomain/preferences", validateStoreDomain, validateSess
     return;
   }
 
-  const existing = await db
-    .select()
-    .from(userPreferencesTable)
-    .where(
-      and(
-        eq(userPreferencesTable.storeDomain, params.data.storeDomain),
-        eq(userPreferencesTable.sessionId, parsed.data.sessionId)
-      )
-    );
-
-  let prefs;
-  if (existing.length > 0) {
-    [prefs] = await db
-      .update(userPreferencesTable)
-      .set({ prefs: parsed.data.prefs })
-      .where(eq(userPreferencesTable.id, existing[0].id))
-      .returning();
-  } else {
-    [prefs] = await db
-      .insert(userPreferencesTable)
-      .values({
-        storeDomain: params.data.storeDomain,
-        sessionId: parsed.data.sessionId,
-        prefs: parsed.data.prefs,
-      })
-      .returning();
-  }
+  const [prefs] = await db
+    .insert(userPreferencesTable)
+    .values({
+      storeDomain: params.data.storeDomain,
+      sessionId: parsed.data.sessionId,
+      prefs: parsed.data.prefs,
+    })
+    .onConflictDoUpdate({
+      target: [userPreferencesTable.storeDomain, userPreferencesTable.sessionId],
+      set: { prefs: parsed.data.prefs, updatedAt: new Date() },
+    })
+    .returning();
 
   res.json(UpdatePreferencesResponse.parse(prefsToResponse(prefs)));
 });

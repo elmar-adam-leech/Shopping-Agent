@@ -31,7 +31,8 @@ export async function* streamChat(
   messages: LLMMessage[],
   tools: MCPToolDef[],
   onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>,
-  baseURL?: string
+  baseURL?: string,
+  signal?: AbortSignal
 ): AsyncGenerator<LLMStreamEvent> {
   const client = new OpenAI({ apiKey, ...(baseURL ? { baseURL } : {}) });
 
@@ -57,6 +58,7 @@ export async function* streamChat(
   let continueLoop = true;
 
   while (continueLoop) {
+    if (signal?.aborted) return;
     continueLoop = false;
 
     const stream = await client.chat.completions.create({
@@ -64,7 +66,7 @@ export async function* streamChat(
       messages: allMessages,
       tools: openaiTools.length > 0 ? openaiTools : undefined,
       stream: true,
-    });
+    }, { signal });
 
     interface ToolCallAccumulator {
       id: string;
@@ -75,6 +77,7 @@ export async function* streamChat(
     let assistantContent = "";
 
     for await (const chunk of stream) {
+      if (signal?.aborted) return;
       const delta = chunk.choices[0]?.delta;
       if (!delta) continue;
 
@@ -110,22 +113,24 @@ export async function* streamChat(
 
       for (const tc of currentToolCalls) {
         yield { type: "tool_call", data: { id: tc.id, name: tc.function.name, arguments: tc.function.arguments } };
+      }
 
+      const toolResultPromises = currentToolCalls.map(async (tc) => {
         try {
           const args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
           const result = await onToolCall(tc.function.name, args);
-          yield { type: "tool_result", data: { toolCallId: tc.id, content: result } };
-
-          allMessages.push({
-            role: "tool",
-            tool_call_id: tc.id,
-            content: result,
-          });
+          return { id: tc.id, content: result, error: false };
         } catch (err: unknown) {
           const errorMsg = `Error: ${err instanceof Error ? err.message : "Unknown error"}`;
-          allMessages.push({ role: "tool", tool_call_id: tc.id, content: errorMsg });
-          yield { type: "tool_result", data: { toolCallId: tc.id, content: errorMsg } };
+          return { id: tc.id, content: errorMsg, error: true };
         }
+      });
+
+      const toolResults = await Promise.all(toolResultPromises);
+
+      for (const result of toolResults) {
+        yield { type: "tool_result", data: { toolCallId: result.id, content: result.content } };
+        allMessages.push({ role: "tool", tool_call_id: result.id, content: result.content });
       }
 
       continueLoop = true;

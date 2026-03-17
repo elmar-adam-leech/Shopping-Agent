@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
 import { db, conversationsTable, shopKnowledgeTable, analyticsLogsTable } from "@workspace/db";
-import type { Conversation } from "@workspace/db/schema";
+import type { Conversation, ShopKnowledge } from "@workspace/db/schema";
 import { SendChatParams, SendChatBody } from "@workspace/api-zod";
 import { streamChatWithProvider } from "../services/llm-service";
 import { listTools, callTool, type MCPTool } from "../services/mcp-client";
@@ -21,6 +21,40 @@ interface ChatMessageRecord {
   timestamp: string;
 }
 
+const KNOWLEDGE_CACHE_TTL_MS = 120_000;
+
+interface KnowledgeCacheEntry {
+  data: ShopKnowledge[];
+  fetchedAt: number;
+}
+
+const knowledgeCache = new Map<string, KnowledgeCacheEntry>();
+
+export function invalidateKnowledgeCache(storeDomain: string): void {
+  knowledgeCache.delete(storeDomain);
+}
+
+async function getCachedKnowledge(storeDomain: string): Promise<ShopKnowledge[]> {
+  const cached = knowledgeCache.get(storeDomain);
+  if (cached && Date.now() - cached.fetchedAt < KNOWLEDGE_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const data = await db
+    .select()
+    .from(shopKnowledgeTable)
+    .where(eq(shopKnowledgeTable.storeDomain, storeDomain));
+
+  knowledgeCache.set(storeDomain, { data, fetchedAt: Date.now() });
+
+  if (knowledgeCache.size > 500) {
+    const first = knowledgeCache.keys().next().value;
+    if (first) knowledgeCache.delete(first);
+  }
+
+  return data;
+}
+
 async function executeToolWithFallback(
   storeDomain: string,
   storefrontToken: string,
@@ -30,9 +64,11 @@ async function executeToolWithFallback(
 ): Promise<string> {
   try {
     const result = await callTool(storeDomain, storefrontToken, toolName, args, ucpEnabled);
-    const parsed = JSON.parse(result);
-    if (parsed.error) {
-      throw new Error(parsed.error);
+    if (result.includes('"error"')) {
+      const parsed = JSON.parse(result);
+      if (parsed.error) {
+        throw new Error(parsed.error);
+      }
     }
     return result;
   } catch {
@@ -92,8 +128,12 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders();
 
+  const abortController = new AbortController();
   let clientDisconnected = false;
-  req.on("close", () => { clientDisconnected = true; });
+  req.on("close", () => {
+    clientDisconnected = true;
+    abortController.abort();
+  });
 
   function safeSend(data: string): boolean {
     if (clientDisconnected) return false;
@@ -101,10 +141,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
   }
 
   try {
-    const knowledge = await db
-      .select()
-      .from(shopKnowledgeTable)
-      .where(eq(shopKnowledgeTable.storeDomain, store.storeDomain));
+    const knowledge = await getCachedKnowledge(store.storeDomain);
 
     let conversation: Conversation | null = null;
     let existingMessages: ChatMessageRecord[] = [];
@@ -157,8 +194,8 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       const result = await listTools(store.storeDomain, store.storefrontToken, ucpEnabled);
       tools = result.tools;
       ucpDoc = result.ucpDoc;
-    } catch {
-      // tools will be empty, chat continues without MCP tools
+    } catch (err) {
+      console.warn(`Failed to list MCP tools for store="${store.storeDomain}":`, err instanceof Error ? err.message : err);
     }
 
     const chatContext = parsed.data.context ? {
@@ -189,7 +226,8 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       tools,
       async (toolName: string, args: Record<string, unknown>) => {
         return executeToolWithFallback(store.storeDomain, store.storefrontToken!, toolName, args, ucpEnabled);
-      }
+      },
+      abortController.signal
     );
 
     for await (const event of stream) {
@@ -227,7 +265,8 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       sessionId: parsed.data.sessionId,
     });
   } catch (err: unknown) {
-    console.error("Chat error:", err);
+    if (clientDisconnected) return;
+    console.error(`Chat error for store="${store.storeDomain}" session="${parsed.data.sessionId}":`, err);
     safeSend(`data: ${JSON.stringify({ type: "error", data: "An error occurred processing your message" })}\n\n`);
   } finally {
     res.end();

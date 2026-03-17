@@ -66,11 +66,8 @@ function evictOldestCacheEntries() {
   }
 }
 
-const MAX_REQUEST_ID = 2_147_483_647;
-let requestId = 0;
-function nextId() {
-  requestId = requestId >= MAX_REQUEST_ID ? 1 : requestId + 1;
-  return requestId;
+function nextId(): string {
+  return crypto.randomUUID();
 }
 
 export async function discoverUCPCapabilities(storeDomain: string): Promise<UCPDiscoveryDocument | null> {
@@ -86,22 +83,23 @@ export async function discoverUCPCapabilities(storeDomain: string): Promise<UCPD
         "Accept": "application/json",
         "UCP-Version": "2026-01-11",
       },
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!response.ok) {
-      console.log(`UCP discovery not available for ${storeDomain} (${response.status}) — continuing with standard MCP tools`);
+      console.log(`[ucp-discovery] store="${storeDomain}" status=${response.status} — UCP not available, continuing with standard MCP tools`);
       ucpCache.set(storeDomain, { document: null, fetchedAt: Date.now() });
       evictOldestCacheEntries();
       return null;
     }
 
     const doc = (await response.json()) as UCPDiscoveryDocument;
-    console.log(`UCP discovery successful for ${storeDomain}: version=${doc.version}`);
+    console.log(`[ucp-discovery] store="${storeDomain}" status=ok version=${doc.version}`);
     ucpCache.set(storeDomain, { document: doc, fetchedAt: Date.now() });
     evictOldestCacheEntries();
     return doc;
   } catch (err) {
-    console.log(`UCP discovery failed for ${storeDomain}: ${err instanceof Error ? err.message : "Unknown error"} — continuing with standard MCP tools`);
+    console.warn(`[ucp-discovery] store="${storeDomain}" status=error error="${err instanceof Error ? err.message : "Unknown error"}" — continuing with standard MCP tools`);
     ucpCache.set(storeDomain, { document: null, fetchedAt: Date.now() });
     evictOldestCacheEntries();
     return null;
@@ -242,17 +240,18 @@ export async function listTools(storeDomain: string, storefrontToken: string, uc
         method: "tools/list",
         params: {},
       }),
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {
-      console.error(`MCP tools/list failed: ${response.status}`);
+      console.error(`[mcp-tools-list] store="${storeDomain}" status=${response.status} — falling back to default tools`);
       mcpTools = getDefaultTools();
     } else {
       const data = (await response.json()) as JsonRpcResponse;
       mcpTools = data.result?.tools || getDefaultTools();
     }
   } catch (err) {
-    console.error("MCP tools/list error:", err);
+    console.error(`[mcp-tools-list] store="${storeDomain}" status=error error="${err instanceof Error ? err.message : "Unknown error"}" — falling back to default tools`);
     mcpTools = getDefaultTools();
   }
 
@@ -303,6 +302,7 @@ export async function callTool(
         method: "tools/call",
         params: { name: toolName, arguments: args },
       }),
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!response.ok) {

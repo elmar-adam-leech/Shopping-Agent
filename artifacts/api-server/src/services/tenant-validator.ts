@@ -11,6 +11,39 @@ declare global {
   }
 }
 
+const STORE_CACHE_TTL_MS = 60_000;
+
+interface StoreCacheEntry {
+  store: Store;
+  fetchedAt: number;
+}
+
+const storeCache = new Map<string, StoreCacheEntry>();
+
+export function invalidateStoreCache(storeDomain: string): void {
+  storeCache.delete(storeDomain);
+}
+
+async function getCachedStore(storeDomain: string): Promise<Store | null> {
+  const cached = storeCache.get(storeDomain);
+  if (cached && Date.now() - cached.fetchedAt < STORE_CACHE_TTL_MS) {
+    return cached.store;
+  }
+
+  const [store] = await db
+    .select()
+    .from(storesTable)
+    .where(eq(storesTable.storeDomain, storeDomain));
+
+  if (store) {
+    storeCache.set(storeDomain, { store, fetchedAt: Date.now() });
+  } else {
+    storeCache.delete(storeDomain);
+  }
+
+  return store ?? null;
+}
+
 export async function validateStoreDomain(
   req: Request,
   res: Response,
@@ -31,10 +64,7 @@ export async function validateStoreDomain(
     return;
   }
 
-  const [store] = await db
-    .select()
-    .from(storesTable)
-    .where(eq(storesTable.storeDomain, storeDomain));
+  const store = await getCachedStore(storeDomain);
 
   if (!store) {
     res.status(404).json({ error: "Store not found" });
