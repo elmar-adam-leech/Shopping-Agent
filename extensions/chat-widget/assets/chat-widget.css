@@ -485,3 +485,33 @@
     left: 16px;
   }
 }
+
+.mcp-retry-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--mcp-primary);
+  background: var(--mcp-primary-light);
+  border: 1px solid var(--mcp-primary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mcp-retry-btn:hover {
+  background: var(--mcp-primary);
+  color: #fff;
+}
+
+.mcp-retry-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

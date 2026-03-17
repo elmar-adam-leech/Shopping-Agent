@@ -1,12 +1,15 @@
 (function () {
   "use strict";
 
+  var SSE_BUFFER_MAX = 65536;
+
   var ICONS = {
     chat: '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
     sparkle: '<svg viewBox="0 0 24 24"><path d="M12 2l2.09 6.26L20.18 10l-6.09 1.74L12 18l-2.09-6.26L3.82 10l6.09-1.74L12 2z"/><path d="M5 19l1.04 3.12L9.16 23.5l-3.12 1.38L5 28l-1.04-3.12L.84 23.5l3.12-1.38z" transform="scale(0.5) translate(2, -6)"/></svg>',
     close: '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
     send: '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
-    tool: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
+    tool: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    retry: '<svg viewBox="0 0 24 24" width="14" height="14"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>'
   };
 
   var TOOL_LABELS = {
@@ -48,6 +51,9 @@
     messages: [],
     isLoading: false
   };
+
+  var currentAbortController = null;
+  var destroyed = false;
 
   var SESSION_KEY = "mcp_chat_session_" + config.storeDomain;
   var CONV_KEY = "mcp_chat_conv_" + config.storeDomain;
@@ -105,32 +111,57 @@
     }
   }
 
+  function clearSessionStorage() {
+    state.sessionId = null;
+    state.conversationId = null;
+    try {
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(CONV_KEY);
+    } catch (e) { /* ignore */ }
+  }
+
+  var sessionAbortController = null;
+
   function createSession(callback) {
-    var xhr = new XMLHttpRequest();
-    xhr.open("POST", config.apiEndpoint + "/sessions");
-    xhr.setRequestHeader("Content-Type", "application/json");
-    xhr.onload = function () {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          var data = JSON.parse(xhr.responseText);
-          state.sessionId = data.sessionId;
-          saveSession();
-          callback(null, data.sessionId);
-        } catch (e) {
-          callback(e);
+    if (destroyed) return;
+
+    if (sessionAbortController) {
+      sessionAbortController.abort();
+    }
+    sessionAbortController = new AbortController();
+    var signal = sessionAbortController.signal;
+
+    fetch(config.apiEndpoint + "/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ storeDomain: config.storeDomain }),
+      signal: signal
+    })
+      .then(function (response) {
+        if (destroyed) return;
+        if (response.status >= 200 && response.status < 300) {
+          return response.json().then(function (data) {
+            sessionAbortController = null;
+            state.sessionId = data.sessionId;
+            saveSession();
+            callback(null, data.sessionId);
+          });
+        } else if (response.status === 403) {
+          sessionAbortController = null;
+          var err = new Error("Chat is currently disabled for this store");
+          err.chatDisabled = true;
+          callback(err);
+        } else {
+          sessionAbortController = null;
+          callback(new Error("Session creation failed: " + response.status));
         }
-      } else if (xhr.status === 403) {
-        var err = new Error("Chat is currently disabled for this store");
-        err.chatDisabled = true;
-        callback(err);
-      } else {
-        callback(new Error("Session creation failed: " + xhr.status));
-      }
-    };
-    xhr.onerror = function () {
-      callback(new Error("Network error creating session"));
-    };
-    xhr.send(JSON.stringify({ storeDomain: config.storeDomain }));
+      })
+      .catch(function (err) {
+        sessionAbortController = null;
+        if (destroyed) return;
+        if (err.name === "AbortError") return;
+        callback(new Error("Network error creating session"));
+      });
   }
 
   function ensureSession(callback) {
@@ -139,6 +170,17 @@
       return;
     }
     createSession(callback);
+  }
+
+  function abortCurrentRequest() {
+    if (currentAbortController) {
+      currentAbortController.abort();
+      currentAbortController = null;
+    }
+    if (sessionAbortController) {
+      sessionAbortController.abort();
+      sessionAbortController = null;
+    }
   }
 
   function el(tag, className, attrs) {
@@ -194,17 +236,20 @@
     onClick: handleSend
   });
 
-  textarea.addEventListener("keydown", function (e) {
+  function onTextareaKeydown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  });
+  }
 
-  textarea.addEventListener("input", function () {
+  function onTextareaInput() {
     textarea.style.height = "auto";
     textarea.style.height = Math.min(textarea.scrollHeight, 100) + "px";
-  });
+  }
+
+  textarea.addEventListener("keydown", onTextareaKeydown);
+  textarea.addEventListener("input", onTextareaInput);
 
   inputArea.appendChild(textarea);
   inputArea.appendChild(sendBtn);
@@ -223,6 +268,31 @@
   loadSession();
   renderMessages();
 
+  var navigationObserver = new MutationObserver(function () {
+    if (!document.contains(root)) {
+      destroyWidget();
+    }
+  });
+
+  navigationObserver.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.addEventListener("beforeunload", onBeforeUnload);
+
+  function onBeforeUnload() {
+    abortCurrentRequest();
+  }
+
+  function destroyWidget() {
+    if (destroyed) return;
+    destroyed = true;
+    abortCurrentRequest();
+    navigationObserver.disconnect();
+    window.removeEventListener("beforeunload", onBeforeUnload);
+    textarea.removeEventListener("keydown", onTextareaKeydown);
+    textarea.removeEventListener("input", onTextareaInput);
+    state.isLoading = false;
+  }
+
   function togglePanel() {
     state.isOpen = !state.isOpen;
     if (state.isOpen) {
@@ -232,6 +302,7 @@
     } else {
       panel.classList.remove("visible");
       bubble.classList.remove("open");
+      abortCurrentRequest();
     }
   }
 
@@ -241,6 +312,8 @@
 
     textarea.value = "";
     textarea.style.height = "auto";
+
+    removeErrorMessages();
 
     state.messages.push({
       role: "user",
@@ -253,13 +326,17 @@
 
     ensureSession(function (err) {
       if (err) {
+        if (destroyed) return;
         var msg = (err.chatDisabled)
           ? "Chat is currently unavailable for this store."
           : "Sorry, I couldn't connect to the assistant. Please try again.";
         state.messages.push({
           role: "assistant",
           content: msg,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          isError: !err.chatDisabled,
+          failedMessage: !err.chatDisabled ? text : null,
+          errorType: "session"
         });
         renderMessages();
         return;
@@ -268,11 +345,44 @@
     });
   }
 
+  function removeErrorMessages() {
+    state.messages = state.messages.filter(function (m) {
+      return !m.isError;
+    });
+  }
+
+  function retryMessage(message) {
+    removeErrorMessages();
+    renderMessages();
+    scrollToBottom();
+    ensureSession(function (err) {
+      if (err) {
+        if (destroyed) return;
+        state.messages.push({
+          role: "assistant",
+          content: "Sorry, I couldn't connect to the assistant. Please try again.",
+          timestamp: new Date().toISOString(),
+          isError: true,
+          failedMessage: message,
+          errorType: "session"
+        });
+        renderMessages();
+        return;
+      }
+      sendChatMessage(message);
+    });
+  }
+
   function sendChatMessage(message, retryCount) {
+    if (destroyed) return;
     retryCount = retryCount || 0;
     state.isLoading = true;
     renderMessages();
     scrollToBottom();
+
+    abortCurrentRequest();
+    var controller = new AbortController();
+    currentAbortController = controller;
 
     var url = config.apiEndpoint + "/stores/" + encodeURIComponent(config.storeDomain) + "/chat";
 
@@ -286,12 +396,15 @@
         sessionId: state.sessionId,
         conversationId: state.conversationId,
         message: message
-      })
+      }),
+      signal: controller.signal
     })
       .then(function (response) {
+        if (destroyed) return;
         if (response.status === 403) {
           return response.json().then(function (body) {
             state.isLoading = false;
+            currentAbortController = null;
             if (body && body.error && body.error.indexOf("disabled") !== -1) {
               state.messages.push({ role: "assistant", content: "Chat is currently unavailable for this store.", timestamp: new Date().toISOString() });
               renderMessages();
@@ -299,37 +412,60 @@
               return;
             }
             if (retryCount < 1) {
-              state.sessionId = null;
-              state.conversationId = null;
-              try { localStorage.removeItem(SESSION_KEY); localStorage.removeItem(CONV_KEY); } catch (e) { /* ignore */ }
+              clearSessionStorage();
               return ensureSession(function (err) {
                 if (err) {
-                  state.messages.push({ role: "assistant", content: "Session expired. Please try sending your message again.", timestamp: new Date().toISOString() });
+                  state.messages.push({
+                    role: "assistant",
+                    content: "Session expired. Please try sending your message again.",
+                    timestamp: new Date().toISOString(),
+                    isError: true,
+                    failedMessage: message,
+                    errorType: "session"
+                  });
                   renderMessages();
                   return;
                 }
                 sendChatMessage(message, retryCount + 1);
               });
             }
-            state.messages.push({ role: "assistant", content: "Sorry, something went wrong. Please try again.", timestamp: new Date().toISOString() });
+            state.messages.push({
+              role: "assistant",
+              content: "Sorry, something went wrong. Please try again.",
+              timestamp: new Date().toISOString(),
+              isError: true,
+              failedMessage: message,
+              errorType: "chat"
+            });
             renderMessages();
           }).catch(function () {
             state.isLoading = false;
-            state.messages.push({ role: "assistant", content: "Sorry, something went wrong. Please try again.", timestamp: new Date().toISOString() });
+            currentAbortController = null;
+            state.messages.push({
+              role: "assistant",
+              content: "Sorry, something went wrong. Please try again.",
+              timestamp: new Date().toISOString(),
+              isError: true,
+              failedMessage: message,
+              errorType: "chat"
+            });
             renderMessages();
           });
         }
         if (response.status === 401 && retryCount < 1) {
-          state.sessionId = null;
-          state.conversationId = null;
-          try {
-            localStorage.removeItem(SESSION_KEY);
-            localStorage.removeItem(CONV_KEY);
-          } catch (e) { /* ignore */ }
+          clearSessionStorage();
           state.isLoading = false;
+          currentAbortController = null;
           return ensureSession(function (err) {
             if (err) {
-              state.messages.push({ role: "assistant", content: "Session expired. Please try sending your message again.", timestamp: new Date().toISOString() });
+              state.messages.push({
+                role: "assistant",
+                content: "Session expired. Please try sending your message again.",
+                timestamp: new Date().toISOString(),
+                isError: true,
+                failedMessage: message,
+                errorType: "session"
+              });
               renderMessages();
               return;
             }
@@ -355,10 +491,17 @@
         });
 
         function processChunk() {
+          if (controller.signal.aborted || destroyed) {
+            state.isLoading = false;
+            currentAbortController = null;
+            renderMessages();
+            return;
+          }
           return reader.read().then(function (result) {
             if (result.done) {
               if (sseBuffer.trim()) processSSELines(sseBuffer);
               state.isLoading = false;
+              currentAbortController = null;
               renderMessages();
               scrollToBottom();
               return;
@@ -367,6 +510,24 @@
             sseBuffer += decoder.decode(result.value, { stream: true });
             var lines = sseBuffer.split("\n");
             sseBuffer = lines.pop() || "";
+
+            if (sseBuffer.length > SSE_BUFFER_MAX) {
+              console.warn("[MCP Chat Widget] SSE buffer exceeded " + SSE_BUFFER_MAX + " bytes, resetting.");
+              sseBuffer = "";
+              var lastMsg = state.messages[state.messages.length - 1];
+              if (lastMsg && lastMsg.role === "assistant") {
+                lastMsg.content = (lastMsg.content ? lastMsg.content + "\n\n" : "") + "Response was too large to process. Please try a simpler question.";
+                lastMsg.isError = true;
+                lastMsg.failedMessage = message;
+                lastMsg.errorType = "chat";
+              }
+              state.isLoading = false;
+              currentAbortController = null;
+              reader.cancel();
+              renderMessages();
+              scrollToBottom();
+              return;
+            }
 
             for (var i = 0; i < lines.length; i++) {
               processSSELine(lines[i]);
@@ -415,6 +576,9 @@
               lastMsg.toolResults = toolResults.slice();
             } else if (event.type === "error") {
               lastMsg.content = (assistantContent ? assistantContent + "\n\n" : "") + (typeof event.data === "string" ? event.data : "An error occurred processing your message.");
+              lastMsg.isError = true;
+              lastMsg.failedMessage = message;
+              lastMsg.errorType = "chat";
             }
           } catch (e) {
             // incomplete JSON, will be completed in next chunk
@@ -424,12 +588,23 @@
         return processChunk();
       })
       .catch(function (err) {
+        if (destroyed) return;
+        if (err.name === "AbortError") {
+          state.isLoading = false;
+          currentAbortController = null;
+          renderMessages();
+          return;
+        }
         console.error("[MCP Chat Widget] Error:", err);
         state.isLoading = false;
+        currentAbortController = null;
         state.messages.push({
           role: "assistant",
           content: "Sorry, something went wrong. Please try again.",
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          isError: true,
+          failedMessage: message,
+          errorType: "chat"
         });
         renderMessages();
         scrollToBottom();
@@ -510,6 +685,20 @@
         renderMarkdownDOM(msg.content, bubble);
       }
       wrapper.appendChild(bubble);
+    }
+
+    if (msg.isError && msg.failedMessage) {
+      var retryBtn = el("button", "mcp-retry-btn", {
+        onClick: (function (failedMsg) {
+          return function () {
+            retryMessage(failedMsg);
+          };
+        })(msg.failedMessage)
+      });
+      var retryIcon = el("span", "mcp-retry-icon", { innerHTML: ICONS.retry });
+      retryBtn.appendChild(retryIcon);
+      retryBtn.appendChild(document.createTextNode(" Retry"));
+      wrapper.appendChild(retryBtn);
     }
 
     return wrapper;
