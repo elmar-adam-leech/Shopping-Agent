@@ -1,0 +1,70 @@
+{% comment %}
+  Shopify MCP Agent — Embeddable Chat Widget (Theme App Extension Block)
+  Renders a floating AI chat widget on the storefront.
+{% endcomment %}
+
+<div
+  id="mcp-chat-widget"
+  data-api-endpoint="{{ block.settings.api_endpoint }}"
+  data-store-domain="{{ shop.permanent_domain }}"
+  data-position="{{ block.settings.widget_position }}"
+  data-primary-color="{{ block.settings.primary_color }}"
+  data-welcome-message="{{ block.settings.welcome_message }}"
+  data-bubble-icon="{{ block.settings.bubble_icon }}"
+  data-widget-title="{{ block.settings.widget_title }}"
+></div>
+
+{% schema %}
+{
+  "name": "AI Chat Widget",
+  "target": "body",
+  "javascript": "chat-widget.js",
+  "stylesheet": "chat-widget.css",
+  "settings": [
+    {
+      "type": "url",
+      "id": "api_endpoint",
+      "label": "API Endpoint URL",
+      "info": "The base URL of your Shopify MCP Agent API server (e.g. https://your-app.replit.app/api)"
+    },
+    {
+      "type": "select",
+      "id": "widget_position",
+      "label": "Widget Position",
+      "default": "bottom-right",
+      "options": [
+        { "value": "bottom-right", "label": "Bottom Right" },
+        { "value": "bottom-left", "label": "Bottom Left" }
+      ]
+    },
+    {
+      "type": "color",
+      "id": "primary_color",
+      "label": "Primary Color",
+      "default": "#6366f1"
+    },
+    {
+      "type": "text",
+      "id": "welcome_message",
+      "label": "Welcome Message",
+      "default": "Hi! I'm your AI shopping assistant. How can I help you today?"
+    },
+    {
+      "type": "select",
+      "id": "bubble_icon",
+      "label": "Bubble Icon",
+      "default": "chat",
+      "options": [
+        { "value": "chat", "label": "Chat Bubble" },
+        { "value": "sparkle", "label": "Sparkle / AI" }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "widget_title",
+      "label": "Widget Title",
+      "default": "Shopping Assistant"
+    }
+  ]
+}
+{% endschema %}

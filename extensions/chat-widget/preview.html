@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chat Widget Preview</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background: #f8fafc;
+    }
+    .preview-banner {
+      background: #1e293b;
+      color: white;
+      padding: 16px 24px;
+      text-align: center;
+      font-size: 14px;
+    }
+    .preview-banner strong { color: #818cf8; }
+    .preview-store {
+      max-width: 960px;
+      margin: 40px auto;
+      padding: 0 24px;
+    }
+    .preview-store h1 {
+      font-size: 28px;
+      color: #1e293b;
+      margin-bottom: 8px;
+    }
+    .preview-store p {
+      color: #64748b;
+      line-height: 1.6;
+    }
+    .preview-products {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 20px;
+      margin-top: 32px;
+    }
+    .preview-product {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .preview-product .swatch {
+      width: 100%;
+      height: 140px;
+      background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    .preview-product h3 { font-size: 15px; color: #1e293b; margin: 0 0 4px; }
+    .preview-product .price { color: #6366f1; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="preview-banner">
+    <strong>Preview Mode</strong> — This simulates a Shopify storefront.
+    The chat widget appears in the bottom-right corner.
+    Configure <code>data-api-endpoint</code> and <code>data-store-domain</code> below.
+  </div>
+
+  <div class="preview-store">
+    <h1>Example Store</h1>
+    <p>This is a preview page that simulates a Shopify storefront so you can test the AI chat widget
+       without needing a live Shopify store. The chat bubble should appear in the bottom-right corner.</p>
+
+    <div class="preview-products">
+      <div class="preview-product">
+        <div class="swatch"></div>
+        <h3>Sample Product A</h3>
+        <div class="price">$49.99</div>
+      </div>
+      <div class="preview-product">
+        <div class="swatch" style="background: linear-gradient(135deg, #fce7f3, #fbcfe8);"></div>
+        <h3>Sample Product B</h3>
+        <div class="price">$29.99</div>
+      </div>
+      <div class="preview-product">
+        <div class="swatch" style="background: linear-gradient(135deg, #d1fae5, #a7f3d0);"></div>
+        <h3>Sample Product C</h3>
+        <div class="price">$79.99</div>
+      </div>
+      <div class="preview-product">
+        <div class="swatch" style="background: linear-gradient(135deg, #fef3c7, #fde68a);"></div>
+        <h3>Sample Product D</h3>
+        <div class="price">$19.99</div>
+      </div>
+    </div>
+  </div>
+
+  <!--
+    Chat Widget Embed
+    Update data-api-endpoint to point to your running API server.
+    Update data-store-domain to match a registered store domain.
+  -->
+  <div
+    id="mcp-chat-widget"
+    data-api-endpoint="http://localhost:3001/api"
+    data-store-domain="your-store.myshopify.com"
+    data-position="bottom-right"
+    data-primary-color="#6366f1"
+    data-welcome-message="Hi! I'm your AI shopping assistant. How can I help you today?"
+    data-bubble-icon="chat"
+    data-widget-title="Shopping Assistant"
+  ></div>
+
+  <link rel="stylesheet" href="assets/chat-widget.css">
+  <script src="assets/chat-widget.js" defer></script>
+</body>
+</html>

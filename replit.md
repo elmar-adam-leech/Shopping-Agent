@@ -63,6 +63,15 @@ artifacts-monorepo/
 │           ├── conversations.ts   # conversations table (JSONB messages)
 │           ├── preferences.ts     # user_preferences table (JSONB prefs)
 │           └── analytics.ts       # analytics_logs table
+├── extensions/
+│   └── chat-widget/              # Shopify theme app extension
+│       ├── shopify.extension.toml # Extension config
+│       ├── blocks/
+│       │   └── chat-widget.liquid # Liquid block with schema settings
+│       ├── assets/
+│       │   ├── chat-widget.css   # Widget styles
+│       │   └── chat-widget.js    # Self-contained vanilla JS widget
+│       └── preview.html          # Standalone preview/demo page
 ├── scripts/
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json
