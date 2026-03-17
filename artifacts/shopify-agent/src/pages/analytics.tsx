@@ -1,33 +1,34 @@
 import { useRoute } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useGetAnalytics } from "@workspace/api-client-react";
-import { BarChart2, MessageSquare, Users, TrendingUp } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
+import { MessageSquare, Users, TrendingUp, Loader2 } from "lucide-react";
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
 
 export default function AnalyticsPage() {
   const [, params] = useRoute("/:storeDomain/analytics");
   const storeDomain = params?.storeDomain || "";
   
-  // Mock data since the endpoint might not be fully seeded yet
-  // In a real scenario we'd use the data from useGetAnalytics
   const { data, isLoading } = useGetAnalytics(storeDomain, { days: 7 });
 
-  const mockChartData = [
-    { date: 'Mon', count: 12 },
-    { date: 'Tue', count: 19 },
-    { date: 'Wed', count: 15 },
-    { date: 'Thu', count: 25 },
-    { date: 'Fri', count: 32 },
-    { date: 'Sat', count: 48 },
-    { date: 'Sun', count: 42 },
+  const emptyChartData = [
+    { date: 'Mon', count: 0 },
+    { date: 'Tue', count: 0 },
+    { date: 'Wed', count: 0 },
+    { date: 'Thu', count: 0 },
+    { date: 'Fri', count: 0 },
+    { date: 'Sat', count: 0 },
+    { date: 'Sun', count: 0 },
   ];
 
-  const mockTopQueries = [
-    { query: "Recommend a mini split for 400 sq ft", count: 45 },
-    { query: "Return policy for damaged units", count: 28 },
-    { query: "Is the MXZ compatible with GL heads?", count: 15 },
-    { query: "Track my order #1234", count: 12 },
-  ];
+  if (isLoading) {
+    return (
+      <AppLayout storeDomain={storeDomain}>
+        <div className="flex h-full items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout storeDomain={storeDomain}>
@@ -40,31 +41,30 @@ export default function AnalyticsPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <StatCard 
             title="Total Conversations" 
-            value={data?.totalChats || 248} 
-            trend="+12%" 
+            value={data?.totalChats ?? 0} 
+            trend="+0%" 
             icon={<MessageSquare className="w-5 h-5 text-primary" />} 
           />
           <StatCard 
             title="Active Sessions" 
-            value={data?.totalSessions || 156} 
-            trend="+5%" 
+            value={data?.totalSessions ?? 0} 
+            trend="+0%" 
             icon={<Users className="w-5 h-5 text-emerald-500" />} 
           />
           <StatCard 
             title="Conversion Lift" 
-            value="3.2%" 
-            trend="+0.8%" 
+            value="--" 
+            trend="--" 
             icon={<TrendingUp className="w-5 h-5 text-amber-500" />} 
           />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Chart */}
           <div className="lg:col-span-2 bg-card border border-border/50 rounded-3xl p-6 shadow-sm">
             <h3 className="font-bold font-display text-lg mb-6">Daily Chat Volume (Last 7 Days)</h3>
             <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data?.dailyChats || mockChartData}>
+                <AreaChart data={data?.dailyChats || emptyChartData}>
                   <defs>
                     <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
@@ -83,18 +83,23 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          {/* Top Queries */}
           <div className="lg:col-span-1 bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col">
             <h3 className="font-bold font-display text-lg mb-6">Top Customer Queries</h3>
             <div className="flex-1 overflow-y-auto pr-2 space-y-4">
-              {(data?.topQueries || mockTopQueries).map((item, i) => (
-                <div key={i} className="flex items-start justify-between gap-4 p-3 rounded-xl bg-secondary/30 hover:bg-secondary/50 transition-colors">
-                  <p className="text-sm font-medium leading-snug">{item.query}</p>
-                  <div className="px-2 py-1 rounded-md bg-background border border-border/50 text-xs font-bold text-muted-foreground whitespace-nowrap">
-                    {item.count}
+              {data?.topQueries && data.topQueries.length > 0 ? (
+                data.topQueries.map((item, i) => (
+                  <div key={i} className="flex items-start justify-between gap-4 p-3 rounded-xl bg-secondary/30 hover:bg-secondary/50 transition-colors">
+                    <p className="text-sm font-medium leading-snug">{item.query}</p>
+                    <div className="px-2 py-1 rounded-md bg-background border border-border/50 text-xs font-bold text-muted-foreground whitespace-nowrap">
+                      {item.count}
+                    </div>
                   </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-muted-foreground text-sm">
+                  No queries recorded yet. Start chatting to see insights.
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>

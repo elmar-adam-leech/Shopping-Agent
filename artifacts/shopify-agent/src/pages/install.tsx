@@ -11,7 +11,6 @@ export default function InstallPage() {
     e.preventDefault();
     if (!shop) return;
     
-    // In a real app this redirects to OAuth flow. We'll simulate by redirecting to /api/auth/install
     const shopDomain = shop.includes(".myshopify.com") ? shop : `${shop}.myshopify.com`;
     window.location.href = `/api/auth/install?shop=${encodeURIComponent(shopDomain)}`;
   };

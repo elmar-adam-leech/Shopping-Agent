@@ -5,7 +5,7 @@ import { CartPanel } from "@/components/chat/cart-panel";
 import { useSession } from "@/hooks/use-session";
 import { useChatStream } from "@/hooks/use-chat-stream";
 import { useListConversations, useDeleteConversation } from "@workspace/api-client-react";
-import { Send, Sparkles, Loader2, RefreshCw, ShoppingBag, MessageSquare, Plus, Trash2 } from "lucide-react";
+import { Send, Sparkles, Loader2, RefreshCw, ShoppingBag, MessageSquare, Plus, Trash2, Search, Tag, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar } from "@/components/ui/avatar";
@@ -247,6 +247,162 @@ export default function ChatPage() {
   );
 }
 
+interface ProductCardData {
+  title?: string;
+  handle?: string;
+  id?: string;
+  featuredImage?: { url?: string; altText?: string };
+  images?: { edges?: Array<{ node: { url?: string; altText?: string } }> };
+  priceRange?: {
+    minVariantPrice?: { amount?: string; currencyCode?: string };
+    maxVariantPrice?: { amount?: string; currencyCode?: string };
+  };
+  description?: string;
+  vendor?: string;
+}
+
+interface CollectionCardData {
+  title?: string;
+  handle?: string;
+  description?: string;
+  image?: { url?: string; altText?: string };
+  productsCount?: number;
+}
+
+function tryParseToolResult(content: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
+
+function ProductCard({ product }: { product: ProductCardData }) {
+  const imageUrl = product.featuredImage?.url || product.images?.edges?.[0]?.node?.url;
+  const price = product.priceRange?.minVariantPrice;
+  return (
+    <div className="flex gap-3 p-3 bg-card border border-border/50 rounded-xl hover:border-primary/30 transition-colors">
+      {imageUrl && (
+        <img src={imageUrl} alt={product.title || "Product"} className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
+      )}
+      <div className="flex-1 min-w-0">
+        <h4 className="font-semibold text-sm truncate">{product.title}</h4>
+        {product.vendor && <p className="text-xs text-muted-foreground">{product.vendor}</p>}
+        {price && (
+          <p className="text-sm font-bold text-primary mt-1">
+            {price.currencyCode === 'USD' ? '$' : price.currencyCode}{price.amount}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CollectionCard({ collection }: { collection: CollectionCardData }) {
+  return (
+    <div className="flex gap-3 p-3 bg-card border border-border/50 rounded-xl hover:border-primary/30 transition-colors">
+      {collection.image?.url && (
+        <img src={collection.image.url} alt={collection.title || "Collection"} className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
+      )}
+      <div className="flex-1 min-w-0">
+        <h4 className="font-semibold text-sm truncate">{collection.title}</h4>
+        {collection.description && (
+          <p className="text-xs text-muted-foreground line-clamp-2">{collection.description}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ToolResultCards({ toolName, content }: { toolName: string; content: string }) {
+  const parsed = tryParseToolResult(content);
+  if (!parsed || typeof parsed !== 'object') return null;
+
+  const data = parsed as Record<string, unknown>;
+
+  if (toolName === 'search_products' || toolName === 'get_product') {
+    const products: ProductCardData[] = [];
+    if (data.products && Array.isArray((data.products as Record<string, unknown>).edges)) {
+      for (const edge of (data.products as { edges: Array<{ node: ProductCardData }> }).edges) {
+        products.push(edge.node);
+      }
+    } else if (data.product && typeof data.product === 'object') {
+      products.push(data.product as ProductCardData);
+    } else if (Array.isArray(data)) {
+      products.push(...(data as ProductCardData[]));
+    }
+
+    if (products.length === 0) return null;
+
+    return (
+      <div className="grid gap-2 mt-2">
+        {products.slice(0, 6).map((p, i) => (
+          <ProductCard key={i} product={p} />
+        ))}
+      </div>
+    );
+  }
+
+  if (toolName === 'get_collections') {
+    const collections: CollectionCardData[] = [];
+    if (data.collections && Array.isArray((data.collections as Record<string, unknown>).edges)) {
+      for (const edge of (data.collections as { edges: Array<{ node: CollectionCardData }> }).edges) {
+        collections.push(edge.node);
+      }
+    }
+
+    if (collections.length === 0) return null;
+
+    return (
+      <div className="grid gap-2 mt-2">
+        {collections.slice(0, 6).map((c, i) => (
+          <CollectionCard key={i} collection={c} />
+        ))}
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function ToolCallBadge({ tc }: { tc: ToolCallDisplay }) {
+  const iconMap: Record<string, React.ReactNode> = {
+    search_products: <Search className="w-3.5 h-3.5" />,
+    get_product: <Package className="w-3.5 h-3.5" />,
+    get_collections: <Tag className="w-3.5 h-3.5" />,
+    add_to_cart: <ShoppingBag className="w-3.5 h-3.5" />,
+    create_cart: <ShoppingBag className="w-3.5 h-3.5" />,
+    get_cart: <ShoppingBag className="w-3.5 h-3.5" />,
+  };
+  const labelMap: Record<string, string> = {
+    search_products: "Searching products...",
+    get_product: "Getting product details...",
+    get_collections: "Fetching collections...",
+    add_to_cart: "Added to cart!",
+    create_cart: "Creating cart...",
+    get_cart: "Loading cart...",
+    get_blogs: "Fetching articles...",
+  };
+
+  if (tc.name === 'add_to_cart') {
+    return (
+      <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 flex items-center gap-3 text-sm text-emerald-800 dark:text-emerald-300">
+        <div className="bg-emerald-100 dark:bg-emerald-800/50 p-2 rounded-lg">
+          <ShoppingBag className="w-4 h-4" />
+        </div>
+        Added an item to your cart!
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium bg-secondary/30 px-3 py-1.5 rounded-full w-fit border border-border/50">
+      {iconMap[tc.name] || <RefreshCw className="w-3 h-3" />}
+      {labelMap[tc.name] || `Using ${tc.name}...`}
+    </div>
+  );
+}
+
 function MessageBubble({ message }: { message: ChatMessageDisplay }) {
   const isUser = message.role === 'user';
   
@@ -282,27 +438,19 @@ function MessageBubble({ message }: { message: ChatMessageDisplay }) {
         )}
 
         {message.toolCalls && message.toolCalls.length > 0 && (
-          <div className="flex flex-col gap-2 w-full mt-2">
-            {message.toolCalls.map((tc, idx) => {
-              if (tc.name === 'add_to_cart') {
-                return (
-                  <div key={idx} className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3 flex items-center gap-3 text-sm text-emerald-800 dark:text-emerald-300">
-                    <div className="bg-emerald-100 dark:bg-emerald-800/50 p-2 rounded-lg">
-                      <ShoppingBag className="w-4 h-4" />
-                    </div>
-                    Added an item to your cart!
-                  </div>
-                );
-              }
-              if (tc.name === 'search_products') {
-                return (
-                  <div key={idx} className="flex items-center gap-2 text-xs text-muted-foreground font-medium bg-secondary/30 px-3 py-1.5 rounded-full w-fit border border-border/50">
-                    <RefreshCw className="w-3 h-3 animate-spin" />
-                    Searching Shopify catalog...
-                  </div>
-                );
-              }
-              return null;
+          <div className="flex flex-col gap-2 w-full mt-1">
+            {message.toolCalls.map((tc, idx) => (
+              <ToolCallBadge key={idx} tc={tc} />
+            ))}
+          </div>
+        )}
+
+        {message.toolResults && message.toolResults.length > 0 && message.toolCalls && (
+          <div className="w-full">
+            {message.toolResults.map((tr, idx) => {
+              const matchingCall = message.toolCalls?.find(tc => tc.id === tr.toolCallId);
+              if (!matchingCall) return null;
+              return <ToolResultCards key={idx} toolName={matchingCall.name} content={tr.content} />;
             })}
           </div>
         )}
