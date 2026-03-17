@@ -84,7 +84,16 @@ export default function HomePage() {
   );
 }
 
-function StoreCard({ store }: { store: any }) {
+interface StoreInfo {
+  storeDomain: string;
+  storefrontToken?: string | null;
+  provider: string;
+  model: string;
+  hasApiKey: boolean;
+  createdAt: string;
+}
+
+function StoreCard({ store }: { store: StoreInfo }) {
   return (
     <div className="group relative bg-card hover:bg-card/80 border border-border/50 hover:border-primary/30 rounded-3xl p-6 transition-all duration-300 shadow-lg shadow-slate-200/20 dark:shadow-none hover:shadow-xl hover:shadow-primary/10 overflow-hidden flex flex-col">
       <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-primary/10 to-transparent rounded-bl-full -z-10 transition-transform duration-500 group-hover:scale-110" />

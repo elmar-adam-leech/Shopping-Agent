@@ -129,9 +129,12 @@ export function useChatStream({ storeDomain, sessionId, conversationId, onSucces
       }
       
       onSuccess?.();
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name !== 'AbortError') {
         setError(err.message || 'An error occurred');
+        console.error('Chat error:', err);
+      } else if (!(err instanceof Error)) {
+        setError('An error occurred');
         console.error('Chat error:', err);
       }
     } finally {

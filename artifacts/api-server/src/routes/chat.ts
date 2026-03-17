@@ -8,6 +8,7 @@ import { listTools, callTool, type MCPTool } from "../services/mcp-client";
 import { fetchBlogs, fetchCollections } from "../services/graphql-client";
 import { buildSystemPrompt } from "../services/system-prompt";
 import { validateStoreDomain } from "../services/tenant-validator";
+import { validateSession } from "../services/session-validator";
 
 const router: IRouter = Router();
 
@@ -48,7 +49,7 @@ async function executeToolWithFallback(
   }
 }
 
-router.post("/stores/:storeDomain/chat", validateStoreDomain, async (req, res): Promise<void> => {
+router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
   const params = SendChatParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

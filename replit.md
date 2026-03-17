@@ -77,6 +77,7 @@ artifacts-monorepo/
 - **conversations**: `id`, `store_domain` (FK), `session_id`, `title`, `messages` (JSONB), timestamps
 - **user_preferences**: `id`, `store_domain` (FK), `session_id`, `prefs` (JSONB), timestamps
 - **analytics_logs**: `id`, `store_domain` (FK), `event_type`, `query`, `session_id`, `created_at`
+- **sessions**: `id` (PK, UUID), `store_domain`, `created_at`, `expires_at` (24h TTL)
 
 ## Key Architecture Decisions
 
@@ -91,11 +92,14 @@ artifacts-monorepo/
 - Knowledge is organized by category and injected into the AI system prompt
 - The system prompt builder assembles knowledge entries into the LLM context
 
-### Multi-Tenancy
-- Every backend route validates `store_domain` parameter
+### Multi-Tenancy & Security
+- Every backend route validates `store_domain` parameter via `validateStoreDomain` middleware
 - Every DB query filters by `store_domain`
+- Chat and conversation routes require valid session via `validateSession` middleware
+- Sessions are persisted in the `sessions` table with 24-hour TTL and scoped to store domain
 - Rate limiting: 10 req/min per session on chat endpoint
 - API keys and tokens stored server-side only
+- Auto-migration runs on server startup (`drizzle-kit push`)
 
 ### Chat Flow
 - Frontend sends message via POST to `/api/stores/{domain}/chat`

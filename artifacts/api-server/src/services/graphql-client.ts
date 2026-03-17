@@ -1,9 +1,14 @@
+interface GraphQLResponse {
+  data?: Record<string, unknown>;
+  errors?: Array<{ message: string }>;
+}
+
 export async function shopifyGraphQL(
   storeDomain: string,
   storefrontToken: string,
   query: string,
-  variables?: Record<string, any>
-): Promise<any> {
+  variables?: Record<string, unknown>
+): Promise<Record<string, unknown>> {
   const response = await fetch(
     `https://${storeDomain}/api/2025-01/graphql.json`,
     {
@@ -20,12 +25,12 @@ export async function shopifyGraphQL(
     throw new Error(`Shopify GraphQL error: ${response.status}`);
   }
 
-  const data: any = await response.json();
+  const data = (await response.json()) as GraphQLResponse;
   if (data.errors) {
     throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
   }
 
-  return data.data;
+  return data.data || {};
 }
 
 export async function fetchBlogs(storeDomain: string, storefrontToken: string, limit = 5) {

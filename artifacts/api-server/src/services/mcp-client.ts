@@ -1,12 +1,20 @@
 export interface MCPTool {
   name: string;
   description: string;
-  inputSchema: any;
+  inputSchema: Record<string, unknown>;
 }
 
 export interface MCPToolResult {
-  content: Array<{ type: string; text?: string; [key: string]: any }>;
+  content: Array<{ type: string; text?: string; [key: string]: unknown }>;
   isError?: boolean;
+}
+
+interface JsonRpcResponse {
+  result?: {
+    tools?: MCPTool[];
+    content?: Array<{ type: string; text?: string }>;
+  };
+  error?: { message?: string };
 }
 
 let requestId = 0;
@@ -15,8 +23,6 @@ function nextId() {
 }
 
 export async function listTools(storeDomain: string, storefrontToken: string): Promise<MCPTool[]> {
-  const url = `https://${storeDomain}/api/2025-01/graphql.json`;
-
   try {
     const response = await fetch(`https://${storeDomain}/api/mcp`, {
       method: "POST",
@@ -37,7 +43,7 @@ export async function listTools(storeDomain: string, storefrontToken: string): P
       return getDefaultTools();
     }
 
-    const data: any = await response.json();
+    const data = (await response.json()) as JsonRpcResponse;
     if (data.result?.tools) {
       return data.result.tools;
     }
@@ -52,7 +58,7 @@ export async function callTool(
   storeDomain: string,
   storefrontToken: string,
   toolName: string,
-  args: any
+  args: Record<string, unknown>
 ): Promise<string> {
   try {
     const response = await fetch(`https://${storeDomain}/api/mcp`, {
@@ -73,20 +79,21 @@ export async function callTool(
       return JSON.stringify({ error: `MCP call failed with status ${response.status}` });
     }
 
-    const data: any = await response.json();
+    const data = (await response.json()) as JsonRpcResponse;
     if (data.error) {
       return JSON.stringify({ error: data.error.message || "MCP tool error" });
     }
 
     if (data.result?.content) {
       return data.result.content
-        .map((c: any) => c.text || JSON.stringify(c))
+        .map((c) => c.text || JSON.stringify(c))
         .join("\n");
     }
 
     return JSON.stringify(data.result || {});
-  } catch (err: any) {
-    return JSON.stringify({ error: `MCP call error: ${err.message}` });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return JSON.stringify({ error: `MCP call error: ${message}` });
   }
 }
 

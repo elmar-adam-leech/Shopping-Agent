@@ -1,19 +1,36 @@
+import { execSync } from "child_process";
 import app from "./app";
 
-const rawPort = process.env["PORT"];
+async function start() {
+  try {
+    console.log("Running database migrations...");
+    execSync("pnpm --filter @workspace/db run push", {
+      stdio: "inherit",
+      cwd: process.env["REPL_HOME"] || process.cwd(),
+    });
+    console.log("Database migrations complete.");
+  } catch (err) {
+    console.error("Database migration failed:", err);
+    process.exit(1);
+  }
 
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
+  const rawPort = process.env["PORT"];
+
+  if (!rawPort) {
+    throw new Error(
+      "PORT environment variable is required but was not provided.",
+    );
+  }
+
+  const port = Number(rawPort);
+
+  if (Number.isNaN(port) || port <= 0) {
+    throw new Error(`Invalid PORT value: "${rawPort}"`);
+  }
+
+  app.listen(port, () => {
+    console.log(`Server listening on port ${port}`);
+  });
 }
 
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
-
-app.listen(port, () => {
-  console.log(`Server listening on port ${port}`);
-});
+start();

@@ -10,6 +10,7 @@ import {
   DeleteConversationParams,
 } from "@workspace/api-zod";
 import { validateStoreDomain } from "../services/tenant-validator";
+import { validateSession } from "../services/session-validator";
 
 const router: IRouter = Router();
 
@@ -19,13 +20,13 @@ function convToResponse(conv: typeof conversationsTable.$inferSelect) {
     storeDomain: conv.storeDomain,
     sessionId: conv.sessionId,
     title: conv.title,
-    messages: (conv.messages as any[]) || [],
+    messages: (conv.messages as Array<Record<string, unknown>>) || [],
     createdAt: conv.createdAt,
     updatedAt: conv.updatedAt,
   };
 }
 
-router.get("/stores/:storeDomain/conversations", validateStoreDomain, async (req, res): Promise<void> => {
+router.get("/stores/:storeDomain/conversations", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
   const params = ListConversationsParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -52,7 +53,7 @@ router.get("/stores/:storeDomain/conversations", validateStoreDomain, async (req
   res.json(ListConversationsResponse.parse(conversations.map(convToResponse)));
 });
 
-router.get("/stores/:storeDomain/conversations/:conversationId", validateStoreDomain, async (req, res): Promise<void> => {
+router.get("/stores/:storeDomain/conversations/:conversationId", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
   const params = GetConversationParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -77,7 +78,7 @@ router.get("/stores/:storeDomain/conversations/:conversationId", validateStoreDo
   res.json(GetConversationResponse.parse(convToResponse(conv)));
 });
 
-router.delete("/stores/:storeDomain/conversations/:conversationId", validateStoreDomain, async (req, res): Promise<void> => {
+router.delete("/stores/:storeDomain/conversations/:conversationId", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
   const params = DeleteConversationParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
