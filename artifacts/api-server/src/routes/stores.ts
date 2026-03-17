@@ -21,7 +21,7 @@ function storeToResponse(store: typeof storesTable.$inferSelect) {
     provider: store.provider,
     model: store.model,
     hasApiKey: !!store.apiKey,
-    createdAt: store.createdAt.toISOString(),
+    createdAt: store.createdAt,
   };
 }
 

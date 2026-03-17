@@ -5,7 +5,7 @@ import { CartPanel } from "@/components/chat/cart-panel";
 import { useSession } from "@/hooks/use-session";
 import { useChatStream } from "@/hooks/use-chat-stream";
 import { useListConversations } from "@workspace/api-client-react";
-import { Send, Sparkles, Loader2, RefreshCw } from "lucide-react";
+import { Send, Sparkles, Loader2, RefreshCw, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar } from "@/components/ui/avatar";

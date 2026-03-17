@@ -20,8 +20,8 @@ function convToResponse(conv: typeof conversationsTable.$inferSelect) {
     sessionId: conv.sessionId,
     title: conv.title,
     messages: (conv.messages as any[]) || [],
-    createdAt: conv.createdAt.toISOString(),
-    updatedAt: conv.updatedAt.toISOString(),
+    createdAt: conv.createdAt,
+    updatedAt: conv.updatedAt,
   };
 }
 

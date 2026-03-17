@@ -20,7 +20,7 @@ export async function shopifyGraphQL(
     throw new Error(`Shopify GraphQL error: ${response.status}`);
   }
 
-  const data = await response.json();
+  const data: any = await response.json();
   if (data.errors) {
     throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
   }

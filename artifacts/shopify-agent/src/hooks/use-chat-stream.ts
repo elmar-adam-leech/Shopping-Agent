@@ -75,21 +75,22 @@ export function useChatStream({ storeDomain, sessionId, conversationId, onSucces
               if (dataStr === '[DONE]') continue;
               
               try {
-                const data = JSON.parse(dataStr);
+                const event = JSON.parse(dataStr);
                 
-                if (data.type === 'text') {
-                  assistantMessage += data.text;
-                } else if (data.type === 'tool_call') {
+                if (event.type === 'text') {
+                  assistantMessage += event.data;
+                } else if (event.type === 'conversation_id') {
+                  // conversation ID received from backend
+                } else if (event.type === 'tool_call') {
                   currentToolCalls.push({
-                    id: data.id,
-                    name: data.name,
-                    arguments: data.arguments
+                    id: event.data.id,
+                    name: event.data.name,
+                    arguments: event.data.arguments
                   });
                   
-                  // Optimistic cart update based on tool calls
-                  if (data.name === 'add_to_cart') {
+                  if (event.data.name === 'add_to_cart') {
                     try {
-                      const args = JSON.parse(data.arguments);
+                      const args = JSON.parse(event.data.arguments);
                       cartStore.addItem({
                         id: args.variantId || args.productId || `tmp-${Date.now()}`,
                         title: args.title || 'Item added',
@@ -100,10 +101,10 @@ export function useChatStream({ storeDomain, sessionId, conversationId, onSucces
                       console.error('Failed to parse add_to_cart arguments', e);
                     }
                   }
-                } else if (data.type === 'tool_result') {
+                } else if (event.type === 'tool_result') {
                   currentToolResults.push({
-                    toolCallId: data.toolCallId,
-                    content: data.content
+                    toolCallId: event.data.toolCallId,
+                    content: event.data.content
                   });
                 }
                 

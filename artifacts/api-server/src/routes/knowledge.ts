@@ -37,11 +37,7 @@ router.get("/stores/:storeDomain/knowledge", validateStoreDomain, async (req, re
     ? entries.filter((e) => e.category === query.data.category)
     : entries;
 
-  res.json(ListKnowledgeResponse.parse(filtered.map((e) => ({
-    ...e,
-    createdAt: e.createdAt.toISOString(),
-    updatedAt: e.updatedAt.toISOString(),
-  }))));
+  res.json(ListKnowledgeResponse.parse(filtered));
 });
 
 router.post("/stores/:storeDomain/knowledge", validateStoreDomain, async (req, res): Promise<void> => {
@@ -68,11 +64,7 @@ router.post("/stores/:storeDomain/knowledge", validateStoreDomain, async (req, r
     })
     .returning();
 
-  res.status(201).json({
-    ...entry,
-    createdAt: entry.createdAt.toISOString(),
-    updatedAt: entry.updatedAt.toISOString(),
-  });
+  res.status(201).json(entry);
 });
 
 router.patch("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain, async (req, res): Promise<void> => {
@@ -110,11 +102,7 @@ router.patch("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain,
     return;
   }
 
-  res.json(UpdateKnowledgeResponse.parse({
-    ...entry,
-    createdAt: entry.createdAt.toISOString(),
-    updatedAt: entry.updatedAt.toISOString(),
-  }));
+  res.json(UpdateKnowledgeResponse.parse(entry));
 });
 
 router.delete("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain, async (req, res): Promise<void> => {

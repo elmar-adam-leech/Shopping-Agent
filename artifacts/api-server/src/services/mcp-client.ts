@@ -37,7 +37,7 @@ export async function listTools(storeDomain: string, storefrontToken: string): P
       return getDefaultTools();
     }
 
-    const data = await response.json();
+    const data: any = await response.json();
     if (data.result?.tools) {
       return data.result.tools;
     }
@@ -73,7 +73,7 @@ export async function callTool(
       return JSON.stringify({ error: `MCP call failed with status ${response.status}` });
     }
 
-    const data = await response.json();
+    const data: any = await response.json();
     if (data.error) {
       return JSON.stringify({ error: data.error.message || "MCP tool error" });
     }

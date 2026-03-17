@@ -10,6 +10,18 @@ const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || "";
 const APP_URL = process.env.APP_URL || "";
 const SCOPES = "unauthenticated_read_product_listings,unauthenticated_read_collection_listings,unauthenticated_read_content";
 
+const pendingStates = new Map<string, { shop: string; createdAt: number }>();
+const STATE_TTL_MS = 10 * 60 * 1000;
+
+function cleanExpiredStates() {
+  const now = Date.now();
+  for (const [key, value] of pendingStates) {
+    if (now - value.createdAt > STATE_TTL_MS) {
+      pendingStates.delete(key);
+    }
+  }
+}
+
 router.get("/auth/install", async (req, res): Promise<void> => {
   const shop = Array.isArray(req.query.shop) ? req.query.shop[0] : req.query.shop;
 
@@ -23,7 +35,9 @@ router.get("/auth/install", async (req, res): Promise<void> => {
     return;
   }
 
+  cleanExpiredStates();
   const state = crypto.randomBytes(16).toString("hex");
+  pendingStates.set(state, { shop, createdAt: Date.now() });
 
   const redirectUri = `${APP_URL}/api/auth/callback`;
   const installUrl = `https://${shop}/admin/oauth/authorize?client_id=${SHOPIFY_API_KEY}&scope=${SCOPES}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
@@ -34,10 +48,17 @@ router.get("/auth/install", async (req, res): Promise<void> => {
 router.get("/auth/callback", async (req, res): Promise<void> => {
   const { code, shop, hmac, state } = req.query as Record<string, string>;
 
-  if (!code || !shop || !hmac) {
+  if (!code || !shop || !hmac || !state) {
     res.status(400).json({ error: "Missing required parameters" });
     return;
   }
+
+  const pendingState = pendingStates.get(state);
+  if (!pendingState || pendingState.shop !== shop) {
+    res.status(403).json({ error: "Invalid or expired OAuth state" });
+    return;
+  }
+  pendingStates.delete(state);
 
   if (SHOPIFY_API_SECRET) {
     const params = { ...req.query } as Record<string, string>;

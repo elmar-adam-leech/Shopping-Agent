@@ -19,8 +19,8 @@ function prefsToResponse(prefs: typeof userPreferencesTable.$inferSelect) {
     storeDomain: prefs.storeDomain,
     sessionId: prefs.sessionId,
     prefs: prefs.prefs,
-    createdAt: prefs.createdAt.toISOString(),
-    updatedAt: prefs.updatedAt.toISOString(),
+    createdAt: prefs.createdAt,
+    updatedAt: prefs.updatedAt,
   };
 }
 
