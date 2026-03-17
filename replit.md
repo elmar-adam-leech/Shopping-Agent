@@ -37,6 +37,11 @@ artifacts-monorepo/
 │   │       │   └── health.ts       # Health check
 │   │       ├── services/
 │   │       │   ├── llms/           # LLM provider implementations
+│   │       │   │   ├── types/      # Shared types (one per file + barrel index)
+│   │       │   │   │   ├── llm-message.ts
+│   │       │   │   │   ├── llm-stream-event.ts
+│   │       │   │   │   ├── mcp-tool-def.ts
+│   │       │   │   │   └── index.ts
 │   │       │   │   ├── openai.ts   # OpenAI SDK streaming + tool calling
 │   │       │   │   ├── anthropic.ts# Anthropic SDK streaming + tool calling
 │   │       │   │   └── xai.ts      # xAI/Grok via OpenAI SDK (baseURL override)
@@ -92,8 +97,9 @@ artifacts-monorepo/
 ## Key Architecture Decisions
 
 ### LLM Provider System
-- Each provider has its own file in `src/services/llms/` with identical interface
-- `llm-service.ts` is a tiny factory that dynamically imports the correct provider
+- Shared types (`LLMMessage`, `LLMStreamEvent`, `LLMStreamEventData`, `MCPToolDef`) live in `src/services/llms/types/` — one file per type with a barrel `index.ts`
+- Each provider has its own file in `src/services/llms/` with identical interface, importing types from `./types`
+- `llm-service.ts` is a tiny factory that imports the correct provider via static imports
 - xAI reuses the OpenAI streaming implementation via a `baseURL` parameter
 - API keys stored server-side only in the database, never exposed to the frontend
 

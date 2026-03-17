@@ -1,7 +1,7 @@
 import { streamChat as streamOpenAIChat } from "./llms/openai";
 import { streamChat as streamAnthropicChat } from "./llms/anthropic";
 import { streamChat as streamXAIChat } from "./llms/xai";
-import type { LLMStreamEvent, LLMMessage, MCPToolDef } from "./llms/openai";
+import type { LLMStreamEvent, LLMMessage, MCPToolDef } from "./llms/types";
 
 export type { LLMStreamEvent, LLMMessage, MCPToolDef };
 

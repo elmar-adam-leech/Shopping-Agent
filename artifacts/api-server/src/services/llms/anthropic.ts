@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { LLMStreamEvent, LLMMessage, MCPToolDef } from "./openai";
+import type { LLMStreamEvent, LLMMessage, MCPToolDef } from "./types";
 
 interface ToolUseBlock {
   type: "tool_use";

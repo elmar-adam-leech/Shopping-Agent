@@ -1,4 +1,4 @@
-import type { LLMStreamEvent, LLMMessage, MCPToolDef } from "./openai";
+import type { LLMStreamEvent, LLMMessage, MCPToolDef } from "./types";
 import { streamChat as streamOpenAIChat } from "./openai";
 
 export async function* streamChat(

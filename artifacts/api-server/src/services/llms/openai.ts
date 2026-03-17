@@ -1,28 +1,5 @@
 import OpenAI from "openai";
-
-export interface LLMMessage {
-  role: "user" | "assistant" | "system" | "tool";
-  content: string;
-  tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }>;
-  tool_call_id?: string;
-}
-
-export type LLMStreamEventData =
-  | string
-  | { id: string; name: string; arguments: string }
-  | { toolCallId: string; content: string }
-  | null;
-
-export interface LLMStreamEvent {
-  type: "text" | "tool_call" | "tool_result" | "done" | "error";
-  data: LLMStreamEventData;
-}
-
-export interface MCPToolDef {
-  name: string;
-  description: string;
-  inputSchema: Record<string, unknown>;
-}
+import type { LLMMessage, LLMStreamEvent, MCPToolDef } from "./types";
 
 export async function* streamChat(
   apiKey: string,
