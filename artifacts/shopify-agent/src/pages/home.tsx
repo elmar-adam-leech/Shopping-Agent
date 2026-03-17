@@ -1,14 +1,45 @@
+import { useState } from "react";
 import { Link } from "wouter";
-import { Store as StoreIcon, Plus, ArrowRight, Settings, MessageSquare, Activity } from "lucide-react";
+import { Store as StoreIcon, Plus, ArrowRight, Settings, MessageSquare, Activity, LogIn } from "lucide-react";
 import { useListStores } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
 export default function HomePage() {
-  const { data: stores, isLoading } = useListStores();
+  const { data: stores, isLoading, error, refetch } = useListStores();
+  const [loginDomain, setLoginDomain] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
+
+  const isUnauthorized = error && "status" in (error as unknown as object) && (error as unknown as { status: number }).status === 401;
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setLoginError("");
+    setLoggingIn(true);
+    try {
+      const resp = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ storeDomain: loginDomain.trim() }),
+      });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({ error: "Login failed" }));
+        setLoginError(data.error || "Login failed");
+        return;
+      }
+      await refetch();
+    } catch {
+      setLoginError("Network error");
+    } finally {
+      setLoggingIn(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      {/* Hero section */}
       <div className="relative pt-24 pb-16 px-6 lg:px-8 overflow-hidden">
         <img
           src={`${import.meta.env.BASE_URL}images/hero-bg.png`}
@@ -41,43 +72,71 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Stores Grid */}
       <div className="max-w-5xl mx-auto px-6 lg:px-8 relative z-10">
-        <div className="flex items-center justify-between mb-8">
-          <h2 className="text-2xl font-bold font-display flex items-center gap-3">
-            <StoreIcon className="w-6 h-6 text-primary" />
-            Connected Stores
-          </h2>
-          <Badge count={stores?.length || 0} />
-        </div>
-
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="h-[220px] rounded-3xl bg-secondary/50 animate-pulse border border-border/50" />
-            ))}
-          </div>
-        ) : stores && stores.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {stores.map((store) => (
-              <StoreCard key={store.storeDomain} store={store} />
-            ))}
+        {isUnauthorized ? (
+          <div className="glass-card rounded-3xl p-12 text-center flex flex-col items-center justify-center max-w-md mx-auto">
+            <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
+              <LogIn className="w-10 h-10 text-primary" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">Merchant Login</h3>
+            <p className="text-muted-foreground mb-6">
+              Enter your store domain to access the admin dashboard.
+            </p>
+            <form onSubmit={handleLogin} className="w-full space-y-4">
+              <input
+                type="text"
+                value={loginDomain}
+                onChange={e => setLoginDomain(e.target.value)}
+                placeholder="your-store.myshopify.com"
+                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+              {loginError && (
+                <p className="text-sm text-red-500">{loginError}</p>
+              )}
+              <Button type="submit" disabled={loggingIn || !loginDomain.trim()} className="w-full rounded-xl">
+                {loggingIn ? "Signing in..." : "Sign In"}
+              </Button>
+            </form>
           </div>
         ) : (
-          <div className="glass-card rounded-3xl p-12 text-center flex flex-col items-center justify-center">
-            <div className="w-20 h-20 bg-secondary/50 rounded-full flex items-center justify-center mb-6">
-              <StoreIcon className="w-10 h-10 text-muted-foreground opacity-50" />
+          <>
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-2xl font-bold font-display flex items-center gap-3">
+                <StoreIcon className="w-6 h-6 text-primary" />
+                Connected Stores
+              </h2>
+              <Badge count={stores?.length || 0} />
             </div>
-            <h3 className="text-xl font-bold mb-2">No stores connected yet</h3>
-            <p className="text-muted-foreground mb-8 max-w-md">
-              Connect your first Shopify store to start configuring your AI shopping agent and engaging with customers.
-            </p>
-            <Link href="/install">
-              <Button variant="outline" className="rounded-full px-6">
-                Connect a Store
-              </Button>
-            </Link>
-          </div>
+
+            {isLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-[220px] rounded-3xl bg-secondary/50 animate-pulse border border-border/50" />
+                ))}
+              </div>
+            ) : stores && stores.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {stores.map((store) => (
+                  <StoreCard key={store.storeDomain} store={store} />
+                ))}
+              </div>
+            ) : (
+              <div className="glass-card rounded-3xl p-12 text-center flex flex-col items-center justify-center">
+                <div className="w-20 h-20 bg-secondary/50 rounded-full flex items-center justify-center mb-6">
+                  <StoreIcon className="w-10 h-10 text-muted-foreground opacity-50" />
+                </div>
+                <h3 className="text-xl font-bold mb-2">No stores connected yet</h3>
+                <p className="text-muted-foreground mb-8 max-w-md">
+                  Connect your first Shopify store to start configuring your AI shopping agent and engaging with customers.
+                </p>
+                <Link href="/install">
+                  <Button variant="outline" className="rounded-full px-6">
+                    Connect a Store
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request } from "express";
 import { eq } from "drizzle-orm";
 import { db, storesTable } from "@workspace/db";
 import type { Store } from "@workspace/db/schema";
@@ -12,6 +12,7 @@ import {
   ListStoresResponse,
   DeleteStoreParams,
 } from "@workspace/api-zod";
+import { validateMerchantAuth, validateMerchantAuthForStoreList } from "../services/merchant-auth";
 
 const router: IRouter = Router();
 
@@ -28,15 +29,24 @@ function storeToResponse(store: Store) {
   };
 }
 
-router.get("/stores", async (_req, res): Promise<void> => {
-  const stores = await db.select().from(storesTable).orderBy(storesTable.createdAt);
+router.get("/stores", validateMerchantAuthForStoreList, async (req, res): Promise<void> => {
+  const merchantDomain = (req as Request & { merchantStoreDomain: string }).merchantStoreDomain;
+  const stores = await db.select().from(storesTable)
+    .where(eq(storesTable.storeDomain, merchantDomain))
+    .orderBy(storesTable.createdAt);
   res.json(ListStoresResponse.parse(stores.map(storeToResponse)));
 });
 
-router.post("/stores", async (req, res): Promise<void> => {
+router.post("/stores", validateMerchantAuthForStoreList, async (req, res): Promise<void> => {
   const parsed = CreateStoreBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const merchantDomain = (req as Request & { merchantStoreDomain: string }).merchantStoreDomain;
+  if (parsed.data.storeDomain !== merchantDomain) {
+    res.status(403).json({ error: "Cannot create store for a different domain" });
     return;
   }
 
@@ -64,7 +74,7 @@ router.post("/stores", async (req, res): Promise<void> => {
   res.status(201).json(GetStoreResponse.parse(storeToResponse(store)));
 });
 
-router.get("/stores/:storeDomain", async (req, res): Promise<void> => {
+router.get("/stores/:storeDomain", validateMerchantAuth, async (req, res): Promise<void> => {
   const params = GetStoreParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -84,7 +94,7 @@ router.get("/stores/:storeDomain", async (req, res): Promise<void> => {
   res.json(GetStoreResponse.parse(storeToResponse(store)));
 });
 
-router.patch("/stores/:storeDomain", async (req, res): Promise<void> => {
+router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Promise<void> => {
   const params = UpdateStoreParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -117,7 +127,7 @@ router.patch("/stores/:storeDomain", async (req, res): Promise<void> => {
   res.json(UpdateStoreResponse.parse(storeToResponse(store)));
 });
 
-router.delete("/stores/:storeDomain", async (req, res): Promise<void> => {
+router.delete("/stores/:storeDomain", validateMerchantAuth, async (req, res): Promise<void> => {
   const params = DeleteStoreParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

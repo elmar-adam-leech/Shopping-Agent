@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import crypto from "crypto";
 import { db, storesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { createMerchantSession } from "../services/merchant-auth";
 
 const router: IRouter = Router();
 
@@ -134,11 +135,54 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
       });
     }
 
+    const merchantToken = await createMerchantSession(shop);
+    res.cookie("merchant_token", merchantToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 72 * 60 * 60 * 1000,
+      path: "/",
+    });
     res.redirect(`/${encodeURIComponent(shop)}/settings`);
   } catch (err: unknown) {
     console.error("OAuth callback error:", err);
     res.status(500).json({ error: "OAuth callback failed" });
   }
+});
+
+router.post("/auth/login", async (req, res): Promise<void> => {
+  if (process.env.NODE_ENV === "production") {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const { storeDomain } = req.body as { storeDomain?: string };
+
+  if (!storeDomain || typeof storeDomain !== "string") {
+    res.status(400).json({ error: "storeDomain is required" });
+    return;
+  }
+
+  const [store] = await db
+    .select()
+    .from(storesTable)
+    .where(eq(storesTable.storeDomain, storeDomain));
+
+  if (!store) {
+    res.status(404).json({ error: "Store not found" });
+    return;
+  }
+
+  const merchantToken = await createMerchantSession(storeDomain);
+  res.cookie("merchant_token", merchantToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 72 * 60 * 60 * 1000,
+    path: "/",
+  });
+
+  res.json({ success: true, storeDomain });
 });
 
 export default router;

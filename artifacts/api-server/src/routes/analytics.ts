@@ -7,10 +7,11 @@ import {
   GetAnalyticsResponse,
 } from "@workspace/api-zod";
 import { validateStoreDomain } from "../services/tenant-validator";
+import { validateMerchantAuth } from "../services/merchant-auth";
 
 const router: IRouter = Router();
 
-router.get("/stores/:storeDomain/analytics", validateStoreDomain, async (req, res): Promise<void> => {
+router.get("/stores/:storeDomain/analytics", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
   const params = GetAnalyticsParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

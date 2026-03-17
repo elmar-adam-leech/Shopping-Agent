@@ -95,10 +95,17 @@ artifacts-monorepo/
 ### Multi-Tenancy & Security
 - Every backend route validates `store_domain` parameter via `validateStoreDomain` middleware
 - Every DB query filters by `store_domain`
-- Chat and conversation routes require valid session via `validateSession` middleware
+- Chat and conversation routes require valid session via `validateSession` middleware (customer sessions)
 - Sessions are persisted in the `sessions` table with 24-hour TTL and scoped to store domain
+- **Merchant auth**: Admin routes (stores CRUD, knowledge CRUD, analytics) protected by `validateMerchantAuth` / `validateMerchantAuthForStoreList` middleware in `merchant-auth.ts`
+  - Merchant tokens prefixed `mtkn_`, stored in sessions table with 72h TTL
+  - Token sent via httpOnly cookie (`merchant_token`) set during OAuth callback or dev login
+  - `POST /auth/login` (dev-only, disabled in production) allows login by store domain
+  - `POST /stores` enforces tenant binding: merchant can only create stores for their own domain
+  - `GET /stores` scoped to authenticated merchant's domain only
 - Rate limiting: 10 req/min per session on chat endpoint
 - API keys and tokens stored server-side only
+- Cookie-parser middleware added to app.ts; custom fetch includes `credentials: 'include'`
 - Auto-migration runs on server startup (`drizzle-kit push`)
 
 ### Chat Flow

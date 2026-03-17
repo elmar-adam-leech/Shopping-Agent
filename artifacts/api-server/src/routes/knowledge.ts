@@ -14,12 +14,13 @@ import {
   DeleteKnowledgeParams,
 } from "@workspace/api-zod";
 import { validateStoreDomain } from "../services/tenant-validator";
+import { validateMerchantAuth } from "../services/merchant-auth";
 
 const router: IRouter = Router();
 
 type KnowledgeCategory = ShopKnowledge["category"];
 
-router.get("/stores/:storeDomain/knowledge", validateStoreDomain, async (req, res): Promise<void> => {
+router.get("/stores/:storeDomain/knowledge", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
   const params = ListKnowledgeParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -41,7 +42,7 @@ router.get("/stores/:storeDomain/knowledge", validateStoreDomain, async (req, re
   res.json(ListKnowledgeResponse.parse(filtered));
 });
 
-router.post("/stores/:storeDomain/knowledge", validateStoreDomain, async (req, res): Promise<void> => {
+router.post("/stores/:storeDomain/knowledge", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
   const params = CreateKnowledgeParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -68,7 +69,7 @@ router.post("/stores/:storeDomain/knowledge", validateStoreDomain, async (req, r
   res.status(201).json(entry);
 });
 
-router.patch("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain, async (req, res): Promise<void> => {
+router.patch("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
   const params = UpdateKnowledgeParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -106,7 +107,7 @@ router.patch("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain,
   res.json(UpdateKnowledgeResponse.parse(entry));
 });
 
-router.delete("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain, async (req, res): Promise<void> => {
+router.delete("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
   const params = DeleteKnowledgeParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
