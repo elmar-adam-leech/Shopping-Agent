@@ -65,7 +65,7 @@ export default function InstallPage() {
               size="lg" 
               className="w-full py-6 rounded-xl text-base font-bold shadow-xl shadow-primary/20 hover:shadow-primary/30 group"
             >
-              Install Application
+              Install
               <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
             </Button>
           </form>
