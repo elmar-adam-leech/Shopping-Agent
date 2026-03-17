@@ -11,6 +11,7 @@ const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || "";
 const APP_URL = process.env.APP_URL || "";
 const SCOPES = "unauthenticated_read_product_listings,unauthenticated_read_collection_listings,unauthenticated_read_content";
 
+const MAX_PENDING_STATES = 10000;
 const pendingStates = new Map<string, { shop: string; createdAt: number }>();
 const STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -23,6 +24,16 @@ function cleanExpiredStates() {
       pendingStates.delete(key);
     }
   }
+}
+
+function setMerchantCookie(res: import("express").Response, token: string) {
+  res.cookie("merchant_token", token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    maxAge: 72 * 60 * 60 * 1000,
+    path: "/",
+  });
 }
 
 router.get("/auth/install", async (req, res): Promise<void> => {
@@ -44,6 +55,13 @@ router.get("/auth/install", async (req, res): Promise<void> => {
   }
 
   cleanExpiredStates();
+
+  if (pendingStates.size >= MAX_PENDING_STATES) {
+    console.warn(`OAuth pendingStates map at capacity (${MAX_PENDING_STATES}), rejecting new install`);
+    res.status(503).json({ error: "Server is busy, please try again later" });
+    return;
+  }
+
   const state = crypto.randomBytes(16).toString("hex");
   pendingStates.set(state, { shop, createdAt: Date.now() });
 
@@ -144,13 +162,7 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
     }
 
     const merchantToken = await createMerchantSession(shop);
-    res.cookie("merchant_token", merchantToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 72 * 60 * 60 * 1000,
-      path: "/",
-    });
+    setMerchantCookie(res, merchantToken);
     res.redirect(`/${encodeURIComponent(shop)}/settings`);
   } catch (err: unknown) {
     console.error("OAuth callback error:", err);
@@ -182,13 +194,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   }
 
   const merchantToken = await createMerchantSession(storeDomain);
-  res.cookie("merchant_token", merchantToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 72 * 60 * 60 * 1000,
-    path: "/",
-  });
+  setMerchantCookie(res, merchantToken);
 
   res.json({ success: true, storeDomain });
 });

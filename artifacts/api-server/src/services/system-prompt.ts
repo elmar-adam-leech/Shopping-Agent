@@ -36,7 +36,6 @@ export function buildSystemPrompt(storeDomain: string, knowledge: ShopKnowledge[
 - Help customers build complete solutions, not just individual products
 - When adding items to cart, confirm the selection with the customer first`;
 
-  // UCP compliance added per ucp.dev
   if (ucpDoc) {
     prompt += `\n\n## UCP (Universal Commerce Protocol) Capabilities
 This store supports UCP version ${ucpDoc.version}. You have access to the following UCP commerce primitives:

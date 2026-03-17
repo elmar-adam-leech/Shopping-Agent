@@ -23,8 +23,10 @@ const chatLimiter = rateLimit({
   max: 10,
   message: { error: "Too many requests, please wait a moment" },
   keyGenerator: (req) => {
-    return req.ip || "anonymous";
+    const sessionId = (req.headers["x-session-id"] as string) || req.body?.sessionId || "";
+    return `${req.ip}:${sessionId}`;
   },
+  validate: false,
 });
 
 const sessionLimiter = rateLimit({

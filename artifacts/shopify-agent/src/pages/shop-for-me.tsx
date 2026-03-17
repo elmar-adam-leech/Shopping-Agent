@@ -1,107 +1,20 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRoute, useSearch } from "wouter";
-import { Send, Sparkles, Loader2, ShoppingBag, Package, Tag, Search } from "lucide-react";
+import { Send, Sparkles, Loader2, ShoppingBag } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ToolCall } from "@workspace/api-client-react";
-import { useChatStream } from "@/hooks/use-chat-stream";
-
-const TOOL_LABELS: Record<string, string> = {
-  search_products: "Searching products",
-  get_product: "Looking up product",
-  get_collections: "Browsing collections",
-  list_collections: "Browsing collections",
-  get_blogs: "Reading blog posts",
-  list_blogs: "Reading blog posts",
-  add_to_cart: "Adding to cart",
-  get_cart: "Checking cart",
-  get_product_recommendations: "Finding recommendations",
-};
-
-const TOOL_ICONS: Record<string, typeof Search> = {
-  search_products: Search,
-  get_product: Package,
-  get_collections: Tag,
-  get_product_recommendations: Sparkles,
-};
+import { useShopForMeSession } from "@/hooks/use-shop-for-me-session";
+import { useShopForMeChatStream } from "@/hooks/use-shop-for-me-chat-stream";
+import { ToolBadge } from "@/components/shop-for-me/ToolBadge";
 
 interface StorePublicInfo {
   storeDomain: string;
   chatEnabled: boolean;
 }
 
-const SESSION_TTL_MS = 23 * 60 * 60 * 1000;
-
-function useShopForMeSession(storeDomain: string) {
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [chatDisabled, setChatDisabled] = useState(false);
-
-  const createNewSession = useCallback((key: string) => {
-    return fetch(`/api/sessions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ storeDomain }),
-    })
-      .then((res) => {
-        if (res.status === 403) {
-          setChatDisabled(true);
-          throw new Error("Chat disabled");
-        }
-        if (!res.ok) throw new Error("Session creation failed");
-        return res.json();
-      })
-      .then((data) => {
-        const sessionData = {
-          sessionId: data.sessionId,
-          expiresAt: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
-        };
-        localStorage.setItem(key, JSON.stringify(sessionData));
-        setSessionId(data.sessionId);
-        return data.sessionId;
-      })
-      .catch((err) => {
-        if (err.message !== "Chat disabled") {
-          console.error("Failed to create session", err);
-        }
-        return null;
-      });
-  }, [storeDomain]);
-
-  useEffect(() => {
-    if (!storeDomain) return;
-    const key = `shop_for_me_session_${storeDomain}`;
-    try {
-      const stored = localStorage.getItem(key);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.sessionId && parsed.expiresAt && new Date(parsed.expiresAt) > new Date()) {
-          setSessionId(parsed.sessionId);
-          return;
-        }
-        localStorage.removeItem(key);
-      }
-    } catch {
-      localStorage.removeItem(key);
-    }
-    createNewSession(key);
-  }, [storeDomain, createNewSession]);
-
-  return { sessionId, chatDisabled };
-}
-
 function formatStoreName(domain: string): string {
   return domain.replace(/\.myshopify\.com$/, "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function ToolBadge({ name }: { name: string }) {
-  const label = TOOL_LABELS[name] || name;
-  const Icon = TOOL_ICONS[name] || Sparkles;
-  return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-medium">
-      <Icon className="w-3 h-3" />
-      {label}
-    </span>
-  );
 }
 
 export default function ShopForMePage() {
@@ -113,15 +26,8 @@ export default function ShopForMePage() {
 
   const [storeInfo, setStoreInfo] = useState<StorePublicInfo | null>(null);
   const [storeNotFound, setStoreNotFound] = useState(false);
-  const [conversationId, setConversationId] = useState<number | null>(null);
   const { sessionId, chatDisabled } = useShopForMeSession(storeDomain);
-
-  const { messages, isLoading, sendMessage } = useChatStream({
-    storeDomain,
-    sessionId: sessionId || "",
-    conversationId,
-    onConversationId: setConversationId,
-  });
+  const { messages, isLoading, sendMessage } = useShopForMeChatStream(storeDomain, sessionId);
 
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);

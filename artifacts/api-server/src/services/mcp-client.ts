@@ -1,4 +1,12 @@
-// UCP compliance added per ucp.dev
+/**
+ * MCP (Model Context Protocol) client for communicating with Shopify storefronts.
+ * Also handles UCP (Universal Commerce Protocol) discovery and capability mapping.
+ * UCP is an open standard for agentic commerce (ucp.dev) that standardizes
+ * discovery, checkout, orders, and payment flows across AI agents.
+ *
+ * MCP communication uses JSON-RPC 2.0 over HTTP POST to the store's /api/mcp endpoint.
+ * Tool calls follow the MCP tools/list and tools/call methods.
+ */
 
 export interface MCPTool {
   name: string;
@@ -19,7 +27,6 @@ interface JsonRpcResponse {
   error?: { message?: string };
 }
 
-// UCP compliance added per ucp.dev
 export interface UCPDiscoveryDocument {
   version: string;
   business: {
@@ -39,21 +46,33 @@ export interface UCPDiscoveryDocument {
   }>;
 }
 
-// UCP compliance added per ucp.dev
 interface UCPCacheEntry {
   document: UCPDiscoveryDocument | null;
   fetchedAt: number;
 }
 
 const UCP_CACHE_TTL_MS = 5 * 60 * 1000;
+const UCP_CACHE_MAX_SIZE = 1000;
 const ucpCache = new Map<string, UCPCacheEntry>();
 
-let requestId = 0;
-function nextId() {
-  return ++requestId;
+function evictOldestCacheEntries() {
+  if (ucpCache.size <= UCP_CACHE_MAX_SIZE) return;
+  const entriesToRemove = ucpCache.size - UCP_CACHE_MAX_SIZE;
+  let removed = 0;
+  for (const key of ucpCache.keys()) {
+    if (removed >= entriesToRemove) break;
+    ucpCache.delete(key);
+    removed++;
+  }
 }
 
-// UCP compliance added per ucp.dev
+const MAX_REQUEST_ID = 2_147_483_647;
+let requestId = 0;
+function nextId() {
+  requestId = requestId >= MAX_REQUEST_ID ? 1 : requestId + 1;
+  return requestId;
+}
+
 export async function discoverUCPCapabilities(storeDomain: string): Promise<UCPDiscoveryDocument | null> {
   const cached = ucpCache.get(storeDomain);
   if (cached && Date.now() - cached.fetchedAt < UCP_CACHE_TTL_MS) {
@@ -72,21 +91,23 @@ export async function discoverUCPCapabilities(storeDomain: string): Promise<UCPD
     if (!response.ok) {
       console.log(`UCP discovery not available for ${storeDomain} (${response.status}) — continuing with standard MCP tools`);
       ucpCache.set(storeDomain, { document: null, fetchedAt: Date.now() });
+      evictOldestCacheEntries();
       return null;
     }
 
     const doc = (await response.json()) as UCPDiscoveryDocument;
     console.log(`UCP discovery successful for ${storeDomain}: version=${doc.version}`);
     ucpCache.set(storeDomain, { document: doc, fetchedAt: Date.now() });
+    evictOldestCacheEntries();
     return doc;
   } catch (err) {
     console.log(`UCP discovery failed for ${storeDomain}: ${err instanceof Error ? err.message : "Unknown error"} — continuing with standard MCP tools`);
     ucpCache.set(storeDomain, { document: null, fetchedAt: Date.now() });
+    evictOldestCacheEntries();
     return null;
   }
 }
 
-// UCP compliance added per ucp.dev
 export function getUCPTools(): MCPTool[] {
   return [
     {
@@ -173,7 +194,6 @@ export function getUCPTools(): MCPTool[] {
   ];
 }
 
-// UCP compliance added per ucp.dev
 const UCP_CAPABILITY_TO_TOOLS: Record<string, string[]> = {
   checkout: ["create_checkout", "update_checkout", "complete_checkout"],
   orders: ["get_order_status"],
@@ -236,7 +256,6 @@ export async function listTools(storeDomain: string, storefrontToken: string, uc
     mcpTools = getDefaultTools();
   }
 
-  // UCP compliance added per ucp.dev — discovery performed after tools/list
   const ucpToolNames = new Set(getUCPTools().map(t => t.name));
   let ucpDoc: UCPDiscoveryDocument | null = null;
 
@@ -267,7 +286,6 @@ export async function callTool(
   ucpEnabled: boolean = true
 ): Promise<string> {
   try {
-    // UCP compliance added per ucp.dev
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       "X-Shopify-Storefront-Access-Token": storefrontToken,

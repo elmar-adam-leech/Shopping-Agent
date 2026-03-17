@@ -31,7 +31,7 @@ export function EmbedChatPanel({
     ? { productHandle, collectionHandle, cartToken }
     : undefined;
 
-  const { messages, isLoading, sendMessage, loadMessages } = useChatStream({
+  const { messages, isLoading, sendMessage } = useChatStream({
     storeDomain,
     sessionId: sessionId || "",
     conversationId,

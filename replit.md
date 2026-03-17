@@ -50,7 +50,8 @@ artifacts-monorepo/
 │       └── src/
 │           ├── pages/             # Route pages (home, chat, settings, analytics, shop-for-me, embed-*)
 │           ├── components/        # Reusable UI components
-│           ├── hooks/             # Custom hooks (useSession, useChatStream, useEmbedMode)
+│           ├── hooks/             # Custom hooks (useSession, useChatStream, useEmbedMode, useShopForMeSession, useShopForMeChatStream)
+│           ├── lib/              # Shared utilities (sse-parser)
 │           └── store/             # Zustand stores (cart)
 ├── lib/
 │   ├── api-spec/                  # OpenAPI 3.1 spec + Orval codegen config
@@ -85,8 +86,8 @@ artifacts-monorepo/
 - **shop_knowledge**: `id`, `store_domain` (FK), `category` (enum: general/sizing/compatibility/required_accessories/restrictions/policies/custom), `title`, `content`, `sort_order`, timestamps
 - **conversations**: `id`, `store_domain` (FK), `session_id`, `title`, `messages` (JSONB), timestamps
 - **user_preferences**: `id`, `store_domain` (FK), `session_id`, `prefs` (JSONB), timestamps
-- **analytics_logs**: `id`, `store_domain` (FK), `event_type`, `query`, `session_id`, `created_at`
-- **sessions**: `id` (PK), `store_domain`, `created_at`, `expires_at` — shared table for both customer sessions (UUID, 24h TTL) and merchant sessions (`mtkn_*` prefix, 72h TTL)
+- **analytics_logs**: `id`, `store_domain` (FK), `event_type`, `query`, `session_id`, `created_at` — indexed on `(store_domain, created_at)`
+- **sessions**: `id` (PK), `store_domain`, `created_at`, `expires_at` — shared table for both customer sessions (UUID, 24h TTL) and merchant sessions (`mtkn_*` prefix, 72h TTL); indexed on `expires_at`
 
 ## Key Architecture Decisions
 
@@ -112,7 +113,7 @@ artifacts-monorepo/
   - `POST /auth/login` (dev-only, disabled in production) allows login by store domain
   - `POST /stores` enforces tenant binding: merchant can only create stores for their own domain
   - `GET /stores` scoped to authenticated merchant's domain only
-- Rate limiting: 10 req/min per IP/session on chat endpoint (uses `x-session-id` header or IP, not user-controlled body)
+- Rate limiting: 10 req/min per IP+session composite key on chat endpoint (uses `x-session-id` header or IP, not user-controlled body)
 - HMAC verification uses timing-safe comparison
 - Request body size limited to 1MB
 - CORS origin configurable via `ALLOWED_ORIGINS` env var (comma-separated)
@@ -150,7 +151,7 @@ ShopMCP is a fully UCP-compliant Shopify Agent. It uses the same Universal Comme
 - **Discovery**: Fetches `/.well-known/ucp` from store domains to discover UCP capabilities, services, transports, and payment handlers
 - **Checkout Primitives**: Exposes `create_checkout`, `update_checkout`, `complete_checkout` as MCP tools when UCP is discovered
 - **Order Tracking**: Exposes `get_order_status` for post-purchase order tracking
-- **Capability Caching**: UCP discovery documents are cached in-memory with a 5-minute TTL per store domain
+- **Capability Caching**: UCP discovery documents are cached in-memory with a 5-minute TTL per store domain (bounded to 1000 entries with LRU-style eviction)
 - **Graceful Fallback**: If a store doesn't support UCP, the agent continues with standard MCP tools without errors
 - **Per-Store Toggle**: Each store has a `ucp_compliant` boolean (default `true`) that can be toggled in the Settings page
 - **UCP Headers**: When UCP is active, all MCP tool calls include the `UCP-Version: 2026-01-11` header

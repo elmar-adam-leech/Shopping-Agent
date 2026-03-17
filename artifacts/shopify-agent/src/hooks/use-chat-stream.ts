@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import type { ChatMessage, ToolCall, ToolResult } from '@workspace/api-client-react';
 import { useCartStore } from '@/store/use-cart-store';
+import { readSSEStream } from '@/lib/sse-parser';
 
 interface ChatContext {
   productHandle?: string;
@@ -64,111 +65,58 @@ export function useChatStream({ storeDomain, sessionId, conversationId, context,
 
       if (!response.body) throw new Error('No response body stream');
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      let done = false;
       let assistantMessage = '';
       let currentToolCalls: ToolCall[] = [];
       let currentToolResults: ToolResult[] = [];
-      let sseBuffer = '';
 
       setMessages(prev => [
         ...prev, 
         { role: 'assistant', content: '', timestamp: new Date().toISOString() }
       ]);
 
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        if (value) {
-          sseBuffer += decoder.decode(value, { stream: true });
-          const lines = sseBuffer.split('\n');
-          sseBuffer = lines.pop() || '';
-          
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const dataStr = line.substring(6).trim();
-              if (dataStr === '[DONE]') continue;
-              
+      await readSSEStream(
+        response.body,
+        (event) => {
+          if (event.type === 'text') {
+            assistantMessage += event.data as string;
+          } else if (event.type === 'conversation_id') {
+            onConversationId?.(event.data as number);
+          } else if (event.type === 'tool_call') {
+            const d = event.data as { id: string; name: string; arguments: string };
+            currentToolCalls.push({ id: d.id, name: d.name, arguments: d.arguments });
+
+            if (d.name === 'add_to_cart') {
               try {
-                const event = JSON.parse(dataStr);
-                
-                if (event.type === 'text') {
-                  assistantMessage += event.data;
-                } else if (event.type === 'conversation_id') {
-                  onConversationId?.(event.data);
-                } else if (event.type === 'tool_call') {
-                  currentToolCalls.push({
-                    id: event.data.id,
-                    name: event.data.name,
-                    arguments: event.data.arguments
-                  });
-                  
-                  if (event.data.name === 'add_to_cart') {
-                    try {
-                      const args = JSON.parse(event.data.arguments);
-                      cartStore.addItem({
-                        id: args.variantId || args.productId || `tmp-${Date.now()}`,
-                        title: args.title || 'Item added',
-                        price: parseFloat(args.price || '0'),
-                        imageUrl: args.imageUrl
-                      });
-                    } catch (e) {
-                      console.error('Failed to parse add_to_cart arguments', e);
-                    }
-                  }
-                } else if (event.type === 'tool_result') {
-                  currentToolResults.push({
-                    toolCallId: event.data.toolCallId,
-                    content: event.data.content
-                  });
-                }
-                
-                setMessages(prev => {
-                  const newMessages = [...prev];
-                  const lastIndex = newMessages.length - 1;
-                  newMessages[lastIndex] = {
-                    ...newMessages[lastIndex],
-                    content: assistantMessage,
-                    toolCalls: currentToolCalls.length > 0 ? [...currentToolCalls] : undefined,
-                    toolResults: currentToolResults.length > 0 ? [...currentToolResults] : undefined
-                  };
-                  return newMessages;
+                const args = JSON.parse(d.arguments);
+                cartStore.addItem({
+                  id: args.variantId || args.productId || `tmp-${Date.now()}`,
+                  title: args.title || 'Item added',
+                  price: parseFloat(args.price || '0'),
+                  imageUrl: args.imageUrl
                 });
-              } catch {
-                // incomplete JSON line — will be handled in next chunk via buffer
+              } catch (e) {
+                console.error('Failed to parse add_to_cart arguments', e);
               }
             }
+          } else if (event.type === 'tool_result') {
+            const d = event.data as { toolCallId: string; content: string };
+            currentToolResults.push({ toolCallId: d.toolCallId, content: d.content });
           }
-        }
-      }
 
-      if (sseBuffer.trim().startsWith('data: ')) {
-        const dataStr = sseBuffer.trim().substring(6).trim();
-        if (dataStr && dataStr !== '[DONE]') {
-          try {
-            const event = JSON.parse(dataStr);
-            if (event.type === 'text') {
-              assistantMessage += event.data;
-            } else if (event.type === 'conversation_id') {
-              onConversationId?.(event.data);
-            }
-            setMessages(prev => {
-              const newMessages = [...prev];
-              const lastIndex = newMessages.length - 1;
-              newMessages[lastIndex] = {
-                ...newMessages[lastIndex],
-                content: assistantMessage,
-                toolCalls: currentToolCalls.length > 0 ? [...currentToolCalls] : undefined,
-                toolResults: currentToolResults.length > 0 ? [...currentToolResults] : undefined
-              };
-              return newMessages;
-            });
-          } catch {
-            // ignore unparseable remainder
-          }
-        }
-      }
+          setMessages(prev => {
+            const newMessages = [...prev];
+            const lastIndex = newMessages.length - 1;
+            newMessages[lastIndex] = {
+              ...newMessages[lastIndex],
+              content: assistantMessage,
+              toolCalls: currentToolCalls.length > 0 ? [...currentToolCalls] : undefined,
+              toolResults: currentToolResults.length > 0 ? [...currentToolResults] : undefined
+            };
+            return newMessages;
+          });
+        },
+        abortControllerRef.current.signal
+      );
       
       onSuccess?.();
     } catch (err: unknown) {

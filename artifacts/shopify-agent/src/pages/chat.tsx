@@ -9,7 +9,7 @@ import { ChatEmptyState } from "@/components/chat/ChatEmptyState";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { useSession } from "@/hooks/use-session";
 import { useChatStream } from "@/hooks/use-chat-stream";
-import { useListConversations, useGetPreferences, useUpdatePreferences } from "@workspace/api-client-react";
+import { useListConversations, useGetPreferences, useUpdatePreferences, deleteConversation } from "@workspace/api-client-react";
 import { Sparkles, Loader2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
@@ -68,14 +68,13 @@ export default function ChatPage() {
 
   const handleDeleteConversation = async (convId: number) => {
     try {
-      await fetch(`/api/stores/${storeDomain}/conversations/${convId}`, {
-        method: 'DELETE',
+      await deleteConversation(storeDomain, convId, {
         headers: { 'x-session-id': sessionId || '' },
       });
       if (activeConversationId === convId) startNewConversation();
       refetchConversations();
-    } catch {
-      console.error("Failed to delete conversation");
+    } catch (err) {
+      console.error("Failed to delete conversation", err);
     }
   };
 

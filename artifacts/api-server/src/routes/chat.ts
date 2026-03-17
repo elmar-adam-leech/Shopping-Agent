@@ -97,7 +97,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
 
   function safeSend(data: string): boolean {
     if (clientDisconnected) return false;
-    try { res.write(data); return true; } catch { return false; }
+    try { res.write(data); return true; } catch (err) { console.warn("SSE write failure:", err); return false; }
   }
 
   try {
@@ -150,7 +150,6 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
 
     safeSend(`data: ${JSON.stringify({ type: "conversation_id", data: conversation.id })}\n\n`);
 
-    // UCP compliance added per ucp.dev
     const ucpEnabled = store.ucpCompliant !== false;
     let tools: MCPTool[] = [];
     let ucpDoc = null;

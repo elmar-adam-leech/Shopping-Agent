@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { Search, Loader2, X } from "lucide-react";
 import { useSession } from "@/hooks/use-session";
 import { ProductCard, type ProductCardData } from "@/components/chat/ProductCard";
+import { readSSEStream } from "@/lib/sse-parser";
 
 interface AISearchBarProps {
   storeDomain: string;
@@ -39,57 +40,38 @@ export function AISearchBar({ storeDomain }: AISearchBarProps) {
 
       if (!response.ok || !response.body) throw new Error("Search failed");
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
-      let done = false;
       let fullText = "";
-      let sseBuffer = "";
 
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        if (value) {
-          sseBuffer += decoder.decode(value, { stream: true });
-          const lines = sseBuffer.split("\n");
-          sseBuffer = lines.pop() || "";
+      await readSSEStream(
+        response.body,
+        (event) => {
+          if (event.type === "text") {
+            fullText += event.data as string;
+            setSummary(fullText);
+          } else if (event.type === "tool_result") {
+            try {
+              const content = (event.data as { content: string }).content;
+              const parsed = JSON.parse(content);
+              const products: ProductCardData[] = [];
 
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const dataStr = line.substring(6).trim();
-              if (dataStr === "[DONE]") continue;
-              try {
-                const event = JSON.parse(dataStr);
-                if (event.type === "text") {
-                  fullText += event.data;
-                  setSummary(fullText);
-                } else if (event.type === "tool_result") {
-                  try {
-                    const content = event.data.content;
-                    const parsed = JSON.parse(content);
-                    const products: ProductCardData[] = [];
-
-                    if (Array.isArray(parsed)) {
-                      products.push(...parsed);
-                    } else if (parsed.products && Array.isArray(parsed.products)) {
-                      products.push(...parsed.products);
-                    } else if (parsed.edges && Array.isArray(parsed.edges)) {
-                      products.push(...parsed.edges.map((e: { node: ProductCardData }) => e.node));
-                    }
-
-                    if (products.length > 0) {
-                      setResults((prev) => [...prev, ...products]);
-                    }
-                  } catch {
-                    // not parseable product data
-                  }
-                }
-              } catch {
-                // incomplete JSON
+              if (Array.isArray(parsed)) {
+                products.push(...parsed);
+              } else if (parsed.products && Array.isArray(parsed.products)) {
+                products.push(...parsed.products);
+              } else if (parsed.edges && Array.isArray(parsed.edges)) {
+                products.push(...parsed.edges.map((e: { node: ProductCardData }) => e.node));
               }
+
+              if (products.length > 0) {
+                setResults((prev) => [...prev, ...products]);
+              }
+            } catch {
+              console.warn("Could not parse product data from tool result");
             }
           }
-        }
-      }
+        },
+        abortRef.current.signal
+      );
     } catch (err: unknown) {
       if (err instanceof Error && err.name !== "AbortError") {
         console.error("Search error:", err);

@@ -11,13 +11,11 @@ export function ThemeIntegrationSettings({ storeDomain }: { storeDomain: string 
   const { mutateAsync: updateStore, isPending: updating } = useUpdateStore();
   const { toast } = useToast();
 
-  const [chatEnabled, setChatEnabled] = useState(true);
   const [embedEnabled, setEmbedEnabled] = useState(false);
   const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
 
   useEffect(() => {
     if (store) {
-      setChatEnabled(store.chatEnabled ?? true);
       setEmbedEnabled(store.embedEnabled ?? false);
     }
   }, [store]);
@@ -26,7 +24,7 @@ export function ThemeIntegrationSettings({ storeDomain }: { storeDomain: string 
     try {
       await updateStore({
         storeDomain,
-        data: { chatEnabled, embedEnabled },
+        data: { embedEnabled },
       });
       toast({ title: "Theme integration settings saved", variant: "default" });
     } catch (err: unknown) {
@@ -63,17 +61,6 @@ export function ThemeIntegrationSettings({ storeDomain }: { storeDomain: string 
       </div>
 
       <div className="grid gap-6">
-        <div className="flex items-center justify-between p-4 border border-border rounded-xl bg-card">
-          <div className="flex items-center gap-3">
-            <MessageSquare className="w-5 h-5 text-primary" />
-            <div>
-              <Label className="text-sm font-semibold">Chat Enabled</Label>
-              <p className="text-xs text-muted-foreground">Allow customers to chat with your AI assistant</p>
-            </div>
-          </div>
-          <Switch checked={chatEnabled} onCheckedChange={setChatEnabled} />
-        </div>
-
         <div className="flex items-center justify-between p-4 border border-border rounded-xl bg-card">
           <div className="flex items-center gap-3">
             <Code className="w-5 h-5 text-primary" />
