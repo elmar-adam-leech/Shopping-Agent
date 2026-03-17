@@ -9,9 +9,9 @@ export default function InstallPage() {
 
   const handleInstall = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!shop) return;
+    if (!shop.trim()) return;
     
-    const shopDomain = shop.includes(".myshopify.com") ? shop : `${shop}.myshopify.com`;
+    const shopDomain = `${shop.trim().replace(/\.myshopify\.com$/i, "")}.myshopify.com`;
     window.location.href = `/api/auth/install?shop=${encodeURIComponent(shopDomain)}`;
   };
 
@@ -48,14 +48,15 @@ export default function InstallPage() {
           <form onSubmit={handleInstall} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="shop">Shopify Store Domain</Label>
-              <div className="relative">
+              <div className="flex items-center rounded-xl border border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm overflow-hidden focus-within:ring-2 focus-within:ring-primary/20">
                 <Input
                   id="shop"
-                  placeholder="your-store.myshopify.com"
+                  placeholder="your-store"
                   value={shop}
                   onChange={(e) => setShop(e.target.value)}
-                  className="pl-4 pr-10 py-6 text-base bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border-slate-200 dark:border-slate-700 rounded-xl focus:ring-primary/20"
+                  className="border-0 pl-4 py-6 text-base bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
+                <span className="pr-4 text-muted-foreground text-sm font-medium whitespace-nowrap select-none">.myshopify.com</span>
               </div>
             </div>
 

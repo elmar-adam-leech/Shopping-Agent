@@ -16,14 +16,16 @@ export default function HomePage() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+    if (!loginDomain.trim()) return;
     setLoginError("");
     setLoggingIn(true);
     try {
+      const fullDomain = `${loginDomain.trim().replace(/\.myshopify\.com$/i, "")}.myshopify.com`;
       const resp = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ storeDomain: loginDomain.trim() }),
+        body: JSON.stringify({ storeDomain: fullDomain }),
       });
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({ error: "Login failed" }));
@@ -83,13 +85,16 @@ export default function HomePage() {
               Enter your store domain to access the admin dashboard.
             </p>
             <form onSubmit={handleLogin} className="w-full space-y-4">
-              <input
-                type="text"
-                value={loginDomain}
-                onChange={e => setLoginDomain(e.target.value)}
-                placeholder="your-store.myshopify.com"
-                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
+              <div className="flex items-center w-full rounded-xl border border-border bg-background overflow-hidden focus-within:ring-2 focus-within:ring-primary/50">
+                <input
+                  type="text"
+                  value={loginDomain}
+                  onChange={e => setLoginDomain(e.target.value)}
+                  placeholder="your-store"
+                  className="flex-1 px-4 py-3 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none border-0"
+                />
+                <span className="pr-4 text-muted-foreground text-sm font-medium whitespace-nowrap select-none">.myshopify.com</span>
+              </div>
               {loginError && (
                 <p className="text-sm text-red-500">{loginError}</p>
               )}
