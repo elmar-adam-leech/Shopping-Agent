@@ -1,0 +1,91 @@
+Build a complete, production-ready full-stack React + Vite + Express web app called Shopify MCP AI Shopping Agent that works for multiple Shopify stores (multi-tenant) using the official Storefront MCP.
+Critical anti-tech-debt rules (follow exactly):
+
+Build modularly and incrementally — never create monolithic files or overbuilt pages.
+Exact folder structure:
+src/frontend/ (all React code)
+routes/ (small page components only)
+components/ (ChatWindow, ProductCard, CollectionCard, BlogCard, etc. — reusable)
+hooks/ (useChat, useCart, usePreferences)
+lib/ (mcp-client.ts, graphql-client.ts)
+
+src/backend/ (Express server)
+api/ (chat.ts, stores.ts, analytics.ts)
+db/ (drizzle config + migrations)
+services/
+llms/ (one file per provider — see below)
+llm-service.ts (tiny factory only)
+tenant-validator.ts
+
+
+src/shared/ (types.ts)
+
+Every page/component <100 lines where possible. Use shadcn/ui CLI for all UI. Scaffold step-by-step: (1) folders, (2) backend + DB, (3) API, (4) frontend, (5) UI, (6) chat.
+
+Follow the tutorial: https://shopify.dev/docs/apps/build/storefront-mcp/build-storefront-ai-agent?framework=reactRouter
+Tech stack:
+
+Frontend: React 18 + Vite + React Router v7 + Tailwind + shadcn/ui
+Backend: Express + Drizzle ORM + pg + openai SDK + @anthropic-ai/sdk
+Database: Neon Postgres (multi-tenant with RLS)
+LLM: Multi-provider (all calls proxied through backend)
+
+LLM support (per-store configurable, merchant-billed + ultra-modular):
+
+Create folder src/backend/services/llms/ with one dedicated file per provider:
+openai.ts (full OpenAI SDK setup, tool calling, streaming)
+xai.ts (Grok/xAI — uses openai SDK with baseURL="https://api.x.ai/v1")
+anthropic.ts (Anthropic SDK — matches Shopify’s official template)
+
+In src/backend/services/llm-service.ts create a tiny factory that:
+Reads provider from the store record
+Dynamically imports and returns the correct llm instance
+Never contains any SDK code itself
+
+Add columns to the stores table: provider (enum: 'openai', 'anthropic', 'xai'), model (text), api_key (text — stored server-side only).
+Settings page per store:
+Dropdown: Provider (OpenAI, Anthropic, Grok/xAI)
+Model field (with helpful presets per provider)
+Input field for their own API key (saved in DB for that store only).
+
+The backend automatically routes to the correct provider file for every chat/tool-call/stream.
+System prompt (in backend): “You are a helpful shopping assistant for [Store Name]. Use MCP tools for products, cart, checkout, collections. Use GraphQL for blogs/articles. Remember user preferences when relevant.”
+All billing goes directly to the merchant’s own LLM account.
+
+Strict multi-tenancy & security (mandatory):
+
+Every backend route validates store_domain.
+Every DB query filters by store_domain.
+Enable Neon Row Level Security (RLS) in migrations.
+Session_id UUID generated & validated server-side, bound to store_domain.
+express-rate-limit (10 req/min per session) on /api/chat.
+API keys stored server-side only in Neon — never exposed.
+No raw errors or DB details ever sent to frontend.
+Tenant isolation must be impossible to bypass (including LLM keys).
+
+Persistence tables (auto-migrate on start):
+
+stores (store_domain PK, storefront_token, provider, model, api_key, created_at)
+conversations (id, store_domain, session_id, title, messages JSONB, ...)
+user_preferences (id, store_domain, session_id, prefs JSONB)
+analytics_logs (id, store_domain, event_type, query, ...)
+
+MCP & GraphQL:
+
+JSON-RPC to https://[store-domain].myshopify.com/api/mcp
+GraphQL fallback for blogs/articles/collections
+
+Features:
+
+Store selector, conversation history sidebar, user prefs, analytics dashboard.
+Rich chat with product/collection/blog cards + live cart.
+Settings page for adding stores + provider/model/API key.
+
+Deliverables:
+
+Full working full-stack project that runs immediately.
+.env.example + instructions for Neon (DATABASE_URL in Replit Secrets only).
+README with setup for my three stores, how others can add their store + their own LLM key safely, and security notes.
+Heavy comments explaining the llms/ folder modularity and tenant isolation.
+
+Start by scaffolding the exact folder structure (including the llms/ subfolder), then proceed incrementally. Make it clean, modular, secure, and production-ready with zero technical debt.
