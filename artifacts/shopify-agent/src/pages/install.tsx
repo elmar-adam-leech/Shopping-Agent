@@ -6,11 +6,15 @@ import { Label } from "@/components/ui/label";
 
 export default function InstallPage() {
   const [shop, setShop] = useState("");
+  const [validationError, setValidationError] = useState("");
 
   const handleInstall = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!shop.trim()) return;
-    
+    if (!shop.trim()) {
+      setValidationError("Please enter your store domain");
+      return;
+    }
+    setValidationError("");
     const shopDomain = `${shop.trim().replace(/\.myshopify\.com$/i, "")}.myshopify.com`;
     window.location.href = `/api/auth/install?shop=${encodeURIComponent(shopDomain)}`;
   };
@@ -53,11 +57,14 @@ export default function InstallPage() {
                   id="shop"
                   placeholder="your-store"
                   value={shop}
-                  onChange={(e) => setShop(e.target.value)}
+                  onChange={(e) => { setShop(e.target.value); setValidationError(""); }}
                   className="border-0 pl-4 py-6 text-base bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
                 <span className="pr-4 text-muted-foreground text-sm font-medium whitespace-nowrap select-none">.myshopify.com</span>
               </div>
+              {validationError && (
+                <p className="text-sm text-red-500">{validationError}</p>
+              )}
             </div>
 
             <Button 
