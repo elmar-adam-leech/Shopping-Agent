@@ -26,6 +26,7 @@ function storeToResponse(store: Store) {
     model: store.model,
     hasApiKey: !!store.apiKey,
     ucpCompliant: store.ucpCompliant,
+    chatEnabled: store.chatEnabled,
     createdAt: store.createdAt,
   };
 }
@@ -108,12 +109,13 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
     return;
   }
 
-  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey" | "ucpCompliant">> = {};
+  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey" | "ucpCompliant" | "chatEnabled">> = {};
   if (parsed.data.storefrontToken !== undefined) updateData.storefrontToken = parsed.data.storefrontToken;
   if (parsed.data.provider !== undefined) updateData.provider = parsed.data.provider as ProviderValue;
   if (parsed.data.model !== undefined) updateData.model = parsed.data.model;
   if (parsed.data.apiKey !== undefined) updateData.apiKey = parsed.data.apiKey;
   if (parsed.data.ucpCompliant !== undefined) updateData.ucpCompliant = parsed.data.ucpCompliant;
+  if (parsed.data.chatEnabled !== undefined) updateData.chatEnabled = parsed.data.chatEnabled;
 
   const [store] = await db
     .update(storesTable)
@@ -127,6 +129,29 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
   }
 
   res.json(UpdateStoreResponse.parse(storeToResponse(store)));
+});
+
+router.get("/stores/:storeDomain/public", async (req, res): Promise<void> => {
+  const { storeDomain } = req.params;
+  if (!storeDomain) {
+    res.status(400).json({ error: "Missing storeDomain" });
+    return;
+  }
+
+  const [store] = await db
+    .select()
+    .from(storesTable)
+    .where(eq(storesTable.storeDomain, storeDomain));
+
+  if (!store) {
+    res.status(404).json({ error: "Store not found" });
+    return;
+  }
+
+  res.json({
+    storeDomain: store.storeDomain,
+    chatEnabled: store.chatEnabled,
+  });
 });
 
 router.delete("/stores/:storeDomain", validateMerchantAuth, async (req, res): Promise<void> => {

@@ -119,6 +119,10 @@
         } catch (e) {
           callback(e);
         }
+      } else if (xhr.status === 403) {
+        var err = new Error("Chat is currently disabled for this store");
+        err.chatDisabled = true;
+        callback(err);
       } else {
         callback(new Error("Session creation failed: " + xhr.status));
       }
@@ -249,9 +253,12 @@
 
     ensureSession(function (err) {
       if (err) {
+        var msg = (err.chatDisabled)
+          ? "Chat is currently unavailable for this store."
+          : "Sorry, I couldn't connect to the assistant. Please try again.";
         state.messages.push({
           role: "assistant",
-          content: "Sorry, I couldn't connect to the assistant. Please try again.",
+          content: msg,
           timestamp: new Date().toISOString()
         });
         renderMessages();
@@ -282,7 +289,37 @@
       })
     })
       .then(function (response) {
-        if ((response.status === 401 || response.status === 403) && retryCount < 1) {
+        if (response.status === 403) {
+          return response.json().then(function (body) {
+            state.isLoading = false;
+            if (body && body.error && body.error.indexOf("disabled") !== -1) {
+              state.messages.push({ role: "assistant", content: "Chat is currently unavailable for this store.", timestamp: new Date().toISOString() });
+              renderMessages();
+              scrollToBottom();
+              return;
+            }
+            if (retryCount < 1) {
+              state.sessionId = null;
+              state.conversationId = null;
+              try { localStorage.removeItem(SESSION_KEY); localStorage.removeItem(CONV_KEY); } catch (e) { /* ignore */ }
+              return ensureSession(function (err) {
+                if (err) {
+                  state.messages.push({ role: "assistant", content: "Session expired. Please try sending your message again.", timestamp: new Date().toISOString() });
+                  renderMessages();
+                  return;
+                }
+                sendChatMessage(message, retryCount + 1);
+              });
+            }
+            state.messages.push({ role: "assistant", content: "Sorry, something went wrong. Please try again.", timestamp: new Date().toISOString() });
+            renderMessages();
+          }).catch(function () {
+            state.isLoading = false;
+            state.messages.push({ role: "assistant", content: "Sorry, something went wrong. Please try again.", timestamp: new Date().toISOString() });
+            renderMessages();
+          });
+        }
+        if (response.status === 401 && retryCount < 1) {
           state.sessionId = null;
           state.conversationId = null;
           try {

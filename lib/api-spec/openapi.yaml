@@ -204,6 +204,31 @@ paths:
         "204":
           description: Store deleted
 
+  /stores/{storeDomain}/public:
+    get:
+      operationId: getStorePublic
+      tags: [stores]
+      summary: Get public store info (no auth required)
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Public store info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorePublicInfo"
+        "404":
+          description: Store not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /stores/{storeDomain}/knowledge:
     get:
       operationId: listKnowledge
@@ -512,6 +537,8 @@ components:
           type: boolean
         ucpCompliant:
           type: boolean
+        chatEnabled:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -521,7 +548,19 @@ components:
         - model
         - hasApiKey
         - ucpCompliant
+        - chatEnabled
         - createdAt
+
+    StorePublicInfo:
+      type: object
+      properties:
+        storeDomain:
+          type: string
+        chatEnabled:
+          type: boolean
+      required:
+        - storeDomain
+        - chatEnabled
 
     CreateStoreBody:
       type: object
@@ -557,6 +596,8 @@ components:
         apiKey:
           type: string
         ucpCompliant:
+          type: boolean
+        chatEnabled:
           type: boolean
 
     KnowledgeEntry:

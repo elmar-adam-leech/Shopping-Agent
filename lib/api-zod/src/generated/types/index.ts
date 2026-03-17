@@ -31,6 +31,7 @@ export * from "./queryCount";
 export * from "./session";
 export * from "./store";
 export * from "./storeProvider";
+export * from "./storePublicInfo";
 export * from "./toolCall";
 export * from "./toolResult";
 export * from "./updateKnowledgeBody";

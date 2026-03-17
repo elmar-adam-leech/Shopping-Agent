@@ -8,6 +8,7 @@ import InstallPage from "./pages/install";
 import SettingsPage from "./pages/settings";
 import ChatPage from "./pages/chat";
 import AnalyticsPage from "./pages/analytics";
+import ShopForMePage from "./pages/shop-for-me";
 import NotFound from "./pages/not-found";
 
 const queryClient = new QueryClient({
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/:storeDomain/settings" component={SettingsPage} />
       <Route path="/:storeDomain/chat" component={ChatPage} />
       <Route path="/:storeDomain/analytics" component={AnalyticsPage} />
+      <Route path="/shop/:storeDomain" component={ShopForMePage} />
       <Route component={NotFound} />
     </Switch>
   );

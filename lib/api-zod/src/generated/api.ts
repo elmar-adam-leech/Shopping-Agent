@@ -48,6 +48,7 @@ export const ListStoresResponseItem = zod.object({
   model: zod.string(),
   hasApiKey: zod.boolean(),
   ucpCompliant: zod.boolean(),
+  chatEnabled: zod.boolean(),
   createdAt: zod.date(),
 });
 export const ListStoresResponse = zod.array(ListStoresResponseItem);
@@ -77,6 +78,7 @@ export const GetStoreResponse = zod.object({
   model: zod.string(),
   hasApiKey: zod.boolean(),
   ucpCompliant: zod.boolean(),
+  chatEnabled: zod.boolean(),
   createdAt: zod.date(),
 });
 
@@ -93,6 +95,7 @@ export const UpdateStoreBody = zod.object({
   model: zod.string().optional(),
   apiKey: zod.string().optional(),
   ucpCompliant: zod.boolean().optional(),
+  chatEnabled: zod.boolean().optional(),
 });
 
 export const UpdateStoreResponse = zod.object({
@@ -102,6 +105,7 @@ export const UpdateStoreResponse = zod.object({
   model: zod.string(),
   hasApiKey: zod.boolean(),
   ucpCompliant: zod.boolean(),
+  chatEnabled: zod.boolean(),
   createdAt: zod.date(),
 });
 
@@ -110,6 +114,18 @@ export const UpdateStoreResponse = zod.object({
  */
 export const DeleteStoreParams = zod.object({
   storeDomain: zod.coerce.string(),
+});
+
+/**
+ * @summary Get public store info (no auth required)
+ */
+export const GetStorePublicParams = zod.object({
+  storeDomain: zod.coerce.string(),
+});
+
+export const GetStorePublicResponse = zod.object({
+  storeDomain: zod.string(),
+  chatEnabled: zod.boolean(),
 });
 
 /**

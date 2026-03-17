@@ -15,5 +15,6 @@ export interface Store {
   model: string;
   hasApiKey: boolean;
   ucpCompliant: boolean;
+  chatEnabled: boolean;
   createdAt: Date;
 }

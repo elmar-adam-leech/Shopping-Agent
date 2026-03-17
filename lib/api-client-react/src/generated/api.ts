@@ -34,6 +34,7 @@ import type {
   ListKnowledgeParams,
   Session,
   Store,
+  StorePublicInfo,
   UpdateKnowledgeBody,
   UpdatePreferencesBody,
   UpdateStoreBody,
@@ -812,6 +813,94 @@ export const useDeleteStore = <
 > => {
   return useMutation(getDeleteStoreMutationOptions(options));
 };
+
+/**
+ * @summary Get public store info (no auth required)
+ */
+export const getGetStorePublicUrl = (storeDomain: string) => {
+  return `/api/stores/${storeDomain}/public`;
+};
+
+export const getStorePublic = async (
+  storeDomain: string,
+  options?: RequestInit,
+): Promise<StorePublicInfo> => {
+  return customFetch<StorePublicInfo>(getGetStorePublicUrl(storeDomain), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetStorePublicQueryKey = (storeDomain: string) => {
+  return [`/api/stores/${storeDomain}/public`] as const;
+};
+
+export const getGetStorePublicQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStorePublic>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  storeDomain: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStorePublic>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStorePublicQueryKey(storeDomain);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getStorePublic>>> = ({
+    signal,
+  }) => getStorePublic(storeDomain, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!storeDomain,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStorePublic>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStorePublicQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStorePublic>>
+>;
+export type GetStorePublicQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get public store info (no auth required)
+ */
+
+export function useGetStorePublic<
+  TData = Awaited<ReturnType<typeof getStorePublic>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  storeDomain: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStorePublic>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStorePublicQueryOptions(storeDomain, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List shop knowledge entries

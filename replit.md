@@ -48,7 +48,7 @@ artifacts-monorepo/
 │   │       └── app.ts             # Express app setup with rate limiting
 │   └── shopify-agent/             # React + Vite frontend
 │       └── src/
-│           ├── pages/             # Route pages (home, chat, settings, analytics)
+│           ├── pages/             # Route pages (home, chat, settings, analytics, shop-for-me)
 │           ├── components/        # Reusable UI components
 │           ├── hooks/             # Custom hooks (useSession, useChatStream)
 │           └── store/             # Zustand stores (cart)
@@ -81,7 +81,7 @@ artifacts-monorepo/
 
 ## Database Tables
 
-- **stores**: `store_domain` (PK), `storefront_token`, `access_token`, `provider` (enum: openai/anthropic/xai), `model`, `api_key`, `ucp_compliant` (boolean, default true), `created_at`
+- **stores**: `store_domain` (PK), `storefront_token`, `access_token`, `provider` (enum: openai/anthropic/xai), `model`, `api_key`, `ucp_compliant` (boolean, default true), `chat_enabled` (boolean, default true), `created_at`
 - **shop_knowledge**: `id`, `store_domain` (FK), `category` (enum: general/sizing/compatibility/required_accessories/restrictions/policies/custom), `title`, `content`, `sort_order`, timestamps
 - **conversations**: `id`, `store_domain` (FK), `session_id`, `title`, `messages` (JSONB), timestamps
 - **user_preferences**: `id`, `store_domain` (FK), `session_id`, `prefs` (JSONB), timestamps
@@ -116,6 +116,20 @@ artifacts-monorepo/
 - API keys and tokens stored server-side only
 - Cookie-parser middleware added to app.ts; custom fetch includes `credentials: 'include'`
 - Auto-migration runs on server startup (`drizzle-kit push`)
+
+### Chat Widget Toggle
+- Merchants can enable/disable the chat widget from the Settings page via a `chat_enabled` toggle
+- When disabled, both the theme extension widget and the "Shop For Me" page return 403 errors
+- Session creation (`POST /sessions`) and chat (`POST /stores/:domain/chat`) both enforce this check server-side
+- The theme extension widget handles 403 "chat disabled" gracefully, showing "Chat is currently unavailable"
+
+### Shop For Me Page
+- Public-facing full-page chat at `/shop/{storeDomain}` — no merchant auth required
+- Auto-creates a customer session with TTL tracking and expiry-based refresh
+- Supports `?embed=true` query param for iframe embedding (removes header chrome)
+- Merchants can link to this page from their Shopify store navigation
+- Respects the `chat_enabled` toggle (shows "unavailable" message if disabled)
+- Public store info available via `GET /api/stores/:storeDomain/public` (returns only storeDomain and chatEnabled)
 
 ### Chat Flow
 - Frontend sends message via POST to `/api/stores/{domain}/chat`

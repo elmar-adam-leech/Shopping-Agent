@@ -12,6 +12,7 @@ export const storesTable = pgTable("stores", {
   model: text("model").notNull().default("gpt-4o"),
   apiKey: text("api_key"),
   ucpCompliant: boolean("ucp_compliant").notNull().default(true),
+  chatEnabled: boolean("chat_enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

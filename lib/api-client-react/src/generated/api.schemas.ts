@@ -29,7 +29,13 @@ export interface Store {
   model: string;
   hasApiKey: boolean;
   ucpCompliant: boolean;
+  chatEnabled: boolean;
   createdAt: string;
+}
+
+export interface StorePublicInfo {
+  storeDomain: string;
+  chatEnabled: boolean;
 }
 
 export type CreateStoreBodyProvider =
@@ -64,6 +70,7 @@ export interface UpdateStoreBody {
   model?: string;
   apiKey?: string;
   ucpCompliant?: boolean;
+  chatEnabled?: boolean;
 }
 
 export type KnowledgeEntryCategory =

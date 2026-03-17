@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useGetStore, useUpdateStore } from "@workspace/api-client-react";
-import { Save, Key, Database, Globe, Shield } from "lucide-react";
+import { Save, Key, Database, Globe, Shield, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
   const [apiKey, setApiKey] = useState("");
   const [storefrontToken, setStorefrontToken] = useState("");
   const [ucpCompliant, setUcpCompliant] = useState(true);
+  const [chatEnabled, setChatEnabled] = useState(true);
 
   useEffect(() => {
     if (store) {
@@ -28,6 +29,7 @@ export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
         setStorefrontToken(store.storefrontToken);
       }
       setUcpCompliant(store.ucpCompliant ?? true);
+      setChatEnabled(store.chatEnabled ?? true);
     }
   }, [store]);
 
@@ -40,6 +42,7 @@ export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
           model,
           storefrontToken: storefrontToken || undefined,
           ucpCompliant,
+          chatEnabled,
           ...(apiKey ? { apiKey } : {})
         }
       });
@@ -77,6 +80,46 @@ export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
               Required for product search, cart management, and checkout. Find this in your Shopify Admin under Apps &gt; Develop apps &gt; Storefront API.
             </p>
           </div>
+        </div>
+      </section>
+
+      <section className="bg-card border border-border/50 rounded-3xl p-6 md:p-8 shadow-sm">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-blue-500/10 text-blue-600 rounded-xl">
+            <MessageSquare className="w-5 h-5" />
+          </div>
+          <h2 className="text-xl font-bold font-display">Chat Widget</h2>
+          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${chatEnabled ? 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300'}`}>
+            {chatEnabled ? 'Enabled' : 'Disabled'}
+          </span>
+        </div>
+        
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Control whether the AI chat widget is active on your store. When disabled, both the chat widget and the Shop For Me page will be inactive for customers.
+          </p>
+          <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/20 border border-border/50">
+            <div>
+              <p className="font-medium text-sm">Enable Chat Widget</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Allow customers to interact with your AI shopping assistant</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={chatEnabled}
+              onClick={() => setChatEnabled(!chatEnabled)}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${chatEnabled ? 'bg-blue-600' : 'bg-muted'}`}
+            >
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${chatEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+          {!chatEnabled && (
+            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+              <p className="text-sm text-amber-800 dark:text-amber-300">
+                The chat widget and Shop For Me page are currently inactive. Customers will not be able to use the AI shopping assistant until you re-enable this setting.
+              </p>
+            </div>
+          )}
         </div>
       </section>
 

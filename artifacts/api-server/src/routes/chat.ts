@@ -65,6 +65,11 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
 
   const store = req.store!;
 
+  if (!store.chatEnabled) {
+    res.status(403).json({ error: "Chat is currently disabled for this store" });
+    return;
+  }
+
   if (!store.apiKey) {
     res.status(400).json({ error: "Store has no LLM API key configured. Please add one in settings." });
     return;

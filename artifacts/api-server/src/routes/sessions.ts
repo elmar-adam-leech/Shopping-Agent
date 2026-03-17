@@ -25,6 +25,11 @@ router.post("/sessions", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!store.chatEnabled) {
+    res.status(403).json({ error: "Chat is currently disabled for this store" });
+    return;
+  }
+
   const sessionId = uuidv4();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_TTL_HOURS * 60 * 60 * 1000);
