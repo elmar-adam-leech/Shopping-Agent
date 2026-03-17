@@ -347,6 +347,21 @@ interface CollectionCardData {
   productsCount?: number;
 }
 
+interface BlogArticleData {
+  title?: string;
+  handle?: string;
+  excerpt?: string;
+  publishedAt?: string;
+  image?: { url?: string; altText?: string };
+  blog?: { title?: string };
+}
+
+interface BlogData {
+  title?: string;
+  handle?: string;
+  articles?: { edges?: Array<{ node: BlogArticleData }> };
+}
+
 function tryParseToolResult(content: string): unknown {
   try {
     return JSON.parse(content);
@@ -386,6 +401,28 @@ function CollectionCard({ collection }: { collection: CollectionCardData }) {
         <h4 className="font-semibold text-sm truncate">{collection.title}</h4>
         {collection.description && (
           <p className="text-xs text-muted-foreground line-clamp-2">{collection.description}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ArticleCard({ article }: { article: BlogArticleData }) {
+  return (
+    <div className="flex gap-3 p-3 bg-card border border-border/50 rounded-xl hover:border-primary/30 transition-colors">
+      {article.image?.url && (
+        <img src={article.image.url} alt={article.title || "Article"} className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
+      )}
+      <div className="flex-1 min-w-0">
+        <h4 className="font-semibold text-sm truncate">{article.title}</h4>
+        {article.blog?.title && <p className="text-xs text-primary font-medium">{article.blog.title}</p>}
+        {article.excerpt && (
+          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{article.excerpt}</p>
+        )}
+        {article.publishedAt && (
+          <p className="text-[10px] text-muted-foreground/60 mt-1">
+            {new Date(article.publishedAt).toLocaleDateString()}
+          </p>
         )}
       </div>
     </div>
@@ -440,6 +477,30 @@ function ToolResultCards({ toolName, content }: { toolName: string; content: str
     );
   }
 
+  if (toolName === 'get_blogs') {
+    const articles: BlogArticleData[] = [];
+    if (data.blogs && Array.isArray((data.blogs as Record<string, unknown>).edges)) {
+      for (const blogEdge of (data.blogs as { edges: Array<{ node: BlogData }> }).edges) {
+        const blog = blogEdge.node;
+        if (blog.articles?.edges) {
+          for (const articleEdge of blog.articles.edges) {
+            articles.push(articleEdge.node);
+          }
+        }
+      }
+    }
+
+    if (articles.length === 0) return null;
+
+    return (
+      <div className="grid gap-2 mt-2">
+        {articles.slice(0, 6).map((a, i) => (
+          <ArticleCard key={i} article={a} />
+        ))}
+      </div>
+    );
+  }
+
   return null;
 }
 
@@ -448,6 +509,7 @@ function ToolCallBadge({ tc }: { tc: ToolCallDisplay }) {
     search_products: <Search className="w-3.5 h-3.5" />,
     get_product: <Package className="w-3.5 h-3.5" />,
     get_collections: <Tag className="w-3.5 h-3.5" />,
+    get_blogs: <Tag className="w-3.5 h-3.5" />,
     add_to_cart: <ShoppingBag className="w-3.5 h-3.5" />,
     create_cart: <ShoppingBag className="w-3.5 h-3.5" />,
     get_cart: <ShoppingBag className="w-3.5 h-3.5" />,

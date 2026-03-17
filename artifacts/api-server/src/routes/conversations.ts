@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, desc } from "drizzle-orm";
-import { db, conversationsTable, sessionsTable } from "@workspace/db";
+import { db, conversationsTable } from "@workspace/db";
 import {
   ListConversationsParams,
   ListConversationsQueryParams,
@@ -69,6 +69,10 @@ router.get("/stores/:storeDomain/conversations/:conversationId", validateStoreDo
   }
 
   const sessionId = extractSessionId(req);
+  if (!sessionId) {
+    res.status(401).json({ error: "Session ID is required" });
+    return;
+  }
 
   const [conv] = await db
     .select()
@@ -85,25 +89,9 @@ router.get("/stores/:storeDomain/conversations/:conversationId", validateStoreDo
     return;
   }
 
-  if (sessionId && conv.sessionId !== sessionId) {
+  if (conv.sessionId !== sessionId) {
     res.status(403).json({ error: "Access denied" });
     return;
-  }
-
-  if (!sessionId) {
-    const [validSession] = await db
-      .select()
-      .from(sessionsTable)
-      .where(
-        and(
-          eq(sessionsTable.id, conv.sessionId),
-          eq(sessionsTable.storeDomain, params.data.storeDomain)
-        )
-      );
-    if (!validSession) {
-      res.status(403).json({ error: "Access denied" });
-      return;
-    }
   }
 
   res.json(GetConversationResponse.parse(convToResponse(conv)));
@@ -117,6 +105,10 @@ router.delete("/stores/:storeDomain/conversations/:conversationId", validateStor
   }
 
   const sessionId = extractSessionId(req);
+  if (!sessionId) {
+    res.status(401).json({ error: "Session ID is required" });
+    return;
+  }
 
   const [conv] = await db
     .select()
@@ -133,7 +125,7 @@ router.delete("/stores/:storeDomain/conversations/:conversationId", validateStor
     return;
   }
 
-  if (sessionId && conv.sessionId !== sessionId) {
+  if (conv.sessionId !== sessionId) {
     res.status(403).json({ error: "Access denied" });
     return;
   }

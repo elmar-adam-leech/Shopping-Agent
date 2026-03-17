@@ -10,6 +10,7 @@ import {
   UpdatePreferencesResponse,
 } from "@workspace/api-zod";
 import { validateStoreDomain } from "../services/tenant-validator";
+import { validateSession } from "../services/session-validator";
 
 const router: IRouter = Router();
 
@@ -24,7 +25,7 @@ function prefsToResponse(prefs: typeof userPreferencesTable.$inferSelect) {
   };
 }
 
-router.get("/stores/:storeDomain/preferences", validateStoreDomain, async (req, res): Promise<void> => {
+router.get("/stores/:storeDomain/preferences", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
   const params = GetPreferencesParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -61,7 +62,7 @@ router.get("/stores/:storeDomain/preferences", validateStoreDomain, async (req, 
   res.json(GetPreferencesResponse.parse(prefsToResponse(prefs)));
 });
 
-router.put("/stores/:storeDomain/preferences", validateStoreDomain, async (req, res): Promise<void> => {
+router.put("/stores/:storeDomain/preferences", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
   const params = UpdatePreferencesParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
