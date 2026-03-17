@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Shopify MCP AI Shopping Agent"
+version = "1.0.0"
+id = "artifacts/shopify-agent"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 22419
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/shopify-agent run dev"
+
+[services.env]
+PORT = "22419"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/shopify-agent", "run", "build"]
+publicDir = "artifacts/shopify-agent/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"

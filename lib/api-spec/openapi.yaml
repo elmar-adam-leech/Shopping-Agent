@@ -3,20 +3,36 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Shopify MCP AI Shopping Agent API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: stores
+    description: Store management
+  - name: knowledge
+    description: Shop knowledge entries
+  - name: chat
+    description: Chat operations
+  - name: conversations
+    description: Conversation history
+  - name: preferences
+    description: User preferences
+  - name: analytics
+    description: Analytics dashboard
+  - name: sessions
+    description: Session management
+  - name: auth
+    description: Shopify OAuth
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +40,444 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/install:
+    get:
+      operationId: authInstall
+      tags: [auth]
+      summary: Start Shopify OAuth install
+      parameters:
+        - name: shop
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to Shopify OAuth
+
+  /auth/callback:
+    get:
+      operationId: authCallback
+      tags: [auth]
+      summary: Shopify OAuth callback
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: shop
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: hmac
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to app after successful auth
+
+  /sessions:
+    post:
+      operationId: createSession
+      tags: [sessions]
+      summary: Create a new session for a store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionBody"
+      responses:
+        "201":
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+
+  /stores:
+    get:
+      operationId: listStores
+      tags: [stores]
+      summary: List all configured stores
+      responses:
+        "200":
+          description: List of stores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Store"
+    post:
+      operationId: createStore
+      tags: [stores]
+      summary: Add a new store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStoreBody"
+      responses:
+        "201":
+          description: Store created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Store"
+
+  /stores/{storeDomain}:
+    get:
+      operationId: getStore
+      tags: [stores]
+      summary: Get store details
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Store details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Store"
+        "404":
+          description: Store not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateStore
+      tags: [stores]
+      summary: Update store settings
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStoreBody"
+      responses:
+        "200":
+          description: Store updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Store"
+        "404":
+          description: Store not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteStore
+      tags: [stores]
+      summary: Remove a store
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Store deleted
+
+  /stores/{storeDomain}/knowledge:
+    get:
+      operationId: listKnowledge
+      tags: [knowledge]
+      summary: List shop knowledge entries
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Knowledge entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KnowledgeEntry"
+    post:
+      operationId: createKnowledge
+      tags: [knowledge]
+      summary: Add a knowledge entry
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateKnowledgeBody"
+      responses:
+        "201":
+          description: Knowledge entry created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeEntry"
+
+  /stores/{storeDomain}/knowledge/{knowledgeId}:
+    patch:
+      operationId: updateKnowledge
+      tags: [knowledge]
+      summary: Update a knowledge entry
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: knowledgeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateKnowledgeBody"
+      responses:
+        "200":
+          description: Knowledge entry updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeEntry"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteKnowledge
+      tags: [knowledge]
+      summary: Delete a knowledge entry
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: knowledgeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /stores/{storeDomain}/chat:
+    post:
+      operationId: sendChat
+      tags: [chat]
+      summary: Send a chat message (returns SSE stream)
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: SSE stream of chat events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /stores/{storeDomain}/conversations:
+    get:
+      operationId: listConversations
+      tags: [conversations]
+      summary: List conversations for a session
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+
+  /stores/{storeDomain}/conversations/{conversationId}:
+    get:
+      operationId: getConversation
+      tags: [conversations]
+      summary: Get a conversation with messages
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteConversation
+      tags: [conversations]
+      summary: Delete a conversation
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /stores/{storeDomain}/preferences:
+    get:
+      operationId: getPreferences
+      tags: [preferences]
+      summary: Get user preferences for a session
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreferences"
+    put:
+      operationId: updatePreferences
+      tags: [preferences]
+      summary: Update user preferences
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePreferencesBody"
+      responses:
+        "200":
+          description: Preferences updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPreferences"
+
+  /stores/{storeDomain}/analytics:
+    get:
+      operationId: getAnalytics
+      tags: [analytics]
+      summary: Get analytics data for a store
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 7
+      responses:
+        "200":
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsData"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +488,324 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Store:
+      type: object
+      properties:
+        storeDomain:
+          type: string
+        storefrontToken:
+          type: ["string", "null"]
+        provider:
+          type: string
+          enum: [openai, anthropic, xai]
+        model:
+          type: string
+        hasApiKey:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - storeDomain
+        - provider
+        - model
+        - hasApiKey
+        - createdAt
+
+    CreateStoreBody:
+      type: object
+      properties:
+        storeDomain:
+          type: string
+        storefrontToken:
+          type: string
+        provider:
+          type: string
+          enum: [openai, anthropic, xai]
+        model:
+          type: string
+        apiKey:
+          type: string
+      required:
+        - storeDomain
+        - storefrontToken
+        - provider
+        - model
+        - apiKey
+
+    UpdateStoreBody:
+      type: object
+      properties:
+        storefrontToken:
+          type: string
+        provider:
+          type: string
+          enum: [openai, anthropic, xai]
+        model:
+          type: string
+        apiKey:
+          type: string
+
+    KnowledgeEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        storeDomain:
+          type: string
+        category:
+          type: string
+          enum: [general, sizing, compatibility, required_accessories, restrictions, policies, custom]
+        title:
+          type: string
+        content:
+          type: string
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - storeDomain
+        - category
+        - title
+        - content
+        - sortOrder
+        - createdAt
+        - updatedAt
+
+    CreateKnowledgeBody:
+      type: object
+      properties:
+        category:
+          type: string
+          enum: [general, sizing, compatibility, required_accessories, restrictions, policies, custom]
+        title:
+          type: string
+        content:
+          type: string
+        sortOrder:
+          type: integer
+      required:
+        - category
+        - title
+        - content
+
+    UpdateKnowledgeBody:
+      type: object
+      properties:
+        category:
+          type: string
+          enum: [general, sizing, compatibility, required_accessories, restrictions, policies, custom]
+        title:
+          type: string
+        content:
+          type: string
+        sortOrder:
+          type: integer
+
+    ChatRequest:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        conversationId:
+          type: ["integer", "null"]
+        message:
+          type: string
+      required:
+        - sessionId
+        - message
+
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        storeDomain:
+          type: string
+        sessionId:
+          type: string
+        title:
+          type: string
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - storeDomain
+        - sessionId
+        - title
+        - messages
+        - createdAt
+        - updatedAt
+
+    ChatMessage:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant, system, tool]
+        content:
+          type: string
+        toolCalls:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolCall"
+        toolResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolResult"
+        timestamp:
+          type: string
+          format: date-time
+      required:
+        - role
+        - content
+        - timestamp
+
+    ToolCall:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        arguments:
+          type: string
+      required:
+        - id
+        - name
+        - arguments
+
+    ToolResult:
+      type: object
+      properties:
+        toolCallId:
+          type: string
+        content:
+          type: string
+      required:
+        - toolCallId
+        - content
+
+    Session:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        storeDomain:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - sessionId
+        - storeDomain
+        - createdAt
+
+    CreateSessionBody:
+      type: object
+      properties:
+        storeDomain:
+          type: string
+      required:
+        - storeDomain
+
+    UserPreferences:
+      type: object
+      properties:
+        id:
+          type: integer
+        storeDomain:
+          type: string
+        sessionId:
+          type: string
+        prefs:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - storeDomain
+        - sessionId
+        - prefs
+        - createdAt
+        - updatedAt
+
+    UpdatePreferencesBody:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        prefs:
+          type: object
+      required:
+        - sessionId
+        - prefs
+
+    AnalyticsData:
+      type: object
+      properties:
+        totalChats:
+          type: integer
+        totalSessions:
+          type: integer
+        topQueries:
+          type: array
+          items:
+            $ref: "#/components/schemas/QueryCount"
+        dailyChats:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailyCount"
+      required:
+        - totalChats
+        - totalSessions
+        - topQueries
+        - dailyChats
+
+    QueryCount:
+      type: object
+      properties:
+        query:
+          type: string
+        count:
+          type: integer
+      required:
+        - query
+        - count
+
+    DailyCount:
+      type: object
+      properties:
+        date:
+          type: string
+        count:
+          type: integer
+      required:
+        - date
+        - count

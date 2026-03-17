@@ -1,8 +1,8 @@
-# Workspace
+# Shopify MCP AI Shopping Agent
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+A multi-tenant Shopify AI Shopping Agent built as a full-stack React + Vite + Express application. Merchants install the app, configure their LLM provider (OpenAI, Anthropic, or Grok/xAI), and add shop knowledge. Customers chat with an AI assistant that uses Shopify's Storefront MCP for product search, cart management, and checkout.
 
 ## Stack
 
@@ -10,8 +10,10 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Node.js version**: 24
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
-- **API framework**: Express 5
+- **Frontend**: React 18 + Vite + wouter + Tailwind + shadcn/ui
+- **Backend**: Express 5
 - **Database**: PostgreSQL + Drizzle ORM
+- **LLM**: Multi-provider (OpenAI SDK, Anthropic SDK, xAI via OpenAI SDK)
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
@@ -20,77 +22,98 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ```text
 artifacts-monorepo/
-├── artifacts/              # Deployable applications
-│   └── api-server/         # Express API server
-├── lib/                    # Shared libraries
-│   ├── api-spec/           # OpenAPI spec + Orval codegen config
-│   ├── api-client-react/   # Generated React Query hooks
-│   ├── api-zod/            # Generated Zod schemas from OpenAPI
-│   └── db/                 # Drizzle ORM schema + DB connection
-├── scripts/                # Utility scripts (single workspace package)
-│   └── src/                # Individual .ts scripts, run via `pnpm --filter @workspace/scripts run <script>`
-├── pnpm-workspace.yaml     # pnpm workspace (artifacts/*, lib/*, lib/integrations/*, scripts)
-├── tsconfig.base.json      # Shared TS options (composite, bundler resolution, es2022)
-├── tsconfig.json           # Root TS project references
-└── package.json            # Root package with hoisted devDeps
+├── artifacts/
+│   ├── api-server/                 # Express API server
+│   │   └── src/
+│   │       ├── routes/             # API route handlers
+│   │       │   ├── auth.ts         # Shopify OAuth install/callback
+│   │       │   ├── stores.ts       # Store CRUD
+│   │       │   ├── knowledge.ts    # Shop knowledge CRUD
+│   │       │   ├── chat.ts         # SSE streaming chat
+│   │       │   ├── conversations.ts# Conversation history
+│   │       │   ├── preferences.ts  # User preferences
+│   │       │   ├── analytics.ts    # Analytics dashboard data
+│   │       │   ├── sessions.ts     # Session management
+│   │       │   └── health.ts       # Health check
+│   │       ├── services/
+│   │       │   ├── llms/           # LLM provider implementations
+│   │       │   │   ├── openai.ts   # OpenAI SDK streaming + tool calling
+│   │       │   │   ├── anthropic.ts# Anthropic SDK streaming + tool calling
+│   │       │   │   └── xai.ts      # xAI/Grok via OpenAI SDK (baseURL override)
+│   │       │   ├── llm-service.ts  # Tiny factory: reads provider → returns correct LLM
+│   │       │   ├── mcp-client.ts   # JSON-RPC client for Shopify Storefront MCP
+│   │       │   ├── graphql-client.ts# Shopify Storefront GraphQL for blogs/collections
+│   │       │   ├── system-prompt.ts # Dynamic system prompt builder with shop knowledge
+│   │       │   └── tenant-validator.ts # Store domain validation middleware
+│   │       └── app.ts             # Express app setup with rate limiting
+│   └── shopify-agent/             # React + Vite frontend
+│       └── src/
+│           ├── pages/             # Route pages (home, chat, settings, analytics)
+│           ├── components/        # Reusable UI components
+│           ├── hooks/             # Custom hooks (useSession, useChatStream)
+│           └── store/             # Zustand stores (cart)
+├── lib/
+│   ├── api-spec/                  # OpenAPI 3.1 spec + Orval codegen config
+│   ├── api-client-react/          # Generated React Query hooks
+│   ├── api-zod/                   # Generated Zod schemas
+│   └── db/                        # Drizzle ORM schema + DB connection
+│       └── src/schema/
+│           ├── stores.ts          # stores table (domain, tokens, provider, model, api_key)
+│           ├── knowledge.ts       # shop_knowledge table (categorized entries)
+│           ├── conversations.ts   # conversations table (JSONB messages)
+│           ├── preferences.ts     # user_preferences table (JSONB prefs)
+│           └── analytics.ts       # analytics_logs table
+├── scripts/
+├── pnpm-workspace.yaml
+├── tsconfig.base.json
+├── tsconfig.json
+└── package.json
 ```
 
-## TypeScript & Composite Projects
+## Database Tables
 
-Every package extends `tsconfig.base.json` which sets `composite: true`. The root `tsconfig.json` lists all packages as project references. This means:
+- **stores**: `store_domain` (PK), `storefront_token`, `access_token`, `provider` (enum: openai/anthropic/xai), `model`, `api_key`, `created_at`
+- **shop_knowledge**: `id`, `store_domain` (FK), `category` (enum: general/sizing/compatibility/required_accessories/restrictions/policies/custom), `title`, `content`, `sort_order`, timestamps
+- **conversations**: `id`, `store_domain` (FK), `session_id`, `title`, `messages` (JSONB), timestamps
+- **user_preferences**: `id`, `store_domain` (FK), `session_id`, `prefs` (JSONB), timestamps
+- **analytics_logs**: `id`, `store_domain` (FK), `event_type`, `query`, `session_id`, `created_at`
 
-- **Always typecheck from the root** — run `pnpm run typecheck` (which runs `tsc --build --emitDeclarationOnly`). This builds the full dependency graph so that cross-package imports resolve correctly. Running `tsc` inside a single package will fail if its dependencies haven't been built yet.
-- **`emitDeclarationOnly`** — we only emit `.d.ts` files during typecheck; actual JS bundling is handled by esbuild/tsx/vite...etc, not `tsc`.
-- **Project references** — when package A depends on package B, A's `tsconfig.json` must list B in its `references` array. `tsc --build` uses this to determine build order and skip up-to-date packages.
+## Key Architecture Decisions
 
-## Root Scripts
+### LLM Provider System
+- Each provider has its own file in `src/services/llms/` with identical interface
+- `llm-service.ts` is a tiny factory that dynamically imports the correct provider
+- xAI uses the OpenAI SDK with `baseURL: "https://api.x.ai/v1"`
+- API keys stored server-side only in the database, never exposed to the frontend
 
-- `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
-- `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
+### Shop Knowledge
+- Merchants add structured knowledge entries (sizing rules, compatibility, required accessories, etc.)
+- Knowledge is organized by category and injected into the AI system prompt
+- The system prompt builder assembles knowledge entries into the LLM context
 
-## Packages
+### Multi-Tenancy
+- Every backend route validates `store_domain` parameter
+- Every DB query filters by `store_domain`
+- Rate limiting: 10 req/min per session on chat endpoint
+- API keys and tokens stored server-side only
 
-### `artifacts/api-server` (`@workspace/api-server`)
+### Chat Flow
+- Frontend sends message via POST to `/api/stores/{domain}/chat`
+- Backend streams SSE events: text deltas, tool_call, tool_result, done
+- MCP tool calls go to `https://{domain}/api/mcp` via JSON-RPC
+- Conversations persisted in JSONB messages column
 
-Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
+## Environment Variables
 
-- Entry: `src/index.ts` — reads `PORT`, starts Express
-- App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
-- Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
-- Depends on: `@workspace/db`, `@workspace/api-zod`
-- `pnpm --filter @workspace/api-server run dev` — run the dev server
-- `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)
-- Build bundles an allowlist of deps (express, cors, pg, drizzle-orm, zod, etc.) and externalizes the rest
+- `DATABASE_URL` — PostgreSQL connection string (auto-provisioned by Replit)
+- `SHOPIFY_API_KEY` — Shopify app API key (optional, for OAuth flow)
+- `SHOPIFY_API_SECRET` — Shopify app API secret (optional, for OAuth flow)
+- `APP_URL` — Public URL of the app (optional, for OAuth callbacks)
 
-### `lib/db` (`@workspace/db`)
+## Commands
 
-Database layer using Drizzle ORM with PostgreSQL. Exports a Drizzle client instance and schema models.
-
-- `src/index.ts` — creates a `Pool` + Drizzle instance, exports schema
-- `src/schema/index.ts` — barrel re-export of all models
-- `src/schema/<modelname>.ts` — table definitions with `drizzle-zod` insert schemas (no models definitions exist right now)
-- `drizzle.config.ts` — Drizzle Kit config (requires `DATABASE_URL`, automatically provided by Replit)
-- Exports: `.` (pool, db, schema), `./schema` (schema only)
-
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
-
-### `lib/api-spec` (`@workspace/api-spec`)
-
-Owns the OpenAPI 3.1 spec (`openapi.yaml`) and the Orval config (`orval.config.ts`). Running codegen produces output into two sibling packages:
-
-1. `lib/api-client-react/src/generated/` — React Query hooks + fetch client
-2. `lib/api-zod/src/generated/` — Zod schemas
-
-Run codegen: `pnpm --filter @workspace/api-spec run codegen`
-
-### `lib/api-zod` (`@workspace/api-zod`)
-
-Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used by `api-server` for response validation.
-
-### `lib/api-client-react` (`@workspace/api-client-react`)
-
-Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
-
-### `scripts` (`@workspace/scripts`)
-
-Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
+- `pnpm run typecheck` — Full typecheck
+- `pnpm --filter @workspace/api-spec run codegen` — Regenerate API hooks/schemas
+- `pnpm --filter @workspace/db run push` — Push schema to database
+- `pnpm --filter @workspace/api-server run dev` — Run API server
+- `pnpm --filter @workspace/shopify-agent run dev` — Run frontend

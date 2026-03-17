@@ -1,0 +1,23 @@
+packages:
+  "framer-motion": "For page transitions, smooth modal animations, and chat bubble staggering"
+  "recharts": "For the analytics dashboard charts (daily chat volume, top queries)"
+  "@hello-pangea/dnd": "For drag-and-drop reordering in the Shop Knowledge editor"
+  "react-markdown": "For rendering rich text responses in the chat interface"
+  "remark-gfm": "For GitHub Flavored Markdown support (tables, lists) in chat"
+  "uuid": "For generating unique user session IDs"
+  "@types/uuid": "TypeScript definitions for uuid"
+  "zustand": "For lightweight global state management of the shopping cart"
+
+images:
+  - path: "artifacts/shopify-agent/public/images/hero-bg.png"
+    description: "Abstract modern gradient background in crisp indigo, slate, and white with soft geometric glassmorphism shapes"
+    aspect_ratio: "16:9"
+  - path: "artifacts/shopify-agent/public/images/logo.png"
+    description: "Minimalist modern app icon for an AI shopping agent, featuring a sleek stylized shopping bag and spark/AI icon, deep blue and indigo"
+    aspect_ratio: "1:1"
+
+notes:
+  - "The app uses @workspace/api-client-react for TanStack Query hooks"
+  - "Session IDs are generated on the client via UUID and stored in localStorage per store domain"
+  - "Chat streaming uses manual ReadableStream parsing to handle SSE from the POST /chat endpoint"
+  - "Cart state is maintained in Zustand and responds to tool_call events from the AI"

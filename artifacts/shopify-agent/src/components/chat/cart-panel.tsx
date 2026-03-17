@@ -1,0 +1,93 @@
+import { X, ShoppingBag, Trash2, Plus, Minus, CreditCard } from "lucide-react";
+import { useCartStore } from "@/store/use-cart-store";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+
+export function CartPanel() {
+  const cart = useCartStore();
+
+  if (!cart.isOpen) return null;
+
+  return (
+    <div className="w-[350px] h-full bg-card border-l border-border/50 shadow-2xl flex flex-col absolute right-0 top-0 z-40 animate-in slide-in-from-right duration-300">
+      <div className="flex items-center justify-between p-4 border-b border-border/50 bg-background/50 backdrop-blur-md">
+        <div className="flex items-center gap-2 font-display font-semibold">
+          <ShoppingBag className="w-5 h-5 text-primary" />
+          Live Cart Preview
+        </div>
+        <Button variant="ghost" size="icon" className="rounded-full hover:bg-secondary" onClick={() => cart.setIsOpen(false)}>
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+
+      <ScrollArea className="flex-1 p-4">
+        {cart.items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 text-center text-muted-foreground space-y-3">
+            <ShoppingBag className="w-12 h-12 opacity-20" />
+            <p>Your cart is empty.<br/>Ask the agent to add products!</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {cart.items.map(item => (
+              <div key={item.id} className="flex gap-4 p-3 rounded-xl bg-secondary/20 border border-border/30 group">
+                <div className="w-16 h-16 rounded-lg bg-secondary/50 flex-shrink-0 overflow-hidden">
+                  {item.imageUrl ? (
+                    <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs font-medium">No Img</div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0 flex flex-col justify-between">
+                  <div className="flex justify-between items-start gap-2">
+                    <h4 className="text-sm font-medium leading-tight truncate">{item.title}</h4>
+                    <button 
+                      onClick={() => cart.removeItem(item.id)}
+                      className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="font-semibold text-primary text-sm">${item.price.toFixed(2)}</span>
+                    <div className="flex items-center gap-2 bg-background rounded-md border border-border/50 p-1">
+                      <button onClick={() => cart.updateQuantity(item.id, item.quantity - 1)} className="p-0.5 hover:bg-secondary rounded">
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="text-xs font-medium w-4 text-center">{item.quantity}</span>
+                      <button onClick={() => cart.updateQuantity(item.id, item.quantity + 1)} className="p-0.5 hover:bg-secondary rounded">
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </ScrollArea>
+
+      <div className="p-4 border-t border-border/50 bg-background/50 backdrop-blur-md">
+        <div className="space-y-2 mb-4 text-sm">
+          <div className="flex justify-between text-muted-foreground">
+            <span>Subtotal</span>
+            <span>${cart.subtotal.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between text-muted-foreground">
+            <span>Shipping</span>
+            <span>Calculated at checkout</span>
+          </div>
+          <Separator className="my-2" />
+          <div className="flex justify-between font-bold text-base">
+            <span>Total</span>
+            <span className="text-primary">${cart.subtotal.toFixed(2)}</span>
+          </div>
+        </div>
+        <Button className="w-full font-bold shadow-lg shadow-primary/20 group" disabled={cart.items.length === 0}>
+          <CreditCard className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+          Go to Checkout
+        </Button>
+      </div>
+    </div>
+  );
+}
