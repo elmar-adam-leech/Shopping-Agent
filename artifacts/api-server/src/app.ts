@@ -21,6 +21,24 @@ const chatLimiter = rateLimit({
   validate: false,
 });
 
+const sessionLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { error: "Too many session requests, please wait a moment" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { error: "Too many login attempts, please wait a moment" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.post("/api/sessions", sessionLimiter);
+app.post("/api/auth/login", loginLimiter);
 app.use("/api/stores/:storeDomain/chat", chatLimiter);
 app.use("/api", router);
 
