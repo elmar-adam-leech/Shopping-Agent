@@ -72,7 +72,7 @@ artifacts-monorepo/
 
 ## Database Tables
 
-- **stores**: `store_domain` (PK), `storefront_token`, `access_token`, `provider` (enum: openai/anthropic/xai), `model`, `api_key`, `created_at`
+- **stores**: `store_domain` (PK), `storefront_token`, `access_token`, `provider` (enum: openai/anthropic/xai), `model`, `api_key`, `ucp_compliant` (boolean, default true), `created_at`
 - **shop_knowledge**: `id`, `store_domain` (FK), `category` (enum: general/sizing/compatibility/required_accessories/restrictions/policies/custom), `title`, `content`, `sort_order`, timestamps
 - **conversations**: `id`, `store_domain` (FK), `session_id`, `title`, `messages` (JSONB), timestamps
 - **user_preferences**: `id`, `store_domain` (FK), `session_id`, `prefs` (JSONB), timestamps
@@ -113,6 +113,24 @@ artifacts-monorepo/
 - Backend streams SSE events: text deltas, tool_call, tool_result, done
 - MCP tool calls go to `https://{domain}/api/mcp` via JSON-RPC
 - Conversations persisted in JSONB messages column
+
+## UCP (Universal Commerce Protocol) Compliance
+
+ShopMCP is a fully UCP-compliant Shopify Agent. It uses the same Universal Commerce Protocol (via MCP) that Shopify provides. UCP is an open standard (co-developed by Google and Shopify) for agentic commerce that standardizes discovery, checkout, orders, and payment flows across AI agents.
+
+### UCP Features
+- **Discovery**: Fetches `/.well-known/ucp` from store domains to discover UCP capabilities, services, transports, and payment handlers
+- **Checkout Primitives**: Exposes `create_checkout`, `update_checkout`, `complete_checkout` as MCP tools when UCP is discovered
+- **Order Tracking**: Exposes `get_order_status` for post-purchase order tracking
+- **Capability Caching**: UCP discovery documents are cached in-memory with a 5-minute TTL per store domain
+- **Graceful Fallback**: If a store doesn't support UCP, the agent continues with standard MCP tools without errors
+- **Per-Store Toggle**: Each store has a `ucp_compliant` boolean (default `true`) that can be toggled in the Settings page
+- **UCP Headers**: When UCP is active, all MCP tool calls include the `UCP-Version: 2026-01-11` header
+- **System Prompt Integration**: When UCP capabilities are discovered, they are injected into the LLM system prompt so the model knows which UCP primitives are available
+
+### UCP Spec Reference
+- Spec: https://ucp.dev/specification/overview/
+- Version: `2026-01-11`
 
 ## Environment Variables
 

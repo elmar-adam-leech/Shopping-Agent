@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { MessageSquare, Settings, BarChart2, Store as StoreIcon, ShoppingBag, Menu } from "lucide-react";
+import { MessageSquare, Settings, BarChart2, Store as StoreIcon, ShoppingBag, Menu, Shield } from "lucide-react";
 import { useCartStore } from "@/store/use-cart-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,10 @@ export function AppLayout({ children, storeDomain }: AppLayoutProps) {
                 </h2>
                 <p className="text-xs text-muted-foreground font-medium">Switch Store</p>
               </div>
+              <span className="ml-auto flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 text-[10px] font-semibold">
+                <Shield className="w-3 h-3" />
+                UCP
+              </span>
             </Link>
           </div>
           
@@ -84,6 +88,10 @@ export function AppLayout({ children, storeDomain }: AppLayoutProps) {
                 <MessageSquare className="w-5 h-5" />
               </div>
               <h1 className="font-display font-bold text-lg">Shopify Agent</h1>
+              <span className="ml-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 text-[10px] font-semibold">
+                <Shield className="w-3 h-3" />
+                UCP
+              </span>
             </div>
           </Link>
         </div>
@@ -105,6 +113,10 @@ export function AppLayout({ children, storeDomain }: AppLayoutProps) {
             <div className="flex items-center gap-2 font-display font-bold">
               <StoreIcon className="w-5 h-5 text-primary" />
               <span className="truncate max-w-[150px]">{storeDomain || 'AI Agent'}</span>
+              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 text-[9px] font-semibold">
+                <Shield className="w-2.5 h-2.5" />
+                UCP
+              </span>
             </div>
           </Link>
           

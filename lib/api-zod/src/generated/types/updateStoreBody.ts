@@ -12,4 +12,5 @@ export interface UpdateStoreBody {
   provider?: UpdateStoreBodyProvider;
   model?: string;
   apiKey?: string;
+  ucpCompliant?: boolean;
 }

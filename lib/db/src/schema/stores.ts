@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, pgEnum, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -11,6 +11,7 @@ export const storesTable = pgTable("stores", {
   provider: providerEnum("provider").notNull().default("openai"),
   model: text("model").notNull().default("gpt-4o"),
   apiKey: text("api_key"),
+  ucpCompliant: boolean("ucp_compliant").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

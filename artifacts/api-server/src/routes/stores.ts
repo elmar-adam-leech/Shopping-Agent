@@ -25,6 +25,7 @@ function storeToResponse(store: Store) {
     provider: store.provider,
     model: store.model,
     hasApiKey: !!store.apiKey,
+    ucpCompliant: store.ucpCompliant,
     createdAt: store.createdAt,
   };
 }
@@ -107,11 +108,12 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
     return;
   }
 
-  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey">> = {};
+  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey" | "ucpCompliant">> = {};
   if (parsed.data.storefrontToken !== undefined) updateData.storefrontToken = parsed.data.storefrontToken;
   if (parsed.data.provider !== undefined) updateData.provider = parsed.data.provider as ProviderValue;
   if (parsed.data.model !== undefined) updateData.model = parsed.data.model;
   if (parsed.data.apiKey !== undefined) updateData.apiKey = parsed.data.apiKey;
+  if (parsed.data.ucpCompliant !== undefined) updateData.ucpCompliant = parsed.data.ucpCompliant;
 
   const [store] = await db
     .update(storesTable)

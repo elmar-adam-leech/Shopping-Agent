@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useRoute } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useGetStore, useUpdateStore, useListKnowledge, useCreateKnowledge, useDeleteKnowledge, useUpdateKnowledge } from "@workspace/api-client-react";
-import { Save, Key, Database, BookOpen, Trash2, Plus, ArrowUp, ArrowDown, Edit2, Check, X, Globe } from "lucide-react";
+import { Save, Key, Database, BookOpen, Trash2, Plus, ArrowUp, ArrowDown, Edit2, Check, X, Globe, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +24,7 @@ export default function SettingsPage() {
   const [model, setModel] = useState("gpt-4o");
   const [apiKey, setApiKey] = useState("");
   const [storefrontToken, setStorefrontToken] = useState("");
+  const [ucpCompliant, setUcpCompliant] = useState(true);
 
   useEffect(() => {
     if (store) {
@@ -32,6 +33,7 @@ export default function SettingsPage() {
       if (store.storefrontToken) {
         setStorefrontToken(store.storefrontToken);
       }
+      setUcpCompliant(store.ucpCompliant ?? true);
     }
   }, [store]);
 
@@ -43,6 +45,7 @@ export default function SettingsPage() {
           provider,
           model,
           storefrontToken: storefrontToken || undefined,
+          ucpCompliant,
           ...(apiKey ? { apiKey } : {})
         }
       });
@@ -86,6 +89,40 @@ export default function SettingsPage() {
               <p className="text-xs text-muted-foreground">
                 Required for product search, cart management, and checkout. Find this in your Shopify Admin under Apps &gt; Develop apps &gt; Storefront API.
               </p>
+            </div>
+          </div>
+        </section>
+
+        {/* UCP Compliance Section */}
+        <section className="bg-card border border-border/50 rounded-3xl p-6 md:p-8 shadow-sm">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-violet-500/10 text-violet-600 rounded-xl">
+              <Shield className="w-5 h-5" />
+            </div>
+            <h2 className="text-xl font-bold font-display">UCP Compliance</h2>
+            <span className="px-2.5 py-1 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 text-xs font-semibold">
+              UCP Compliant
+            </span>
+          </div>
+          
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              The Universal Commerce Protocol (UCP) is an open standard for agentic commerce that standardizes discovery, checkout, orders, and payment flows across AI agents. When enabled, the agent will attempt UCP capability discovery and use UCP primitives for commerce actions.
+            </p>
+            <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/20 border border-border/50">
+              <div>
+                <p className="font-medium text-sm">Enable UCP Discovery</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Discover and use UCP checkout, order, and payment primitives via MCP</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={ucpCompliant}
+                onClick={() => setUcpCompliant(!ucpCompliant)}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${ucpCompliant ? 'bg-violet-600' : 'bg-muted'}`}
+              >
+                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${ucpCompliant ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
             </div>
           </div>
         </section>

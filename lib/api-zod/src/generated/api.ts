@@ -47,6 +47,7 @@ export const ListStoresResponseItem = zod.object({
   provider: zod.enum(["openai", "anthropic", "xai"]),
   model: zod.string(),
   hasApiKey: zod.boolean(),
+  ucpCompliant: zod.boolean(),
   createdAt: zod.date(),
 });
 export const ListStoresResponse = zod.array(ListStoresResponseItem);
@@ -75,6 +76,7 @@ export const GetStoreResponse = zod.object({
   provider: zod.enum(["openai", "anthropic", "xai"]),
   model: zod.string(),
   hasApiKey: zod.boolean(),
+  ucpCompliant: zod.boolean(),
   createdAt: zod.date(),
 });
 
@@ -90,6 +92,7 @@ export const UpdateStoreBody = zod.object({
   provider: zod.enum(["openai", "anthropic", "xai"]).optional(),
   model: zod.string().optional(),
   apiKey: zod.string().optional(),
+  ucpCompliant: zod.boolean().optional(),
 });
 
 export const UpdateStoreResponse = zod.object({
@@ -98,6 +101,7 @@ export const UpdateStoreResponse = zod.object({
   provider: zod.enum(["openai", "anthropic", "xai"]),
   model: zod.string(),
   hasApiKey: zod.boolean(),
+  ucpCompliant: zod.boolean(),
   createdAt: zod.date(),
 });
 

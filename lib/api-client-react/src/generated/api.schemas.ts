@@ -28,6 +28,7 @@ export interface Store {
   provider: StoreProvider;
   model: string;
   hasApiKey: boolean;
+  ucpCompliant: boolean;
   createdAt: string;
 }
 
@@ -62,6 +63,7 @@ export interface UpdateStoreBody {
   provider?: UpdateStoreBodyProvider;
   model?: string;
   apiKey?: string;
+  ucpCompliant?: boolean;
 }
 
 export type KnowledgeEntryCategory =

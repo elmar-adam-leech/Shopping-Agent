@@ -25,10 +25,11 @@ async function executeToolWithFallback(
   storeDomain: string,
   storefrontToken: string,
   toolName: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  ucpEnabled: boolean = true
 ): Promise<string> {
   try {
-    const result = await callTool(storeDomain, storefrontToken, toolName, args);
+    const result = await callTool(storeDomain, storefrontToken, toolName, args, ucpEnabled);
     const parsed = JSON.parse(result);
     if (parsed.error) {
       throw new Error(parsed.error);
@@ -86,8 +87,6 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       .from(shopKnowledgeTable)
       .where(eq(shopKnowledgeTable.storeDomain, store.storeDomain));
 
-    const systemPrompt = buildSystemPrompt(store.storeDomain, knowledge);
-
     let conversation: Conversation | null = null;
     let existingMessages: ChatMessageRecord[] = [];
 
@@ -132,12 +131,19 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
 
     res.write(`data: ${JSON.stringify({ type: "conversation_id", data: conversation.id })}\n\n`);
 
+    // UCP compliance added per ucp.dev
+    const ucpEnabled = store.ucpCompliant !== false;
     let tools: MCPTool[] = [];
+    let ucpDoc = null;
     try {
-      tools = await listTools(store.storeDomain, store.storefrontToken);
+      const result = await listTools(store.storeDomain, store.storefrontToken, ucpEnabled);
+      tools = result.tools;
+      ucpDoc = result.ucpDoc;
     } catch {
       // tools will be empty, chat continues without MCP tools
     }
+
+    const systemPrompt = buildSystemPrompt(store.storeDomain, knowledge, ucpDoc);
 
     const llmMessages = existingMessages.map((m) => ({
       role: m.role,
@@ -157,7 +163,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       llmMessages,
       tools,
       async (toolName: string, args: Record<string, unknown>) => {
-        return executeToolWithFallback(store.storeDomain, store.storefrontToken!, toolName, args);
+        return executeToolWithFallback(store.storeDomain, store.storefrontToken!, toolName, args, ucpEnabled);
       }
     );
 

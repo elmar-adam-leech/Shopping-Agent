@@ -1,4 +1,5 @@
 import type { ShopKnowledge } from "@workspace/db";
+import type { UCPDiscoveryDocument } from "./mcp-client";
 
 const CATEGORY_LABELS: Record<string, string> = {
   general: "General Store Information",
@@ -10,8 +11,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   custom: "Additional Information",
 };
 
-export function buildSystemPrompt(storeDomain: string, knowledge: ShopKnowledge[]): string {
-  let prompt = `You are a helpful, knowledgeable shopping assistant for the store "${storeDomain}". Your job is to help customers find products, understand their options, and make informed purchasing decisions.
+export function buildSystemPrompt(storeDomain: string, knowledge: ShopKnowledge[], ucpDoc?: UCPDiscoveryDocument | null): string {
+  let prompt = `You are a fully UCP-compliant Shopify Agent and helpful, knowledgeable shopping assistant for the store "${storeDomain}". Use the Universal Commerce Protocol primitives via MCP for all commerce actions (capability discovery, checkout negotiation, orders, post-purchase). Your job is to help customers find products, understand their options, and make informed purchasing decisions.
 
 ## Your Capabilities
 - Use MCP tools to search products, view product details, browse collections, and manage shopping carts
@@ -27,6 +28,32 @@ export function buildSystemPrompt(storeDomain: string, knowledge: ShopKnowledge[
 - If you're unsure about something, say so honestly
 - Help customers build complete solutions, not just individual products
 - When adding items to cart, confirm the selection with the customer first`;
+
+  // UCP compliance added per ucp.dev
+  if (ucpDoc) {
+    prompt += `\n\n## UCP (Universal Commerce Protocol) Capabilities
+This store supports UCP version ${ucpDoc.version}. You have access to the following UCP commerce primitives:
+- **create_checkout**: Create a new checkout session for purchasing items
+- **update_checkout**: Update an existing checkout session (modify items, shipping, etc.)
+- **complete_checkout**: Complete/finalize a checkout session to place the order
+- **get_order_status**: Get order status including fulfillment and tracking
+
+Use these UCP tools for all checkout and order operations when available. They provide a standardized commerce flow across AI agents.`;
+
+    if (ucpDoc.services && ucpDoc.services.length > 0) {
+      prompt += `\n\nDiscovered UCP services:`;
+      for (const service of ucpDoc.services) {
+        prompt += `\n- ${service.type}${service.capabilities ? ` (capabilities: ${service.capabilities.join(", ")})` : ""}`;
+      }
+    }
+
+    if (ucpDoc.payment_handlers && ucpDoc.payment_handlers.length > 0) {
+      prompt += `\n\nSupported payment methods:`;
+      for (const handler of ucpDoc.payment_handlers) {
+        prompt += `\n- ${handler.type}${handler.supported_methods ? `: ${handler.supported_methods.join(", ")}` : ""}`;
+      }
+    }
+  }
 
   if (knowledge.length > 0) {
     prompt += `\n\n## Store Knowledge Base\nThe store owner has provided the following information to help you assist customers:\n`;

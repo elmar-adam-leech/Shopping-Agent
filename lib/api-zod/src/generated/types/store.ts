@@ -14,5 +14,6 @@ export interface Store {
   provider: StoreProvider;
   model: string;
   hasApiKey: boolean;
+  ucpCompliant: boolean;
   createdAt: Date;
 }
