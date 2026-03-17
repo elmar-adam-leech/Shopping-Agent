@@ -47,3 +47,20 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Environment variables
+.env
+.env.*
+
+# Certificates and keys
+*.pem
+*.key
+
+# Chat-attached assets
+attached_assets/
+
+# Temp/log files
+/tmp/
+
+# Drizzle migration artifacts
+drizzle/
