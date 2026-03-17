@@ -32,7 +32,7 @@ export default function InstallPage() {
             <Store className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="font-display font-bold text-2xl leading-none">AI Agent</h1>
+            <h1 className="font-display font-bold text-2xl leading-none">Shopify Storefront Agent</h1>
             <p className="text-muted-foreground text-sm font-medium">for Shopify</p>
           </div>
         </div>
@@ -41,7 +41,7 @@ export default function InstallPage() {
           <div>
             <h2 className="text-xl font-bold mb-2">Connect your store</h2>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Install the AI Shopping Agent to give your customers a personalized, deeply knowledgeable shopping assistant powered by your own data.
+              Install the Shopping Agent to give your customers a personalized, deeply knowledgeable shopping assistant powered by your own data.
             </p>
           </div>
 

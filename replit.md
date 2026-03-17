@@ -77,7 +77,7 @@ artifacts-monorepo/
 - **conversations**: `id`, `store_domain` (FK), `session_id`, `title`, `messages` (JSONB), timestamps
 - **user_preferences**: `id`, `store_domain` (FK), `session_id`, `prefs` (JSONB), timestamps
 - **analytics_logs**: `id`, `store_domain` (FK), `event_type`, `query`, `session_id`, `created_at`
-- **sessions**: `id` (PK, UUID), `store_domain`, `created_at`, `expires_at` (24h TTL)
+- **sessions**: `id` (PK), `store_domain`, `created_at`, `expires_at` — shared table for both customer sessions (UUID, 24h TTL) and merchant sessions (`mtkn_*` prefix, 72h TTL)
 
 ## Key Architecture Decisions
 
