@@ -4,7 +4,7 @@ import * as schema from "./schema";
 
 const { Pool } = pg;
 
-const connectionString = process.env.DATABASE_URL || process.env.NEON_DATABASE_STRING;
+const connectionString = process.env.NEON_DATABASE_STRING || process.env.DATABASE_URL;
 
 if (!connectionString) {
   throw new Error(
