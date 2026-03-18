@@ -1,5 +1,6 @@
 import type { LLMMessage, LLMStreamEvent, MCPToolDef } from "./types";
-import { streamOpenAICompatibleChat } from "./openai";
+import { streamChat as streamChatEngine } from "./chat-stream";
+import { createChatAdapter } from "./chat-adapter";
 
 export async function* streamChat(
   apiKey: string,
@@ -10,5 +11,6 @@ export async function* streamChat(
   onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>,
   signal?: AbortSignal
 ): AsyncGenerator<LLMStreamEvent> {
-  yield* streamOpenAICompatibleChat(apiKey, model, systemPrompt, messages, tools, onToolCall, "https://api.x.ai/v1", signal);
+  const adapter = createChatAdapter("https://api.x.ai/v1");
+  yield* streamChatEngine(adapter, apiKey, model, systemPrompt, messages, tools, onToolCall, signal);
 }
