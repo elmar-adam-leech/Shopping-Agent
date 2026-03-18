@@ -23,7 +23,7 @@ export default function InstallPage() {
     <div className="min-h-screen w-full flex items-center justify-center bg-background relative overflow-hidden p-4">
       {/* Decorative background */}
       <img
-        src={`${import.meta.env.BASE_URL}images/hero-bg.png`}
+        src={`${import.meta.env.BASE_URL}images/hero-bg.webp`}
         alt="Background"
         className="absolute inset-0 w-full h-full object-cover opacity-30 z-0"
       />
