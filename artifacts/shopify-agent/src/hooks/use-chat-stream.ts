@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { ChatMessage, ToolCall, ToolResult } from '@workspace/api-client-react';
-import { useCartStore } from '@/store/use-cart-store';
 import { readSSEStream } from '@/lib/sse-parser';
 
 interface ChatContext {
@@ -10,21 +9,40 @@ interface ChatContext {
   searchMode?: boolean;
 }
 
-interface UseChatStreamProps {
-  storeDomain: string;
-  sessionId: string;
-  conversationId?: number | null;
-  context?: ChatContext;
-  onConversationId?: (id: number) => void;
-  onSuccess?: () => void;
+interface CartStoreActions {
+  addItem: (item: { id: string; title: string; price: number; imageUrl?: string }) => void;
 }
 
-export function useChatStream({ storeDomain, sessionId, conversationId, context, onConversationId, onSuccess }: UseChatStreamProps) {
+interface UseChatStreamOptions {
+  storeDomain: string;
+  sessionId: string | null;
+  conversationId?: number | null;
+  context?: ChatContext;
+  cartStore?: CartStoreActions;
+  onConversationId?: (id: number) => void;
+  onSuccess?: () => void;
+  onSessionExpired?: () => Promise<string | null>;
+}
+
+export function useChatStream({
+  storeDomain,
+  sessionId,
+  conversationId: externalConversationId,
+  context,
+  cartStore,
+  onConversationId,
+  onSuccess,
+  onSessionExpired,
+}: UseChatStreamOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [internalConversationId, setInternalConversationId] = useState<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const cartStore = useCartStore();
+  const sessionIdRef = useRef(sessionId);
+  sessionIdRef.current = sessionId;
+
+  const conversationId = externalConversationId !== undefined ? externalConversationId : internalConversationId;
 
   useEffect(() => {
     return () => {
@@ -33,19 +51,21 @@ export function useChatStream({ storeDomain, sessionId, conversationId, context,
     };
   }, []);
 
-  const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim() || !sessionId || !storeDomain) return;
+  const sendMessage = useCallback(async (content: string, retryCount = 0) => {
+    const currentSessionId = sessionIdRef.current;
+    if (!content.trim() || !currentSessionId || !storeDomain) return;
 
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
 
-    const userMessage: ChatMessage = {
-      role: 'user',
-      content,
-      timestamp: new Date().toISOString()
-    };
-    
-    setMessages(prev => [...prev, userMessage]);
+    if (retryCount === 0) {
+      const userMessage: ChatMessage = {
+        role: 'user',
+        content,
+        timestamp: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, userMessage]);
+    }
     setIsLoading(true);
     setError(null);
 
@@ -62,13 +82,21 @@ export function useChatStream({ storeDomain, sessionId, conversationId, context,
         method: 'POST',
         headers,
         body: JSON.stringify({
-          sessionId,
+          sessionId: currentSessionId,
           conversationId,
           message: content,
           ...(context ? { context } : {}),
         }),
         signal: controller.signal
       });
+
+      if ((response.status === 401 || response.status === 403) && retryCount < 1 && onSessionExpired) {
+        const newSessionId = await onSessionExpired();
+        if (newSessionId) {
+          setInternalConversationId(null);
+          return sendMessage(content, retryCount + 1);
+        }
+      }
 
       if (!response.ok) {
         throw new Error('Failed to send message');
@@ -81,7 +109,7 @@ export function useChatStream({ storeDomain, sessionId, conversationId, context,
       let currentToolResults: ToolResult[] = [];
 
       setMessages(prev => [
-        ...prev, 
+        ...prev,
         { role: 'assistant', content: '', timestamp: new Date().toISOString() }
       ]);
 
@@ -91,12 +119,14 @@ export function useChatStream({ storeDomain, sessionId, conversationId, context,
           if (event.type === 'text') {
             assistantMessage += event.data as string;
           } else if (event.type === 'conversation_id') {
-            onConversationId?.(event.data as number);
+            const id = event.data as number;
+            onConversationId?.(id);
+            setInternalConversationId(id);
           } else if (event.type === 'tool_call') {
             const d = event.data as { id: string; name: string; arguments: string };
-            currentToolCalls.push({ id: d.id, name: d.name, arguments: d.arguments });
+            currentToolCalls = [...currentToolCalls, { id: d.id, name: d.name, arguments: d.arguments }];
 
-            if (d.name === 'add_to_cart') {
+            if (d.name === 'add_to_cart' && cartStore) {
               try {
                 const args = JSON.parse(d.arguments);
                 cartStore.addItem({
@@ -106,12 +136,12 @@ export function useChatStream({ storeDomain, sessionId, conversationId, context,
                   imageUrl: args.imageUrl
                 });
               } catch (e) {
-                console.error('Failed to parse add_to_cart arguments', e);
+                console.warn('[useChatStream] Failed to parse add_to_cart arguments:', e);
               }
             }
           } else if (event.type === 'tool_result') {
             const d = event.data as { toolCallId: string; content: string };
-            currentToolResults.push({ toolCallId: d.toolCallId, content: d.content });
+            currentToolResults = [...currentToolResults, { toolCallId: d.toolCallId, content: d.content }];
           }
 
           setMessages(prev => {
@@ -128,15 +158,21 @@ export function useChatStream({ storeDomain, sessionId, conversationId, context,
         },
         controller.signal
       );
-      
+
       onSuccess?.();
     } catch (err: unknown) {
-      if (err instanceof Error && err.name !== 'AbortError') {
-        setError(err.message || 'An error occurred');
-        console.error('Chat error:', err);
-      } else if (!(err instanceof Error)) {
-        setError('An error occurred');
-        console.error('Chat error:', err);
+      if (err instanceof Error && err.name === 'AbortError') {
+        return;
+      }
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      setError(errorMessage);
+      console.warn('[useChatStream] Chat error:', err);
+
+      if (onSessionExpired && !onConversationId) {
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: 'Sorry, something went wrong. Please try again.', timestamp: new Date().toISOString() }
+        ]);
       }
     } finally {
       if (abortControllerRef.current === controller) {
@@ -144,7 +180,7 @@ export function useChatStream({ storeDomain, sessionId, conversationId, context,
         abortControllerRef.current = null;
       }
     }
-  }, [storeDomain, sessionId, conversationId, context, cartStore, onConversationId, onSuccess]);
+  }, [storeDomain, conversationId, context, cartStore, onConversationId, onSuccess, onSessionExpired]);
 
   const stopGeneration = useCallback(() => {
     if (abortControllerRef.current) {
@@ -164,6 +200,7 @@ export function useChatStream({ storeDomain, sessionId, conversationId, context,
     error,
     sendMessage,
     stopGeneration,
-    loadMessages
+    loadMessages,
+    conversationId: internalConversationId,
   };
 }

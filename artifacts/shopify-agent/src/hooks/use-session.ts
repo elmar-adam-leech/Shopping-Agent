@@ -1,21 +1,30 @@
-import { useState, useEffect } from 'react';
-import { useCreateSession } from '@workspace/api-client-react';
+import { useState, useEffect, useCallback } from 'react';
 
-const SESSION_STORAGE_KEY_PREFIX = 'shopify_agent_session_';
-const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 
 interface StoredSession {
   sessionId: string;
-  createdAt: number;
+  createdAt?: number;
+  expiresAt?: string;
 }
 
-function getStorageKey(storeDomain: string) {
-  return `${SESSION_STORAGE_KEY_PREFIX}${storeDomain}`;
+interface UseSessionOptions {
+  storageKeyPrefix?: string;
+  ttlMs?: number;
 }
 
-function loadStoredSession(storeDomain: string): string | null {
+interface UseSessionResult {
+  sessionId: string | null;
+  chatDisabled: boolean;
+  refreshSession: () => Promise<string | null>;
+}
+
+function getStorageKey(prefix: string, storeDomain: string) {
+  return `${prefix}${storeDomain}`;
+}
+
+function loadStoredSession(key: string, ttlMs: number): string | null {
   try {
-    const key = getStorageKey(storeDomain);
     const raw = localStorage.getItem(key);
     if (!raw) return null;
 
@@ -27,7 +36,18 @@ function loadStoredSession(storeDomain: string): string | null {
       return null;
     }
 
-    if (parsed.sessionId && parsed.createdAt && (Date.now() - parsed.createdAt) < SESSION_TTL_MS) {
+    if (!parsed.sessionId) {
+      localStorage.removeItem(key);
+      return null;
+    }
+
+    if (parsed.expiresAt) {
+      if (new Date(parsed.expiresAt) > new Date()) return parsed.sessionId;
+      localStorage.removeItem(key);
+      return null;
+    }
+
+    if (parsed.createdAt && (Date.now() - parsed.createdAt) < ttlMs) {
       return parsed.sessionId;
     }
 
@@ -38,39 +58,68 @@ function loadStoredSession(storeDomain: string): string | null {
   }
 }
 
-function saveSession(storeDomain: string, sessionId: string) {
-  const key = getStorageKey(storeDomain);
-  const data: StoredSession = { sessionId, createdAt: Date.now() };
+function saveSession(key: string, sessionId: string, ttlMs: number) {
+  const data: StoredSession = {
+    sessionId,
+    createdAt: Date.now(),
+    expiresAt: new Date(Date.now() + ttlMs).toISOString(),
+  };
   localStorage.setItem(key, JSON.stringify(data));
 }
 
-export function useSession(storeDomain: string) {
+export function useSession(storeDomain: string, options?: UseSessionOptions): UseSessionResult {
+  const prefix = options?.storageKeyPrefix || 'shopify_agent_session_';
+  const ttlMs = options?.ttlMs || DEFAULT_TTL_MS;
+
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const { mutateAsync: createSessionApi } = useCreateSession();
+  const [chatDisabled, setChatDisabled] = useState(false);
+
+  const createNewSession = useCallback(async (key: string): Promise<string | null> => {
+    try {
+      const res = await fetch(`/api/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storeDomain }),
+      });
+
+      if (res.status === 403) {
+        setChatDisabled(true);
+        return null;
+      }
+
+      if (!res.ok) {
+        console.warn("[useSession] Session creation failed:", res.status);
+        return null;
+      }
+
+      const data = await res.json();
+      saveSession(key, data.sessionId, ttlMs);
+      setSessionId(data.sessionId);
+      return data.sessionId;
+    } catch (err) {
+      console.warn("[useSession] Failed to create session:", err);
+      return null;
+    }
+  }, [storeDomain, ttlMs]);
+
+  const refreshSession = useCallback(async (): Promise<string | null> => {
+    const key = getStorageKey(prefix, storeDomain);
+    localStorage.removeItem(key);
+    return createNewSession(key);
+  }, [storeDomain, prefix, createNewSession]);
 
   useEffect(() => {
     if (!storeDomain) return;
 
-    const initSession = async () => {
-      const existing = loadStoredSession(storeDomain);
-      if (existing) {
-        setSessionId(existing);
-        return;
-      }
+    const key = getStorageKey(prefix, storeDomain);
+    const existing = loadStoredSession(key, ttlMs);
+    if (existing) {
+      setSessionId(existing);
+      return;
+    }
 
-      try {
-        const response = await createSessionApi({ data: { storeDomain } });
-        const newSessionId = (response as { sessionId: string }).sessionId;
-        saveSession(storeDomain, newSessionId);
-        setSessionId(newSessionId);
-      } catch (error) {
-        console.error('[Session] Failed to create session', error);
-        setSessionId(null);
-      }
-    };
+    createNewSession(key);
+  }, [storeDomain, prefix, ttlMs, createNewSession]);
 
-    initSession();
-  }, [storeDomain, createSessionApi]);
-
-  return sessionId;
+  return { sessionId, chatDisabled, refreshSession };
 }

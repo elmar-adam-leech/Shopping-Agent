@@ -9,6 +9,7 @@ import { fetchBlogs, fetchCollections } from "../services/graphql-client";
 import { buildSystemPrompt } from "../services/system-prompt";
 import { validateStoreDomain } from "../services/tenant-validator";
 import { validateSession } from "../services/session-validator";
+import { LRUCache } from "../services/lru-cache";
 
 const router: IRouter = Router();
 
@@ -21,14 +22,7 @@ interface ChatMessageRecord {
   timestamp: string;
 }
 
-const KNOWLEDGE_CACHE_TTL_MS = 120_000;
-
-interface KnowledgeCacheEntry {
-  data: ShopKnowledge[];
-  fetchedAt: number;
-}
-
-const knowledgeCache = new Map<string, KnowledgeCacheEntry>();
+const knowledgeCache = new LRUCache<ShopKnowledge[]>(500, 120_000);
 
 export function invalidateKnowledgeCache(storeDomain: string): void {
   knowledgeCache.delete(storeDomain);
@@ -36,22 +30,14 @@ export function invalidateKnowledgeCache(storeDomain: string): void {
 
 async function getCachedKnowledge(storeDomain: string): Promise<ShopKnowledge[]> {
   const cached = knowledgeCache.get(storeDomain);
-  if (cached && Date.now() - cached.fetchedAt < KNOWLEDGE_CACHE_TTL_MS) {
-    return cached.data;
-  }
+  if (cached) return cached;
 
   const data = await db
     .select()
     .from(shopKnowledgeTable)
     .where(eq(shopKnowledgeTable.storeDomain, storeDomain));
 
-  knowledgeCache.set(storeDomain, { data, fetchedAt: Date.now() });
-
-  if (knowledgeCache.size > 500) {
-    const first = knowledgeCache.keys().next().value;
-    if (first) knowledgeCache.delete(first);
-  }
-
+  knowledgeCache.set(storeDomain, data);
   return data;
 }
 
@@ -64,14 +50,16 @@ async function executeToolWithFallback(
 ): Promise<string> {
   try {
     const result = await callTool(storeDomain, storefrontToken, toolName, args, ucpEnabled);
-    if (result.includes('"error"')) {
-      const parsed = JSON.parse(result);
-      if (parsed.error) {
-        throw new Error(parsed.error);
-      }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(result);
+    } catch {
+    }
+    if (parsed && typeof parsed === "object" && (parsed as Record<string, unknown>).error) {
+      throw new Error(String((parsed as Record<string, unknown>).error));
     }
     return result;
-  } catch {
+  } catch (err) {
     if (toolName === "get_collections" || toolName === "list_collections") {
       const limit = typeof args.limit === "number" ? args.limit : 10;
       const data = await fetchCollections(storeDomain, storefrontToken, limit);

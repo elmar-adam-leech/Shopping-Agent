@@ -46,25 +46,9 @@ export interface UCPDiscoveryDocument {
   }>;
 }
 
-interface UCPCacheEntry {
-  document: UCPDiscoveryDocument | null;
-  fetchedAt: number;
-}
+import { LRUCache } from "./lru-cache";
 
-const UCP_CACHE_TTL_MS = 5 * 60 * 1000;
-const UCP_CACHE_MAX_SIZE = 1000;
-const ucpCache = new Map<string, UCPCacheEntry>();
-
-function evictOldestCacheEntries() {
-  if (ucpCache.size <= UCP_CACHE_MAX_SIZE) return;
-  const entriesToRemove = ucpCache.size - UCP_CACHE_MAX_SIZE;
-  let removed = 0;
-  for (const key of ucpCache.keys()) {
-    if (removed >= entriesToRemove) break;
-    ucpCache.delete(key);
-    removed++;
-  }
-}
+const ucpCache = new LRUCache<UCPDiscoveryDocument | null>(1000, 5 * 60 * 1000);
 
 function nextId(): string {
   return crypto.randomUUID();
@@ -72,9 +56,7 @@ function nextId(): string {
 
 export async function discoverUCPCapabilities(storeDomain: string): Promise<UCPDiscoveryDocument | null> {
   const cached = ucpCache.get(storeDomain);
-  if (cached && Date.now() - cached.fetchedAt < UCP_CACHE_TTL_MS) {
-    return cached.document;
-  }
+  if (cached !== undefined) return cached;
 
   try {
     const response = await fetch(`https://${storeDomain}/.well-known/ucp`, {
@@ -88,20 +70,17 @@ export async function discoverUCPCapabilities(storeDomain: string): Promise<UCPD
 
     if (!response.ok) {
       console.log(`[ucp-discovery] store="${storeDomain}" status=${response.status} — UCP not available, continuing with standard MCP tools`);
-      ucpCache.set(storeDomain, { document: null, fetchedAt: Date.now() });
-      evictOldestCacheEntries();
+      ucpCache.set(storeDomain, null);
       return null;
     }
 
     const doc = (await response.json()) as UCPDiscoveryDocument;
     console.log(`[ucp-discovery] store="${storeDomain}" status=ok version=${doc.version}`);
-    ucpCache.set(storeDomain, { document: doc, fetchedAt: Date.now() });
-    evictOldestCacheEntries();
+    ucpCache.set(storeDomain, doc);
     return doc;
   } catch (err) {
     console.warn(`[ucp-discovery] store="${storeDomain}" status=error error="${err instanceof Error ? err.message : "Unknown error"}" — continuing with standard MCP tools`);
-    ucpCache.set(storeDomain, { document: null, fetchedAt: Date.now() });
-    evictOldestCacheEntries();
+    ucpCache.set(storeDomain, null);
     return null;
   }
 }

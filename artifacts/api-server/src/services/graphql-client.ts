@@ -18,6 +18,7 @@ export async function shopifyGraphQL(
         "X-Shopify-Storefront-Access-Token": storefrontToken,
       },
       body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.timeout(15_000),
     }
   );
 

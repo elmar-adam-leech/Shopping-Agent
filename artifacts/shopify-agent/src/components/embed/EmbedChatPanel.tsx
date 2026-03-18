@@ -21,7 +21,7 @@ export function EmbedChatPanel({
   cartToken,
   initialMessage,
 }: EmbedChatPanelProps) {
-  const sessionId = useSession(storeDomain);
+  const { sessionId } = useSession(storeDomain);
   const [input, setInput] = useState("");
   const [conversationId, setConversationId] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);

@@ -9,6 +9,7 @@ import { ChatEmptyState } from "@/components/chat/ChatEmptyState";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { useSession } from "@/hooks/use-session";
 import { useChatStream } from "@/hooks/use-chat-stream";
+import { useCartStore } from "@/store/use-cart-store";
 import { useListConversations, useGetPreferences, useUpdatePreferences, deleteConversation } from "@workspace/api-client-react";
 import { Sparkles, Loader2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,8 @@ import { Avatar } from "@/components/ui/avatar";
 export default function ChatPage() {
   const [, params] = useRoute("/:storeDomain/chat");
   const storeDomain = params?.storeDomain || "";
-  const sessionId = useSession(storeDomain);
+  const { sessionId } = useSession(storeDomain);
+  const cartStore = useCartStore();
 
   const [input, setInput] = useState("");
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
@@ -32,6 +34,7 @@ export default function ChatPage() {
     storeDomain,
     sessionId: sessionId || "",
     conversationId: activeConversationId,
+    cartStore,
     onConversationId: (id) => setActiveConversationId(id),
     onSuccess: () => refetchConversations()
   });

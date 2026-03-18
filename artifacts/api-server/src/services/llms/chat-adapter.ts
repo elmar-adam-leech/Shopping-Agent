@@ -58,7 +58,8 @@ export function createChatAdapter(baseURL: string): ProviderAdapter {
       let chunk: ChatChunk;
       try {
         chunk = JSON.parse(event.data) as ChatChunk;
-      } catch {
+      } catch (err) {
+        console.warn("[chat-adapter] Failed to parse SSE event:", err instanceof Error ? err.message : err);
         return null;
       }
       const delta = chunk.choices?.[0]?.delta;
@@ -99,7 +100,8 @@ export function createChatAdapter(baseURL: string): ProviderAdapter {
       let chunk: ChatChunk;
       try {
         chunk = JSON.parse(event.data) as ChatChunk;
-      } catch {
+      } catch (err) {
+        console.warn("[chat-adapter] Failed to parse accumulated SSE event:", err instanceof Error ? err.message : err);
         return;
       }
       const delta = chunk.choices?.[0]?.delta;

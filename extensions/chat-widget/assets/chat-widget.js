@@ -348,9 +348,13 @@
   }
 
   function removeErrorMessages() {
+    var before = state.messages.length;
     state.messages = state.messages.filter(function (m) {
       return !m.isError;
     });
+    if (state.messages.length !== before) {
+      renderedMessageCount = 0;
+    }
   }
 
   function retryMessage(message) {
@@ -613,10 +617,12 @@
       });
   }
 
-  function renderMessages() {
-    messagesContainer.innerHTML = "";
+  var renderedMessageCount = 0;
+  var lastTypingEl = null;
 
-    if (state.messages.length === 0) {
+  function renderMessages() {
+    if (state.messages.length === 0 && renderedMessageCount === 0) {
+      messagesContainer.innerHTML = "";
       var welcome = el("div", "mcp-welcome");
       var wIcon = el("div", "mcp-welcome-icon", { innerHTML: ICONS.sparkle });
       var wText = el("div", "mcp-welcome-text");
@@ -624,12 +630,44 @@
       welcome.appendChild(wIcon);
       welcome.appendChild(wText);
       messagesContainer.appendChild(welcome);
-    } else {
-      for (var i = 0; i < state.messages.length; i++) {
-        var msg = state.messages[i];
-        var msgEl = renderMessage(msg);
-        messagesContainer.appendChild(msgEl);
+      lastTypingEl = null;
+      sendBtn.disabled = state.isLoading;
+      return;
+    }
+
+    if (state.messages.length > 0 && renderedMessageCount === 0) {
+      var welcomeEl = messagesContainer.querySelector(".mcp-welcome");
+      if (welcomeEl) welcomeEl.remove();
+    }
+
+    if (lastTypingEl) {
+      lastTypingEl.remove();
+      lastTypingEl = null;
+    }
+
+    if (state.messages.length < renderedMessageCount) {
+      messagesContainer.innerHTML = "";
+      renderedMessageCount = 0;
+    }
+
+    var lastMsgIndex = state.messages.length - 1;
+
+    if (renderedMessageCount > 0 && renderedMessageCount === state.messages.length && lastMsgIndex >= 0) {
+      var lastChild = messagesContainer.lastElementChild;
+      if (lastChild) {
+        var updatedEl = document.createElement("div");
+        updatedEl.appendChild(renderMessage(state.messages[lastMsgIndex]));
+        lastChild.replaceWith(updatedEl.firstChild || updatedEl);
       }
+    } else {
+      for (var i = renderedMessageCount; i < state.messages.length; i++) {
+        var msgWrapper = document.createElement("div");
+        msgWrapper.appendChild(renderMessage(state.messages[i]));
+        while (msgWrapper.firstChild) {
+          messagesContainer.appendChild(msgWrapper.firstChild);
+        }
+      }
+      renderedMessageCount = state.messages.length;
     }
 
     if (state.isLoading) {
@@ -638,6 +676,7 @@
       typing.appendChild(el("div", "mcp-typing-dot"));
       typing.appendChild(el("div", "mcp-typing-dot"));
       messagesContainer.appendChild(typing);
+      lastTypingEl = typing;
     }
 
     sendBtn.disabled = state.isLoading;

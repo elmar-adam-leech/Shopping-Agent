@@ -6,6 +6,8 @@ import router from "./routes";
 
 const app: Express = express();
 
+app.set("trust proxy", 1);
+
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim())
   : undefined;
@@ -28,10 +30,7 @@ const chatLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
   message: { error: "Too many requests, please wait a moment" },
-  keyGenerator: (req) => {
-    const sessionId = (req.headers["x-session-id"] as string) || req.body?.sessionId || "";
-    return `${req.ip}:${sessionId}`;
-  },
+  keyGenerator: (req) => req.ip || "unknown",
   validate: false,
 });
 

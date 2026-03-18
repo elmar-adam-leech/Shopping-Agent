@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { db, storesTable } from "@workspace/db";
 import type { Store } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
+import { LRUCache } from "./lru-cache";
 
 declare global {
   namespace Express {
@@ -11,14 +12,7 @@ declare global {
   }
 }
 
-const STORE_CACHE_TTL_MS = 60_000;
-
-interface StoreCacheEntry {
-  store: Store;
-  fetchedAt: number;
-}
-
-const storeCache = new Map<string, StoreCacheEntry>();
+const storeCache = new LRUCache<Store>(500, 60_000);
 
 export function invalidateStoreCache(storeDomain: string): void {
   storeCache.delete(storeDomain);
@@ -26,9 +20,7 @@ export function invalidateStoreCache(storeDomain: string): void {
 
 async function getCachedStore(storeDomain: string): Promise<Store | null> {
   const cached = storeCache.get(storeDomain);
-  if (cached && Date.now() - cached.fetchedAt < STORE_CACHE_TTL_MS) {
-    return cached.store;
-  }
+  if (cached) return cached;
 
   const [store] = await db
     .select()
@@ -36,9 +28,7 @@ async function getCachedStore(storeDomain: string): Promise<Store | null> {
     .where(eq(storesTable.storeDomain, storeDomain));
 
   if (store) {
-    storeCache.set(storeDomain, { store, fetchedAt: Date.now() });
-  } else {
-    storeCache.delete(storeDomain);
+    storeCache.set(storeDomain, store);
   }
 
   return store ?? null;

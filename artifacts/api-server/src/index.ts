@@ -1,5 +1,6 @@
 import { execSync } from "child_process";
 import app from "./app";
+import { startDbMaintenance } from "./services/db-maintenance";
 
 async function start() {
   try {
@@ -30,6 +31,7 @@ async function start() {
 
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
+    startDbMaintenance();
   });
 }
 

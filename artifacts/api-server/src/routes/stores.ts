@@ -19,8 +19,10 @@ const router: IRouter = Router();
 
 type ProviderValue = "openai" | "anthropic" | "xai";
 
+const SENSITIVE_FIELDS = new Set(["accessToken", "apiKey"]);
+
 function storeToResponse(store: Store) {
-  return {
+  const response: Record<string, unknown> = {
     storeDomain: store.storeDomain,
     storefrontToken: store.storefrontToken,
     provider: store.provider,
@@ -31,6 +33,12 @@ function storeToResponse(store: Store) {
     embedEnabled: store.embedEnabled,
     createdAt: store.createdAt,
   };
+
+  for (const field of SENSITIVE_FIELDS) {
+    delete response[field];
+  }
+
+  return response;
 }
 
 router.get("/stores", validateMerchantAuthForStoreList, async (req, res): Promise<void> => {

@@ -1,8 +1,7 @@
-import React from "react";
+import { memo } from "react";
 import { Sparkles } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { MarkdownContent } from "@/components/ui/markdown-content";
 import { cn } from "@/lib/utils";
 import { ToolCallBadge, type ToolCallDisplay } from "./ToolCallBadge";
 import { ToolResultCards } from "./ToolResultCards";
@@ -42,9 +41,7 @@ function MessageBubbleInner({ message }: { message: ChatMessageDisplay }) {
               : "bg-card border border-border/50 text-foreground rounded-tl-sm"
           )}>
             <div className="prose prose-sm dark:prose-invert max-w-none break-words">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {message.content}
-              </ReactMarkdown>
+              <MarkdownContent content={message.content} />
             </div>
           </div>
         )}
@@ -71,7 +68,7 @@ function MessageBubbleInner({ message }: { message: ChatMessageDisplay }) {
   );
 }
 
-export const MessageBubble = React.memo(MessageBubbleInner, (prevProps, nextProps) => {
+export const MessageBubble = memo(MessageBubbleInner, (prevProps, nextProps) => {
   const prev = prevProps.message;
   const next = nextProps.message;
   if (

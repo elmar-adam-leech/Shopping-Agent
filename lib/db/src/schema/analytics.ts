@@ -14,6 +14,7 @@ export const analyticsLogsTable = pgTable("analytics_logs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("idx_analytics_store_created").on(table.storeDomain, table.createdAt),
+  index("idx_analytics_event_type").on(table.eventType),
 ]);
 
 export const insertAnalyticsSchema = createInsertSchema(analyticsLogsTable).omit({ id: true, createdAt: true });

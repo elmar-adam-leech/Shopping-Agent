@@ -1,12 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 import { useRoute, useSearch } from "wouter";
 import { Send, Sparkles, Loader2, ShoppingBag } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import type { ToolCall } from "@workspace/api-client-react";
-import { useShopForMeSession } from "@/hooks/use-shop-for-me-session";
-import { useShopForMeChatStream } from "@/hooks/use-shop-for-me-chat-stream";
+import { useSession } from "@/hooks/use-session";
+import { useChatStream } from "@/hooks/use-chat-stream";
 import { ToolBadge } from "@/components/shop-for-me/ToolBadge";
+import { MarkdownContent } from "@/components/ui/markdown-content";
 
 interface StorePublicInfo {
   storeDomain: string;
@@ -26,8 +25,15 @@ export default function ShopForMePage() {
 
   const [storeInfo, setStoreInfo] = useState<StorePublicInfo | null>(null);
   const [storeNotFound, setStoreNotFound] = useState(false);
-  const { sessionId, chatDisabled } = useShopForMeSession(storeDomain);
-  const { messages, isLoading, sendMessage } = useShopForMeChatStream(storeDomain, sessionId);
+  const { sessionId, chatDisabled, refreshSession } = useSession(storeDomain, {
+    storageKeyPrefix: 'shop_for_me_session_',
+    ttlMs: 23 * 60 * 60 * 1000,
+  });
+  const { messages, isLoading, sendMessage } = useChatStream({
+    storeDomain,
+    sessionId,
+    onSessionExpired: refreshSession,
+  });
 
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -144,9 +150,7 @@ export default function ShopForMePage() {
                       <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
                     ) : (
                       <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {msg.content || "\u00A0"}
-                        </ReactMarkdown>
+                        <MarkdownContent content={msg.content || "\u00A0"} />
                       </div>
                     )}
                   </div>

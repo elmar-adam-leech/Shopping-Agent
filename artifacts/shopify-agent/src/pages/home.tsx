@@ -5,8 +5,6 @@ import { useListStores } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { StoreDomainInput } from "@/components/ui/store-domain-input";
 
-const API_BASE = import.meta.env.VITE_API_URL || "";
-
 export default function HomePage() {
   const { data: stores, isLoading, error, refetch } = useListStores();
   const [loginDomain, setLoginDomain] = useState("");
@@ -22,7 +20,7 @@ export default function HomePage() {
     setLoggingIn(true);
     try {
       const fullDomain = `${loginDomain.trim().replace(/\.myshopify\.com$/i, "")}.myshopify.com`;
-      const resp = await fetch(`${API_BASE}/auth/login`, {
+      const resp = await fetch(`/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -34,7 +32,8 @@ export default function HomePage() {
         return;
       }
       await refetch();
-    } catch {
+    } catch (err) {
+      console.warn("[HomePage] Login network error:", err);
       setLoginError("Network error");
     } finally {
       setLoggingIn(false);

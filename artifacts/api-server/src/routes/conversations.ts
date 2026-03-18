@@ -80,17 +80,13 @@ router.get("/stores/:storeDomain/conversations/:conversationId", validateStoreDo
     .where(
       and(
         eq(conversationsTable.id, params.data.conversationId),
-        eq(conversationsTable.storeDomain, params.data.storeDomain)
+        eq(conversationsTable.storeDomain, params.data.storeDomain),
+        eq(conversationsTable.sessionId, sessionId)
       )
     );
 
   if (!conv) {
     res.status(404).json({ error: "Conversation not found" });
-    return;
-  }
-
-  if (conv.sessionId !== sessionId) {
-    res.status(403).json({ error: "Access denied" });
     return;
   }
 
@@ -110,34 +106,21 @@ router.delete("/stores/:storeDomain/conversations/:conversationId", validateStor
     return;
   }
 
-  const [conv] = await db
-    .select()
-    .from(conversationsTable)
-    .where(
-      and(
-        eq(conversationsTable.id, params.data.conversationId),
-        eq(conversationsTable.storeDomain, params.data.storeDomain)
-      )
-    );
-
-  if (!conv) {
-    res.status(404).json({ error: "Conversation not found" });
-    return;
-  }
-
-  if (conv.sessionId !== sessionId) {
-    res.status(403).json({ error: "Access denied" });
-    return;
-  }
-
-  await db
+  const [deleted] = await db
     .delete(conversationsTable)
     .where(
       and(
         eq(conversationsTable.id, params.data.conversationId),
+        eq(conversationsTable.storeDomain, params.data.storeDomain),
         eq(conversationsTable.sessionId, sessionId)
       )
-    );
+    )
+    .returning({ id: conversationsTable.id });
+
+  if (!deleted) {
+    res.status(404).json({ error: "Conversation not found" });
+    return;
+  }
 
   res.sendStatus(204);
 });

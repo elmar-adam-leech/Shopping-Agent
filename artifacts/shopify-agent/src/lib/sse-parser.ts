@@ -33,7 +33,7 @@ export async function readSSEStream(
           const event = JSON.parse(dataStr) as SSEEvent;
           onEvent(event);
         } catch {
-          // incomplete JSON fragment — will be completed in next chunk
+          buffer = line + "\n" + buffer;
         }
       }
     }
@@ -44,8 +44,8 @@ export async function readSSEStream(
         try {
           const event = JSON.parse(dataStr) as SSEEvent;
           onEvent(event);
-        } catch {
-          // unparseable remainder
+        } catch (err) {
+          console.warn("[sse-parser] Failed to parse final SSE data:", err instanceof Error ? err.message : err);
         }
       }
     }
