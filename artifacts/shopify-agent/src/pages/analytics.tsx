@@ -4,16 +4,6 @@ import { useGetAnalytics } from "@workspace/api-client-react";
 import { MessageSquare, Users, TrendingUp, Loader2 } from "lucide-react";
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
 
-const emptyChartData = [
-  { date: 'Mon', count: 0 },
-  { date: 'Tue', count: 0 },
-  { date: 'Wed', count: 0 },
-  { date: 'Thu', count: 0 },
-  { date: 'Fri', count: 0 },
-  { date: 'Sat', count: 0 },
-  { date: 'Sun', count: 0 },
-];
-
 export default function AnalyticsPage() {
   const [, params] = useRoute("/:storeDomain/analytics");
   const storeDomain = params?.storeDomain || "";
@@ -64,7 +54,7 @@ export default function AnalyticsPage() {
             <h3 className="font-bold font-display text-lg mb-6">Daily Chat Volume (Last 7 Days)</h3>
             <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data?.dailyChats || emptyChartData}>
+                <AreaChart data={data?.dailyChats || []}>
                   <defs>
                     <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>

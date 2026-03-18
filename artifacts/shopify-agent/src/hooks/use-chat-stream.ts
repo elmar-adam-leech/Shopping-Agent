@@ -107,57 +107,72 @@ export function useChatStream({
       let assistantMessage = '';
       let currentToolCalls: ToolCall[] = [];
       let currentToolResults: ToolResult[] = [];
+      let streamDirty = false;
 
       setMessages(prev => [
         ...prev,
         { role: 'assistant', content: '', timestamp: new Date().toISOString() }
       ]);
 
-      await readSSEStream(
-        response.body,
-        (event) => {
-          if (event.type === 'text') {
-            assistantMessage += event.data as string;
-          } else if (event.type === 'conversation_id') {
-            const id = event.data as number;
-            onConversationId?.(id);
-            setInternalConversationId(id);
-          } else if (event.type === 'tool_call') {
-            const d = event.data as { id: string; name: string; arguments: string };
-            currentToolCalls = [...currentToolCalls, { id: d.id, name: d.name, arguments: d.arguments }];
+      const flushStreamUpdate = () => {
+        if (!streamDirty) return;
+        streamDirty = false;
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastIndex = newMessages.length - 1;
+          newMessages[lastIndex] = {
+            ...newMessages[lastIndex],
+            content: assistantMessage,
+            toolCalls: currentToolCalls.length > 0 ? [...currentToolCalls] : undefined,
+            toolResults: currentToolResults.length > 0 ? [...currentToolResults] : undefined
+          };
+          return newMessages;
+        });
+      };
 
-            if (d.name === 'add_to_cart' && cartStore) {
-              try {
-                const args = JSON.parse(d.arguments);
-                cartStore.addItem({
-                  id: args.variantId || args.productId || `tmp-${Date.now()}`,
-                  title: args.title || 'Item added',
-                  price: parseFloat(args.price || '0'),
-                  imageUrl: args.imageUrl
-                });
-              } catch (e) {
-                console.warn('[useChatStream] Failed to parse add_to_cart arguments:', e);
+      const throttleInterval = setInterval(flushStreamUpdate, 100);
+
+      try {
+        await readSSEStream(
+          response.body,
+          (event) => {
+            if (event.type === 'text') {
+              assistantMessage += event.data as string;
+              streamDirty = true;
+            } else if (event.type === 'conversation_id') {
+              const id = event.data as number;
+              onConversationId?.(id);
+              setInternalConversationId(id);
+            } else if (event.type === 'tool_call') {
+              const d = event.data as { id: string; name: string; arguments: string };
+              currentToolCalls = [...currentToolCalls, { id: d.id, name: d.name, arguments: d.arguments }];
+              streamDirty = true;
+
+              if (d.name === 'add_to_cart' && cartStore) {
+                try {
+                  const args = JSON.parse(d.arguments);
+                  cartStore.addItem({
+                    id: args.variantId || args.productId || `tmp-${Date.now()}`,
+                    title: args.title || 'Item added',
+                    price: parseFloat(args.price || '0'),
+                    imageUrl: args.imageUrl
+                  });
+                } catch (e) {
+                  console.warn('[useChatStream] Failed to parse add_to_cart arguments:', e);
+                }
               }
+            } else if (event.type === 'tool_result') {
+              const d = event.data as { toolCallId: string; content: string };
+              currentToolResults = [...currentToolResults, { toolCallId: d.toolCallId, content: d.content }];
+              streamDirty = true;
             }
-          } else if (event.type === 'tool_result') {
-            const d = event.data as { toolCallId: string; content: string };
-            currentToolResults = [...currentToolResults, { toolCallId: d.toolCallId, content: d.content }];
-          }
-
-          setMessages(prev => {
-            const newMessages = [...prev];
-            const lastIndex = newMessages.length - 1;
-            newMessages[lastIndex] = {
-              ...newMessages[lastIndex],
-              content: assistantMessage,
-              toolCalls: currentToolCalls.length > 0 ? [...currentToolCalls] : undefined,
-              toolResults: currentToolResults.length > 0 ? [...currentToolResults] : undefined
-            };
-            return newMessages;
-          });
-        },
-        controller.signal
-      );
+          },
+          controller.signal
+        );
+      } finally {
+        clearInterval(throttleInterval);
+        flushStreamUpdate();
+      }
 
       onSuccess?.();
     } catch (err: unknown) {

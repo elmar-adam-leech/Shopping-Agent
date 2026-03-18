@@ -100,6 +100,8 @@ export interface ProviderAdapter {
   ): Array<{ id: string; name: string; arguments: string }>;
 }
 
+const DEFAULT_MAX_TOOL_ROUNDS = 10;
+
 export async function* streamChat(
   adapter: ProviderAdapter,
   apiKey: string,
@@ -110,11 +112,17 @@ export async function* streamChat(
   onToolCall: (name: string, args: Record<string, unknown>) => Promise<string>,
   signal?: AbortSignal
 ): AsyncGenerator<LLMStreamEvent> {
+  const maxToolRounds = parseInt(process.env.MAX_TOOL_ROUNDS || "", 10) || DEFAULT_MAX_TOOL_ROUNDS;
   const allMessages = adapter.formatMessages(systemPrompt, messages);
 
   let continueLoop = true;
+  let iterations = 0;
 
   while (continueLoop) {
+    if (++iterations > maxToolRounds) {
+      yield { type: "error", data: `Tool-call loop exceeded maximum of ${maxToolRounds} iterations` };
+      return;
+    }
     if (signal?.aborted) return;
     continueLoop = false;
 

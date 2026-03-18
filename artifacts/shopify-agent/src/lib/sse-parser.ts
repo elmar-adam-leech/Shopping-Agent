@@ -13,6 +13,7 @@ export async function readSSEStream(
   const reader = body.getReader();
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
+  const failedLines = new Set<string>();
 
   try {
     while (true) {
@@ -32,8 +33,15 @@ export async function readSSEStream(
         try {
           const event = JSON.parse(dataStr) as SSEEvent;
           onEvent(event);
+          failedLines.delete(line);
         } catch {
-          buffer = line + "\n" + buffer;
+          if (failedLines.has(line)) {
+            console.warn("[sse-parser] Discarding unparseable SSE line after retry:", line.slice(0, 200));
+            failedLines.delete(line);
+          } else {
+            failedLines.add(line);
+            buffer = line + "\n" + buffer;
+          }
         }
       }
     }

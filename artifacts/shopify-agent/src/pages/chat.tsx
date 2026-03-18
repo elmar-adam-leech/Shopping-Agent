@@ -14,21 +14,47 @@ import { useListConversations, useGetPreferences, useUpdatePreferences, deleteCo
 import { Sparkles, Loader2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ChatPage() {
   const [, params] = useRoute("/:storeDomain/chat");
   const storeDomain = params?.storeDomain || "";
   const { sessionId } = useSession(storeDomain);
   const cartStore = useCartStore();
+  const { toast } = useToast();
 
   const [input, setInput] = useState("");
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [showPrefs, setShowPrefs] = useState(false);
+  const [convOffset, setConvOffset] = useState(0);
+  const [allConversations, setAllConversations] = useState<Array<{ id: number; title: string; messages: ChatMessageDisplay[]; updatedAt: string }>>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const conversationsResult = useListConversations(storeDomain, { sessionId: sessionId || "" });
-  const conversations = sessionId ? conversationsResult.data : undefined;
+  const CONV_PAGE_SIZE = 50;
+  const conversationsResult = useListConversations(storeDomain, { sessionId: sessionId || "", limit: String(CONV_PAGE_SIZE), offset: String(convOffset) } as { sessionId: string });
   const refetchConversations = conversationsResult.refetch;
+
+  useEffect(() => {
+    if (conversationsResult.data) {
+      const newData = conversationsResult.data as Array<{ id: number; title: string; messages: ChatMessageDisplay[]; updatedAt: string }>;
+      if (convOffset === 0) {
+        setAllConversations(newData);
+      } else {
+        setAllConversations(prev => {
+          const existingIds = new Set(prev.map(c => c.id));
+          const unique = newData.filter(c => !existingIds.has(c.id));
+          return [...prev, ...unique];
+        });
+      }
+    }
+  }, [conversationsResult.data, convOffset]);
+
+  const conversations = sessionId ? allConversations : undefined;
+  const hasMoreConversations = (conversationsResult.data?.length ?? 0) >= CONV_PAGE_SIZE;
+
+  const loadMoreConversations = useCallback(() => {
+    setConvOffset(prev => prev + CONV_PAGE_SIZE);
+  }, []);
 
   const { messages, isLoading, sendMessage, loadMessages } = useChatStream({
     storeDomain,
@@ -36,7 +62,7 @@ export default function ChatPage() {
     conversationId: activeConversationId,
     cartStore,
     onConversationId: (id) => setActiveConversationId(id),
-    onSuccess: () => refetchConversations()
+    onSuccess: () => { setConvOffset(0); refetchConversations(); }
   });
 
   const { data: prefsData } = useGetPreferences(storeDomain, { sessionId: sessionId || "" });
@@ -49,8 +75,12 @@ export default function ChatPage() {
 
   const handlePrefChange = useCallback(async (key: string, value: string) => {
     if (!sessionId) return;
-    await updatePrefs({ storeDomain, data: { sessionId, prefs: { ...userPrefs, [key]: value } } });
-  }, [sessionId, storeDomain, updatePrefs, userPrefs]);
+    try {
+      await updatePrefs({ storeDomain, data: { sessionId, prefs: { ...userPrefs, [key]: value } } });
+    } catch {
+      toast({ title: "Failed to update preference", description: "Please try again.", variant: "destructive" });
+    }
+  }, [sessionId, storeDomain, updatePrefs, userPrefs, toast]);
 
   const handleSubmit = useCallback((e?: React.FormEvent) => {
     e?.preventDefault();
@@ -61,6 +91,7 @@ export default function ChatPage() {
 
   const startNewConversation = useCallback(() => {
     setActiveConversationId(null);
+    setConvOffset(0);
     loadMessages([]);
   }, [loadMessages]);
 
@@ -75,11 +106,12 @@ export default function ChatPage() {
         headers: { 'x-session-id': sessionId || '' },
       });
       if (activeConversationId === convId) startNewConversation();
+      setConvOffset(0);
       refetchConversations();
-    } catch (err) {
-      console.error("Failed to delete conversation", err);
+    } catch {
+      toast({ title: "Failed to delete conversation", description: "Please try again.", variant: "destructive" });
     }
-  }, [storeDomain, sessionId, activeConversationId, startNewConversation, refetchConversations]);
+  }, [storeDomain, sessionId, activeConversationId, startNewConversation, refetchConversations, toast]);
 
   if (!sessionId) {
     return (
@@ -100,6 +132,8 @@ export default function ChatPage() {
           onNewConversation={startNewConversation}
           onSelectConversation={selectConversation}
           onDeleteConversation={handleDeleteConversation}
+          hasMore={hasMoreConversations}
+          onLoadMore={loadMoreConversations}
         />
 
         <div className="flex-1 flex flex-col h-full bg-background/50 relative z-10">

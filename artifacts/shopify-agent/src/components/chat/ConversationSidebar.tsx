@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Plus, Trash2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -16,14 +17,18 @@ interface ConversationSidebarProps {
   onNewConversation: () => void;
   onSelectConversation: (conv: ConversationItem) => void;
   onDeleteConversation: (convId: number) => void;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
 }
 
-export function ConversationSidebar({
+export const ConversationSidebar = memo(function ConversationSidebar({
   conversations,
   activeConversationId,
   onNewConversation,
   onSelectConversation,
   onDeleteConversation,
+  hasMore,
+  onLoadMore,
 }: ConversationSidebarProps) {
   return (
     <div className="w-64 border-r border-border/50 bg-card/50 flex flex-col h-full hidden md:flex">
@@ -59,7 +64,15 @@ export function ConversationSidebar({
             No conversations yet
           </div>
         )}
+        {hasMore && onLoadMore && (
+          <button
+            onClick={onLoadMore}
+            className="w-full py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Load more...
+          </button>
+        )}
       </div>
     </div>
   );
-}
+});

@@ -2,24 +2,35 @@ import { db, sessionsTable, analyticsLogsTable } from "@workspace/db";
 import { lt, sql } from "drizzle-orm";
 
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+const BATCH_DELETE_LIMIT = 1000;
 const rawRetention = parseInt(process.env.ANALYTICS_RETENTION_DAYS || "90", 10);
 const ANALYTICS_RETENTION_DAYS = Number.isFinite(rawRetention) && rawRetention >= 1 ? rawRetention : 90;
 
 async function cleanExpiredSessions(): Promise<number> {
-  const result = await db
-    .delete(sessionsTable)
-    .where(lt(sessionsTable.expiresAt, new Date()))
-    .returning({ id: sessionsTable.id });
-  return result.length;
+  let totalDeleted = 0;
+  while (true) {
+    const result = await db.execute(
+      sql`DELETE FROM ${sessionsTable} WHERE ${sessionsTable.expiresAt} < NOW() AND ctid IN (SELECT ctid FROM ${sessionsTable} WHERE ${sessionsTable.expiresAt} < NOW() LIMIT ${BATCH_DELETE_LIMIT})`
+    );
+    const count = Number(result.rowCount ?? 0);
+    totalDeleted += count;
+    if (count < BATCH_DELETE_LIMIT) break;
+  }
+  return totalDeleted;
 }
 
 async function pruneOldAnalytics(): Promise<number> {
   const cutoff = new Date(Date.now() - ANALYTICS_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-  const result = await db
-    .delete(analyticsLogsTable)
-    .where(lt(analyticsLogsTable.createdAt, cutoff))
-    .returning({ id: analyticsLogsTable.id });
-  return result.length;
+  let totalDeleted = 0;
+  while (true) {
+    const result = await db.execute(
+      sql`DELETE FROM ${analyticsLogsTable} WHERE ${analyticsLogsTable.createdAt} < ${cutoff} AND ctid IN (SELECT ctid FROM ${analyticsLogsTable} WHERE ${analyticsLogsTable.createdAt} < ${cutoff} LIMIT ${BATCH_DELETE_LIMIT})`
+    );
+    const count = Number(result.rowCount ?? 0);
+    totalDeleted += count;
+    if (count < BATCH_DELETE_LIMIT) break;
+  }
+  return totalDeleted;
 }
 
 async function runMaintenance(): Promise<void> {

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Settings2 } from "lucide-react";
 
 interface PreferencesPanelProps {
@@ -5,7 +6,7 @@ interface PreferencesPanelProps {
   onPrefChange: (key: string, value: string) => void;
 }
 
-export function PreferencesPanel({ userPrefs, onPrefChange }: PreferencesPanelProps) {
+export const PreferencesPanel = memo(function PreferencesPanel({ userPrefs, onPrefChange }: PreferencesPanelProps) {
   return (
     <div className="border-b border-border/50 bg-card/80 backdrop-blur-sm px-6 py-4 space-y-3 animate-in slide-in-from-top-2 duration-200">
       <h3 className="font-semibold text-sm flex items-center gap-2">
@@ -60,4 +61,4 @@ export function PreferencesPanel({ userPrefs, onPrefChange }: PreferencesPanelPr
       </div>
     </div>
   );
-}
+});

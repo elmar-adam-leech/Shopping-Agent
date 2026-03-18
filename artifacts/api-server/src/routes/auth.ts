@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import crypto from "crypto";
-import { db, storesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, storesTable, pendingOAuthStatesTable } from "@workspace/db";
+import { eq, lt, gt, and, sql } from "drizzle-orm";
 import { createMerchantSession } from "../services/merchant-auth";
 
 const router: IRouter = Router();
@@ -11,19 +11,13 @@ const SHOPIFY_API_SECRET = process.env.SHOPIFY_API_SECRET || "";
 const APP_URL = process.env.APP_URL || "";
 const SCOPES = "unauthenticated_read_product_listings,unauthenticated_read_collection_listings,unauthenticated_read_content";
 
-const MAX_PENDING_STATES = 10000;
-const pendingStates = new Map<string, { shop: string; createdAt: number }>();
 const STATE_TTL_MS = 10 * 60 * 1000;
+const MAX_PENDING_STATES = 10000;
 
 const SHOPIFY_DOMAIN_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$/;
 
-function cleanExpiredStates() {
-  const now = Date.now();
-  for (const [key, value] of pendingStates) {
-    if (now - value.createdAt > STATE_TTL_MS) {
-      pendingStates.delete(key);
-    }
-  }
+async function cleanExpiredStates() {
+  await db.delete(pendingOAuthStatesTable).where(lt(pendingOAuthStatesTable.expiresAt, new Date()));
 }
 
 function setMerchantCookie(res: import("express").Response, token: string) {
@@ -54,16 +48,21 @@ router.get("/auth/install", async (req, res): Promise<void> => {
     return;
   }
 
-  cleanExpiredStates();
+  await cleanExpiredStates();
 
-  if (pendingStates.size >= MAX_PENDING_STATES) {
-    console.warn(`OAuth pendingStates map at capacity (${MAX_PENDING_STATES}), rejecting new install`);
+  const [{ count: pendingCount }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(pendingOAuthStatesTable);
+
+  if (pendingCount >= MAX_PENDING_STATES) {
+    console.warn(`[auth] OAuth pending states at capacity (${MAX_PENDING_STATES}), rejecting new install`);
     res.status(503).json({ error: "Server is busy, please try again later" });
     return;
   }
 
   const state = crypto.randomBytes(16).toString("hex");
-  pendingStates.set(state, { shop, createdAt: Date.now() });
+  const expiresAt = new Date(Date.now() + STATE_TTL_MS);
+  await db.insert(pendingOAuthStatesTable).values({ state, shop, expiresAt });
 
   const redirectUri = `${APP_URL}/api/auth/callback`;
   const installUrl = `https://${shop}/admin/oauth/authorize?client_id=${SHOPIFY_API_KEY}&scope=${SCOPES}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
@@ -84,17 +83,28 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
     return;
   }
 
+  await cleanExpiredStates();
+
   if (!SHOPIFY_API_SECRET) {
     res.status(500).json({ error: "SHOPIFY_API_SECRET is required for OAuth callback" });
     return;
   }
 
-  const pendingState = pendingStates.get(state);
-  if (!pendingState || pendingState.shop !== shop) {
+  const deletedRows = await db
+    .delete(pendingOAuthStatesTable)
+    .where(
+      and(
+        eq(pendingOAuthStatesTable.state, state),
+        eq(pendingOAuthStatesTable.shop, shop),
+        gt(pendingOAuthStatesTable.expiresAt, new Date())
+      )
+    )
+    .returning({ state: pendingOAuthStatesTable.state });
+
+  if (deletedRows.length === 0) {
     res.status(403).json({ error: "Invalid or expired OAuth state" });
     return;
   }
-  pendingStates.delete(state);
 
   const params = { ...req.query } as Record<string, string>;
   delete params.hmac;
@@ -136,6 +146,12 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
     });
 
     if (!tokenResponse.ok) {
+      let errorBody = "";
+      try {
+        errorBody = await tokenResponse.text();
+      } catch {}
+      const redactedBody = errorBody.replace(/("access_token"|"api_key"|"secret")[^,}]*/gi, '$1":"[REDACTED]"');
+      console.error(`[auth] Shopify token exchange failed (${tokenResponse.status}):`, redactedBody.slice(0, 500));
       res.status(500).json({ error: "Failed to exchange OAuth code" });
       return;
     }

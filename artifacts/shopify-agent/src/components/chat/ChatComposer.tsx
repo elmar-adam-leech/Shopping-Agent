@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,7 +10,7 @@ interface ChatComposerProps {
   onSubmit: (e?: React.FormEvent) => void;
 }
 
-export function ChatComposer({ input, isLoading, onInputChange, onSubmit }: ChatComposerProps) {
+export const ChatComposer = memo(function ChatComposer({ input, isLoading, onInputChange, onSubmit }: ChatComposerProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -49,4 +50,4 @@ export function ChatComposer({ input, isLoading, onInputChange, onSubmit }: Chat
       </div>
     </div>
   );
-}
+});

@@ -124,11 +124,17 @@ function createAnthropicAdapter(): ProviderAdapter {
         }
       } else if (eventType === "content_block_stop") {
         if (s.currentToolUse) {
+          let parsedInput: Record<string, unknown> = {};
+          try {
+            parsedInput = JSON.parse(s.currentToolUse.input || "{}") as Record<string, unknown>;
+          } catch {
+            console.warn("[anthropic] Failed to parse tool input JSON, using empty object. Raw input:", s.currentToolUse.input?.slice(0, 200));
+          }
           s.contentBlocks.push({
             type: "tool_use",
             id: s.currentToolUse.id,
             name: s.currentToolUse.name,
-            input: JSON.parse(s.currentToolUse.input || "{}") as Record<string, unknown>,
+            input: parsedInput,
           });
           s.currentToolUse = null;
         } else if (s.text) {

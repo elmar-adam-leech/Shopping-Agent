@@ -26,14 +26,6 @@ function convToResponse(conv: typeof conversationsTable.$inferSelect) {
   };
 }
 
-function extractSessionId(req: import("express").Request): string | undefined {
-  return (
-    (req.query.sessionId as string | undefined) ||
-    (req.body?.sessionId as string | undefined) ||
-    (req.headers["x-session-id"] as string | undefined)
-  );
-}
-
 router.get("/stores/:storeDomain/conversations", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
   const params = ListConversationsParams.safeParse(req.params);
   if (!params.success) {
@@ -47,6 +39,9 @@ router.get("/stores/:storeDomain/conversations", validateStoreDomain, validateSe
     return;
   }
 
+  const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 50, 1), 200);
+  const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
+
   const conversations = await db
     .select()
     .from(conversationsTable)
@@ -56,7 +51,9 @@ router.get("/stores/:storeDomain/conversations", validateStoreDomain, validateSe
         eq(conversationsTable.sessionId, query.data.sessionId)
       )
     )
-    .orderBy(desc(conversationsTable.updatedAt));
+    .orderBy(desc(conversationsTable.updatedAt))
+    .limit(limit)
+    .offset(offset);
 
   res.json(ListConversationsResponse.parse(conversations.map(convToResponse)));
 });
@@ -68,7 +65,7 @@ router.get("/stores/:storeDomain/conversations/:conversationId", validateStoreDo
     return;
   }
 
-  const sessionId = extractSessionId(req);
+  const sessionId = (req.query.sessionId as string | undefined) || (req.headers["x-session-id"] as string | undefined);
   if (!sessionId) {
     res.status(401).json({ error: "Session ID is required" });
     return;
@@ -100,7 +97,7 @@ router.delete("/stores/:storeDomain/conversations/:conversationId", validateStor
     return;
   }
 
-  const sessionId = extractSessionId(req);
+  const sessionId = (req.query.sessionId as string | undefined) || (req.headers["x-session-id"] as string | undefined);
   if (!sessionId) {
     res.status(401).json({ error: "Session ID is required" });
     return;
