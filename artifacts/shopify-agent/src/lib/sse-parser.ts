@@ -13,6 +13,7 @@ export async function readSSEStream(
   const reader = body.getReader();
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
+  const MAX_FAILED_LINES = 50;
   const failedLines = new Set<string>();
 
   try {
@@ -39,6 +40,10 @@ export async function readSSEStream(
             console.warn("[sse-parser] Discarding unparseable SSE line after retry:", line.slice(0, 200));
             failedLines.delete(line);
           } else {
+            if (failedLines.size >= MAX_FAILED_LINES) {
+              console.warn("[sse-parser] failedLines limit reached, clearing buffer");
+              failedLines.clear();
+            }
             failedLines.add(line);
             buffer = line + "\n" + buffer;
           }

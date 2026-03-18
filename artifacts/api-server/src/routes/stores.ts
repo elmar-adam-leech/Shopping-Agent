@@ -14,6 +14,7 @@ import {
 } from "@workspace/api-zod";
 import { validateMerchantAuth, validateMerchantAuthForStoreList } from "../services/merchant-auth";
 import { invalidateStoreCache } from "../services/tenant-validator";
+import { encrypt } from "../services/encryption";
 
 const router: IRouter = Router();
 
@@ -72,6 +73,16 @@ router.post("/stores", validateMerchantAuthForStoreList, async (req, res): Promi
     return;
   }
 
+  let encryptedApiKey: string | undefined;
+  if (parsed.data.apiKey) {
+    try {
+      encryptedApiKey = encrypt(parsed.data.apiKey);
+    } catch (err) {
+      res.status(503).json({ error: "Server encryption is not configured. Cannot store API keys." });
+      return;
+    }
+  }
+
   const [store] = await db
     .insert(storesTable)
     .values({
@@ -79,7 +90,7 @@ router.post("/stores", validateMerchantAuthForStoreList, async (req, res): Promi
       storefrontToken: parsed.data.storefrontToken,
       provider: parsed.data.provider as ProviderValue,
       model: parsed.data.model,
-      apiKey: parsed.data.apiKey,
+      apiKey: encryptedApiKey ?? parsed.data.apiKey,
     })
     .returning();
 
@@ -123,7 +134,18 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
   if (parsed.data.storefrontToken !== undefined) updateData.storefrontToken = parsed.data.storefrontToken;
   if (parsed.data.provider !== undefined) updateData.provider = parsed.data.provider as ProviderValue;
   if (parsed.data.model !== undefined) updateData.model = parsed.data.model;
-  if (parsed.data.apiKey !== undefined) updateData.apiKey = parsed.data.apiKey;
+  if (parsed.data.apiKey !== undefined) {
+    if (parsed.data.apiKey) {
+      try {
+        updateData.apiKey = encrypt(parsed.data.apiKey);
+      } catch (err) {
+        res.status(503).json({ error: "Server encryption is not configured. Cannot store API keys." });
+        return;
+      }
+    } else {
+      updateData.apiKey = parsed.data.apiKey;
+    }
+  }
   if (parsed.data.ucpCompliant !== undefined) updateData.ucpCompliant = parsed.data.ucpCompliant;
   if (parsed.data.chatEnabled !== undefined) updateData.chatEnabled = parsed.data.chatEnabled;
   if (parsed.data.embedEnabled !== undefined) updateData.embedEnabled = parsed.data.embedEnabled;

@@ -21,7 +21,7 @@ The frontend is built with React 18, Vite, Tailwind CSS, and shadcn/ui, providin
 - **Monorepo**: pnpm workspaces for managing multiple packages (API server, frontend, shared libraries).
 - **Backend**: Express 5 serving as the API server.
 - **Database**: PostgreSQL with Drizzle ORM for data persistence.
-- **LLM Integration**: Multi-provider support (OpenAI, Anthropic, xAI) with a unified interface. LLM API keys are stored securely server-side.
+- **LLM Integration**: Multi-provider support (OpenAI, Anthropic, xAI) with a unified interface. LLM API keys are encrypted at rest using AES-256-GCM (requires `ENCRYPTION_KEY` env var — 64 hex chars / 32 bytes). Keys are encrypted on store create/update and decrypted before LLM calls. Plaintext legacy keys are supported for reads but new writes require encryption to be configured.
 - **API Communication**: Orval for OpenAPI-based API codegen, ensuring type-safe client-server interaction.
 - **Multi-Tenancy**: Every backend route and DB query is scoped by `store_domain` for secure multi-tenant operation.
 - **Session Management**: Customer and merchant sessions are persisted in the database with defined TTLs. OAuth pending states are also stored in the DB (`pending_oauth_states` table) for horizontal scaling support.
@@ -31,7 +31,7 @@ The frontend is built with React 18, Vite, Tailwind CSS, and shadcn/ui, providin
 - **Chat Widget**: A Shopify theme app extension provides a customizable chat widget with merchant-controlled enable/disable toggles.
 - **"Shop For Me" Page**: A public-facing full-page chat interface available at `/shop/{storeDomain}`.
 - **Rate Limiting**: Implemented on chat endpoints to prevent abuse.
-- **Security**: HMAC verification, strict body size limits, CORS configuration, and a global error handler. LLM tool-call loop has a configurable max-iterations guard (default 10).
+- **Security**: HMAC verification, strict body size limits, CORS configuration, and a global error handler. LLM tool-call loop has a configurable max-iterations guard (default 10). Markdown rendering is sanitized with DOMPurify to prevent XSS. Dev auth endpoint requires `DEV_AUTH_SECRET` env var. Session IDs in conversation routes use middleware-validated values. User messages are truncated to 10,000 chars before DB insertion. SSE parser failedLines set is bounded to 50 entries.
 
 ### Feature Specifications
 - **Shopify OAuth**: Secure merchant authentication and app installation.

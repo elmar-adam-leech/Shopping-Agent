@@ -35,5 +35,6 @@ export async function validateSession(
     return;
   }
 
+  (req as Request & { validatedSessionId: string }).validatedSessionId = sessionId;
   next();
 }

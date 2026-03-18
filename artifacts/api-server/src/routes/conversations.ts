@@ -65,7 +65,7 @@ router.get("/stores/:storeDomain/conversations/:conversationId", validateStoreDo
     return;
   }
 
-  const sessionId = (req.query.sessionId as string | undefined) || (req.headers["x-session-id"] as string | undefined);
+  const sessionId = (req as import("express").Request & { validatedSessionId: string }).validatedSessionId;
   if (!sessionId) {
     res.status(401).json({ error: "Session ID is required" });
     return;
@@ -97,7 +97,7 @@ router.delete("/stores/:storeDomain/conversations/:conversationId", validateStor
     return;
   }
 
-  const sessionId = (req.query.sessionId as string | undefined) || (req.headers["x-session-id"] as string | undefined);
+  const sessionId = (req as import("express").Request & { validatedSessionId: string }).validatedSessionId;
   if (!sessionId) {
     res.status(401).json({ error: "Session ID is required" });
     return;

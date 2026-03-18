@@ -119,7 +119,7 @@
     try {
       localStorage.removeItem(SESSION_KEY);
       localStorage.removeItem(CONV_KEY);
-    } catch (e) { /* ignore */ }
+    } catch (e) { console.warn("[chat-widget] localStorage cleanup failed:", e); }
   }
 
   var sessionAbortController = null;
@@ -444,7 +444,8 @@
               errorType: "chat"
             });
             renderMessages();
-          }).catch(function () {
+          }).catch(function (err) {
+            console.warn("[chat-widget] Session creation failed during chat:", err);
             state.isLoading = false;
             currentAbortController = null;
             state.messages.push({
@@ -587,7 +588,7 @@
               lastMsg.errorType = "chat";
             }
           } catch (e) {
-            // incomplete JSON, will be completed in next chunk
+            console.warn("[chat-widget] Incomplete SSE JSON chunk, will retry:", e.message);
           }
         }
 
@@ -622,7 +623,7 @@
 
   function renderMessages() {
     if (state.messages.length === 0 && renderedMessageCount === 0) {
-      messagesContainer.innerHTML = "";
+      messagesContainer.replaceChildren();
       var welcome = el("div", "mcp-welcome");
       var wIcon = el("div", "mcp-welcome-icon", { innerHTML: ICONS.sparkle });
       var wText = el("div", "mcp-welcome-text");
@@ -646,7 +647,7 @@
     }
 
     if (state.messages.length < renderedMessageCount) {
-      messagesContainer.innerHTML = "";
+      messagesContainer.replaceChildren();
       renderedMessageCount = 0;
     }
 
@@ -749,6 +750,7 @@
     try {
       var data = JSON.parse(content);
     } catch (e) {
+      console.warn("[chat-widget] Failed to parse product card JSON:", e.message);
       return null;
     }
 
@@ -921,6 +923,7 @@
       }
       return null;
     } catch (e) {
+      console.warn("[chat-widget] Invalid URL rejected:", e.message);
       return null;
     }
   }

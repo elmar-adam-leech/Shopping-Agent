@@ -192,7 +192,18 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
 
-  const { storeDomain } = req.body as { storeDomain?: string };
+  const devSecret = process.env.DEV_AUTH_SECRET;
+  if (!devSecret) {
+    res.status(403).json({ error: "DEV_AUTH_SECRET is not configured" });
+    return;
+  }
+
+  const { storeDomain, secret } = req.body as { storeDomain?: string; secret?: string };
+
+  if (secret !== devSecret) {
+    res.status(403).json({ error: "Invalid dev auth secret" });
+    return;
+  }
 
   if (!storeDomain || typeof storeDomain !== "string") {
     res.status(400).json({ error: "storeDomain is required" });

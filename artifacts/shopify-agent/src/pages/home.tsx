@@ -8,6 +8,7 @@ import { StoreDomainInput } from "@/components/ui/store-domain-input";
 export default function HomePage() {
   const { data: stores, isLoading, error, refetch } = useListStores();
   const [loginDomain, setLoginDomain] = useState("");
+  const [devSecret, setDevSecret] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
 
@@ -24,7 +25,7 @@ export default function HomePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ storeDomain: fullDomain }),
+        body: JSON.stringify({ storeDomain: fullDomain, secret: devSecret }),
       });
       if (!resp.ok) {
         const data = await resp.json().catch(() => ({ error: "Login failed" }));
@@ -92,6 +93,13 @@ export default function HomePage() {
                 onChange={e => setLoginDomain(e.target.value)}
                 className="w-full border-border bg-background focus-within:ring-primary/50"
                 inputClassName="text-foreground placeholder:text-muted-foreground"
+              />
+              <input
+                type="password"
+                placeholder="Dev auth secret"
+                value={devSecret}
+                onChange={e => setDevSecret(e.target.value)}
+                className="w-full rounded-xl border border-border bg-background px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
               />
               {loginError && (
                 <p className="text-sm text-red-500">{loginError}</p>

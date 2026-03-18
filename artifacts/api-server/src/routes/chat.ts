@@ -10,6 +10,9 @@ import { buildSystemPrompt } from "../services/system-prompt";
 import { validateStoreDomain } from "../services/tenant-validator";
 import { validateSession } from "../services/session-validator";
 import { LRUCache } from "../services/lru-cache";
+import { decrypt } from "../services/encryption";
+
+const MAX_USER_MESSAGE_LENGTH = 10_000;
 
 const router: IRouter = Router();
 
@@ -165,9 +168,13 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       conversation = newConv;
     }
 
+    const truncatedMessage = parsed.data.message.length > MAX_USER_MESSAGE_LENGTH
+      ? parsed.data.message.slice(0, MAX_USER_MESSAGE_LENGTH)
+      : parsed.data.message;
+
     const userMessage: ChatMessageRecord = {
       role: "user",
-      content: parsed.data.message,
+      content: truncatedMessage,
       timestamp: new Date().toISOString(),
     };
 
@@ -205,9 +212,11 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     const toolCalls: Array<{ id: string; name: string; arguments: string }> = [];
     const toolResults: Array<{ toolCallId: string; content: string }> = [];
 
+    const decryptedApiKey = decrypt(store.apiKey);
+
     const stream = streamChatWithProvider(
       store.provider,
-      store.apiKey,
+      decryptedApiKey,
       store.model,
       systemPrompt,
       llmMessages,
@@ -249,7 +258,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     await db.insert(analyticsLogsTable).values({
       storeDomain: store.storeDomain,
       eventType: "chat",
-      query: parsed.data.message.slice(0, 500),
+      query: truncatedMessage.slice(0, 500),
       sessionId: parsed.data.sessionId,
     });
   } catch (err: unknown) {
