@@ -397,7 +397,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     }
   } catch (err: unknown) {
     if (clientDisconnected) return;
-    console.error(`Chat error for store="${store.storeDomain}":`, err instanceof Error ? err.message : "Unknown error");
+    console.error(`[chat] Error store="${store.storeDomain}":`, err instanceof Error ? err.message : "Unknown error");
     safeSend(`data: ${JSON.stringify({ type: "error", data: "An error occurred processing your message" })}\n\n`);
   } finally {
     res.end();

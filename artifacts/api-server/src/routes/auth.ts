@@ -190,7 +190,7 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
     setMerchantCookie(res, merchantToken);
     res.redirect(`/${encodeURIComponent(shop)}/settings`);
   } catch (err: unknown) {
-    console.error("OAuth callback error:", err instanceof Error ? err.message : "Unknown error");
+    console.error("[auth] OAuth callback error:", err instanceof Error ? err.message : "Unknown error");
     sendError(res, 500, "OAuth callback failed");
   }
 });

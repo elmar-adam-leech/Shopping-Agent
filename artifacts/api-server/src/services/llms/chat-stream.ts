@@ -141,8 +141,9 @@ export async function* streamChat(
     });
 
     if (!response.ok) {
-      const errorBody = await response.text();
-      yield { type: "error", data: `API error ${response.status}: ${errorBody}` };
+      try { await response.text(); } catch {}
+      console.error(`[llm] API error status=${response.status}`);
+      yield { type: "error", data: "Failed to get response from AI provider" };
       return;
     }
 

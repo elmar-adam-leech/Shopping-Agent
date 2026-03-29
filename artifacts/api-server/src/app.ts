@@ -51,6 +51,14 @@ const loginLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const storeMutationLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  message: { error: "Too many requests, please wait a moment" },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use("/api", (req: Request, res: Response, next: NextFunction) => {
   const hasAuth = req.headers.authorization
     || req.cookies?.merchant_token
@@ -67,10 +75,13 @@ app.use("/api", (req: Request, res: Response, next: NextFunction) => {
 app.post("/api/sessions", sessionLimiter);
 app.post("/api/auth/login", loginLimiter);
 app.use("/api/stores/:storeDomain/chat", chatLimiter);
+app.post("/api/stores", storeMutationLimiter);
+app.patch("/api/stores/:storeDomain", storeMutationLimiter);
+app.delete("/api/stores/:storeDomain", storeMutationLimiter);
 app.use("/api", router);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("Unhandled error:", err.message);
+  console.error("[app] Unhandled error:", err.message);
   sendError(res, 500, "Internal server error");
 });
 
