@@ -199,7 +199,7 @@ async function persistChatResult(
     await appendMessages(conversationId, newMessages);
   } catch (err) {
     conversationSaved = false;
-    console.error(`[chat] FAILED to save conversation id="${conversationId}" store="${storeDomain}":`, err);
+    console.error(`[chat] FAILED to save conversation id="${conversationId}" store="${storeDomain}":`, err instanceof Error ? err.message : "Unknown error");
   }
 
   try {
@@ -211,7 +211,7 @@ async function persistChatResult(
     });
   } catch (err) {
     analyticsSaved = false;
-    console.error(`[chat] FAILED to insert analytics log store="${storeDomain}" session="${sessionId}":`, err);
+    console.error(`[chat] FAILED to insert analytics log store="${storeDomain}":`, err instanceof Error ? err.message : "Unknown error");
   }
 
   return { conversationSaved, analyticsSaved };
@@ -397,7 +397,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     }
   } catch (err: unknown) {
     if (clientDisconnected) return;
-    console.error(`Chat error for store="${store.storeDomain}" session="${parsed.data.sessionId}":`, err);
+    console.error(`Chat error for store="${store.storeDomain}":`, err instanceof Error ? err.message : "Unknown error");
     safeSend(`data: ${JSON.stringify({ type: "error", data: "An error occurred processing your message" })}\n\n`);
   } finally {
     res.end();

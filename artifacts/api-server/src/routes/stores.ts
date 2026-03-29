@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request } from "express";
 import { eq } from "drizzle-orm";
-import { db, storesTable } from "@workspace/db";
+import { db, storesTable, sessionsTable } from "@workspace/db";
 import type { Store } from "@workspace/db/schema";
 import {
   CreateStoreBody,
@@ -203,6 +203,7 @@ router.delete("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pr
     return;
   }
 
+  await db.delete(sessionsTable).where(eq(sessionsTable.storeDomain, params.data.storeDomain));
   await db.delete(storesTable).where(eq(storesTable.storeDomain, params.data.storeDomain));
   invalidateStoreCache(params.data.storeDomain);
   invalidateSessionCacheForDomain(params.data.storeDomain);

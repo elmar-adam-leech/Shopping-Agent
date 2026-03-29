@@ -142,7 +142,7 @@ function createAnthropicAdapter(): ProviderAdapter {
           try {
             parsedInput = JSON.parse(s.currentToolUse.input || "{}") as Record<string, unknown>;
           } catch {
-            console.warn("[anthropic] Failed to parse tool input JSON, using empty object. Raw input:", s.currentToolUse.input?.slice(0, 200));
+            console.warn("[anthropic] Failed to parse tool input JSON, using empty object");
           }
           s.contentBlocks.push({
             type: "tool_use",
