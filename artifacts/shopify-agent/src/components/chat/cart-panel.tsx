@@ -10,32 +10,32 @@ export function CartPanel() {
   if (!cart.isOpen) return null;
 
   return (
-    <div className="w-[350px] h-full bg-card border-l border-border/50 shadow-2xl flex flex-col absolute right-0 top-0 z-40 animate-in slide-in-from-right duration-300">
+    <aside aria-label="Shopping cart" className="w-[350px] h-full bg-card border-l border-border/50 shadow-2xl flex flex-col absolute right-0 top-0 z-40 animate-in slide-in-from-right duration-300" role="complementary">
       <div className="flex items-center justify-between p-4 border-b border-border/50 bg-background/50 backdrop-blur-md">
-        <div className="flex items-center gap-2 font-display font-semibold">
-          <ShoppingBag className="w-5 h-5 text-primary" />
+        <h2 className="flex items-center gap-2 font-display font-semibold">
+          <ShoppingBag className="w-5 h-5 text-primary" aria-hidden="true" />
           Live Cart Preview
-        </div>
-        <Button variant="ghost" size="icon" className="rounded-full hover:bg-secondary" onClick={() => cart.setIsOpen(false)}>
-          <X className="w-4 h-4" />
+        </h2>
+        <Button variant="ghost" size="icon" className="rounded-full hover:bg-secondary" onClick={() => cart.setIsOpen(false)} aria-label="Close cart panel">
+          <X className="w-4 h-4" aria-hidden="true" />
         </Button>
       </div>
 
       <ScrollArea className="flex-1 p-4">
         {cart.items.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-center text-muted-foreground space-y-3">
-            <ShoppingBag className="w-12 h-12 opacity-20" />
+            <ShoppingBag className="w-12 h-12 opacity-20" aria-hidden="true" />
             <p>Your cart is empty.<br/>Ask the agent to add products!</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4" role="list" aria-label="Cart items">
             {cart.items.map(item => (
-              <div key={item.id} className="flex gap-4 p-3 rounded-xl bg-secondary/20 border border-border/30 group">
+              <div key={item.id} className="flex gap-4 p-3 rounded-xl bg-secondary/20 border border-border/30 group" role="listitem">
                 <div className="w-16 h-16 rounded-lg bg-secondary/50 flex-shrink-0 overflow-hidden">
                   {item.imageUrl ? (
                     <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs font-medium">No Img</div>
+                    <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs font-medium" aria-label={`${item.title} - no image available`}>No Img</div>
                   )}
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col justify-between">
@@ -43,20 +43,21 @@ export function CartPanel() {
                     <h4 className="text-sm font-medium leading-tight truncate">{item.title}</h4>
                     <button 
                       onClick={() => cart.removeItem(item.id)}
-                      className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                      className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring rounded"
+                      aria-label={`Remove ${item.title} from cart`}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4" aria-hidden="true" />
                     </button>
                   </div>
                   <div className="flex items-center justify-between mt-2">
                     <span className="font-semibold text-primary text-sm">${item.price.toFixed(2)}</span>
-                    <div className="flex items-center gap-2 bg-background rounded-md border border-border/50 p-1">
-                      <button onClick={() => cart.updateQuantity(item.id, item.quantity - 1)} className="p-0.5 hover:bg-secondary rounded">
-                        <Minus className="w-3 h-3" />
+                    <div className="flex items-center gap-2 bg-background rounded-md border border-border/50 p-1" role="group" aria-label={`Quantity for ${item.title}`}>
+                      <button onClick={() => cart.updateQuantity(item.id, item.quantity - 1)} className="p-0.5 hover:bg-secondary rounded focus:outline-none focus:ring-2 focus:ring-ring" aria-label={`Decrease quantity of ${item.title}`}>
+                        <Minus className="w-3 h-3" aria-hidden="true" />
                       </button>
-                      <span className="text-xs font-medium w-4 text-center">{item.quantity}</span>
-                      <button onClick={() => cart.updateQuantity(item.id, item.quantity + 1)} className="p-0.5 hover:bg-secondary rounded">
-                        <Plus className="w-3 h-3" />
+                      <span className="text-xs font-medium w-4 text-center" aria-live="polite">{item.quantity}</span>
+                      <button onClick={() => cart.updateQuantity(item.id, item.quantity + 1)} className="p-0.5 hover:bg-secondary rounded focus:outline-none focus:ring-2 focus:ring-ring" aria-label={`Increase quantity of ${item.title}`}>
+                        <Plus className="w-3 h-3" aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -84,10 +85,10 @@ export function CartPanel() {
           </div>
         </div>
         <Button className="w-full font-bold shadow-lg shadow-primary/20 group" disabled={cart.items.length === 0}>
-          <CreditCard className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+          <CreditCard className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" aria-hidden="true" />
           Go to Checkout
         </Button>
       </div>
-    </div>
+    </aside>
   );
 }

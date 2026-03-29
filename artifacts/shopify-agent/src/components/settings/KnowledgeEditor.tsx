@@ -213,16 +213,18 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
                         <button
                           disabled={itemIdx === 0}
                           onClick={() => handleReorder(cat.id, item.id, 'up')}
-                          className="p-0.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                          className="p-0.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
+                          aria-label={`Move ${item.title} up`}
                         >
-                          <ArrowUp className="w-3.5 h-3.5" />
+                          <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
                         <button
                           disabled={itemIdx === items.length - 1}
                           onClick={() => handleReorder(cat.id, item.id, 'down')}
-                          className="p-0.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                          className="p-0.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
+                          aria-label={`Move ${item.title} down`}
                         >
-                          <ArrowDown className="w-3.5 h-3.5" />
+                          <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
                         </button>
                       </div>
                       <div className="flex-1">
@@ -255,22 +257,24 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
                         )}
                       </div>
                       {editingId !== item.id && (
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-all">
                           <Button 
                             variant="ghost" 
                             size="icon" 
                             onClick={() => startEdit(item)}
                             className="text-muted-foreground hover:text-primary hover:bg-primary/10 -mt-1"
+                            aria-label={`Edit ${item.title}`}
                           >
-                            <Edit2 className="w-4 h-4" />
+                            <Edit2 className="w-4 h-4" aria-hidden="true" />
                           </Button>
                           <Button 
                             variant="ghost" 
                             size="icon" 
                             onClick={() => handleDelete(item.id)}
                             className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-1"
+                            aria-label={`Delete ${item.title}`}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-4 h-4" aria-hidden="true" />
                           </Button>
                         </div>
                       )}

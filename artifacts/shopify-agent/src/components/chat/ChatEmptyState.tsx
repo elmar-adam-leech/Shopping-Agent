@@ -15,12 +15,12 @@ export function ChatEmptyState({ storeDomain, onPresetClick }: ChatEmptyStatePro
       <p className="text-muted-foreground max-w-sm mb-8">
         I'm an AI assistant for {storeDomain}. Ask me anything about products, sizing, or policies!
       </p>
-      <div className="flex flex-wrap justify-center gap-2 max-w-lg">
+      <div className="flex flex-wrap justify-center gap-2 max-w-lg" role="group" aria-label="Suggested questions">
         {["Show me your best sellers", "What are your return policies?", "Find matching accessories"].map(preset => (
           <button 
             key={preset}
             onClick={() => onPresetClick(preset)}
-            className="px-4 py-2 rounded-full bg-secondary/50 border border-border/50 text-sm hover:bg-secondary hover:text-foreground text-muted-foreground transition-colors"
+            className="px-4 py-2 rounded-full bg-secondary/50 border border-border/50 text-sm hover:bg-secondary hover:text-foreground text-muted-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
           >
             {preset}
           </button>

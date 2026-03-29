@@ -32,14 +32,16 @@ export const ChatComposer = memo(function ChatComposer({ input, isLoading, onInp
             placeholder="Ask about products, sizing, or policies..."
             className="min-h-[60px] max-h-[200px] w-full resize-none border-0 focus-visible:ring-0 bg-transparent py-4 pl-4 pr-14"
             rows={1}
+            aria-label="Message input"
           />
           <Button 
             type="submit" 
             size="icon" 
             disabled={!input.trim() || isLoading}
             className="absolute right-2 bottom-2 rounded-xl bg-primary text-white hover:bg-primary/90"
+            aria-label="Send message"
           >
-            <Send className="w-4 h-4" />
+            <Send className="w-4 h-4" aria-hidden="true" />
           </Button>
         </form>
         <div className="text-center mt-2">

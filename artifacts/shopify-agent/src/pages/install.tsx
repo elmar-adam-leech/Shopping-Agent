@@ -110,7 +110,7 @@ export default function InstallPage() {
                 inputClassName="pl-4 py-6 text-base"
               />
               {validationError && (
-                <p className="text-sm text-red-500">{validationError}</p>
+                <p className="text-sm text-red-500" role="alert">{validationError}</p>
               )}
             </div>
 

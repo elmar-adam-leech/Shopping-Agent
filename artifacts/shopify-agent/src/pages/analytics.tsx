@@ -15,8 +15,9 @@ export default function AnalyticsPage() {
   if (isLoading) {
     return (
       <AppLayout storeDomain={storeDomain}>
-        <div className="flex h-full items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="flex h-full items-center justify-center" role="status" aria-label="Loading">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" aria-hidden="true" />
+          <span className="sr-only">Loading analytics...</span>
         </div>
       </AppLayout>
     );

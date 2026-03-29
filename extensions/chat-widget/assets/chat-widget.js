@@ -204,6 +204,7 @@
 
   var bubble = el("button", "mcp-bubble " + config.position, {
     "aria-label": "Open chat",
+    "aria-expanded": "false",
     onClick: togglePanel
   });
   var chatIcon = el("span", "mcp-chat-icon", { innerHTML: ICONS[config.bubbleIcon] || ICONS.chat });
@@ -211,10 +212,14 @@
   bubble.appendChild(chatIcon);
   bubble.appendChild(closeIcon);
 
-  var panel = el("div", "mcp-panel " + config.position);
+  var panel = el("div", "mcp-panel " + config.position, {
+    role: "region",
+    "aria-label": config.widgetTitle,
+    "aria-hidden": "true"
+  });
 
   var header = el("div", "mcp-header");
-  var headerIcon = el("div", "mcp-header-icon", { innerHTML: ICONS.sparkle });
+  var headerIcon = el("div", "mcp-header-icon", { innerHTML: ICONS.sparkle, "aria-hidden": "true" });
   var headerText = el("div", "mcp-header-text");
   var headerTitle = el("div", "mcp-header-title");
   headerTitle.textContent = config.widgetTitle;
@@ -225,12 +230,18 @@
   header.appendChild(headerIcon);
   header.appendChild(headerText);
 
-  var messagesContainer = el("div", "mcp-messages");
+  var messagesContainer = el("div", "mcp-messages", {
+    role: "log",
+    "aria-label": "Chat messages",
+    "aria-live": "polite",
+    "aria-relevant": "additions"
+  });
 
   var inputArea = el("div", "mcp-input-area");
   var textarea = el("textarea", "mcp-input", {
     placeholder: "Ask a question...",
-    rows: "1"
+    rows: "1",
+    "aria-label": "Message input"
   });
   var sendBtn = el("button", "mcp-send-btn", {
     "aria-label": "Send message",
@@ -242,6 +253,11 @@
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+    if (e.key === "Escape" && state.isOpen) {
+      e.preventDefault();
+      togglePanel();
+      bubble.focus();
     }
   }
 
@@ -299,11 +315,17 @@
     state.isOpen = !state.isOpen;
     if (state.isOpen) {
       panel.classList.add("visible");
+      panel.setAttribute("aria-hidden", "false");
       bubble.classList.add("open");
+      bubble.setAttribute("aria-label", "Close chat");
+      bubble.setAttribute("aria-expanded", "true");
       textarea.focus();
     } else {
       panel.classList.remove("visible");
+      panel.setAttribute("aria-hidden", "true");
       bubble.classList.remove("open");
+      bubble.setAttribute("aria-label", "Open chat");
+      bubble.setAttribute("aria-expanded", "false");
       abortCurrentRequest();
     }
   }
@@ -672,10 +694,13 @@
     }
 
     if (state.isLoading) {
-      var typing = el("div", "mcp-typing");
-      typing.appendChild(el("div", "mcp-typing-dot"));
-      typing.appendChild(el("div", "mcp-typing-dot"));
-      typing.appendChild(el("div", "mcp-typing-dot"));
+      var typing = el("div", "mcp-typing", { role: "status", "aria-label": "Assistant is typing" });
+      typing.appendChild(el("div", "mcp-typing-dot", { "aria-hidden": "true" }));
+      typing.appendChild(el("div", "mcp-typing-dot", { "aria-hidden": "true" }));
+      typing.appendChild(el("div", "mcp-typing-dot", { "aria-hidden": "true" }));
+      var srTyping = el("span", "", { style: "position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;" });
+      srTyping.textContent = "Assistant is typing...";
+      typing.appendChild(srTyping);
       messagesContainer.appendChild(typing);
       lastTypingEl = typing;
     }
@@ -688,11 +713,13 @@
     var isUser = msg.role === "user";
 
     if (msg.toolCalls && msg.toolCalls.length > 0) {
-      var badgesWrap = el("div", "", { style: "align-self: flex-start; display: flex; flex-wrap: wrap; gap: 4px;" });
+      var badgesWrap = el("div", "", { style: "align-self: flex-start; display: flex; flex-wrap: wrap; gap: 4px;", role: "status", "aria-live": "polite" });
       for (var t = 0; t < msg.toolCalls.length; t++) {
         var tc = msg.toolCalls[t];
         var label = TOOL_LABELS[tc.name] || tc.name;
-        var badge = el("span", "mcp-tool-badge", { innerHTML: ICONS.tool });
+        var badge = el("span", "mcp-tool-badge");
+        var badgeIconSpan = el("span", "", { innerHTML: ICONS.tool, "aria-hidden": "true" });
+        badge.appendChild(badgeIconSpan);
         var badgeText = document.createTextNode(" " + label);
         badge.appendChild(badgeText);
         badgesWrap.appendChild(badge);
@@ -731,13 +758,14 @@
 
     if (msg.isError && msg.failedMessage) {
       var retryBtn = el("button", "mcp-retry-btn", {
+        "aria-label": "Retry sending message",
         onClick: (function (failedMsg) {
           return function () {
             retryMessage(failedMsg);
           };
         })(msg.failedMessage)
       });
-      var retryIcon = el("span", "mcp-retry-icon", { innerHTML: ICONS.retry });
+      var retryIcon = el("span", "mcp-retry-icon", { innerHTML: ICONS.retry, "aria-hidden": "true" });
       retryBtn.appendChild(retryIcon);
       retryBtn.appendChild(document.createTextNode(" Retry"));
       wrapper.appendChild(retryBtn);

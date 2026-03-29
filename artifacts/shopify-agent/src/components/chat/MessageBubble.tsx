@@ -21,11 +21,11 @@ function MessageBubbleInner({ message }: { message: ChatMessageDisplay }) {
     <div className={cn(
       "flex gap-4 w-full animate-in slide-in-from-bottom-2 duration-300",
       isUser ? "flex-row-reverse" : "flex-row"
-    )}>
+    )} role="article" aria-label={isUser ? "Your message" : "Assistant message"}>
       <Avatar className={cn(
         "w-10 h-10 border shadow-sm flex-shrink-0 flex items-center justify-center text-sm font-bold",
         isUser ? "bg-slate-900 text-white border-slate-800" : "bg-gradient-to-br from-primary to-accent text-white border-primary/20"
-      )}>
+      )} aria-hidden="true">
         {isUser ? "U" : <Sparkles className="w-5 h-5" />}
       </Avatar>
       

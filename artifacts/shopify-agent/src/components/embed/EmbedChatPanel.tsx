@@ -47,18 +47,19 @@ export function EmbedChatPanel({
 
   if (!sessionId) {
     return (
-      <div className="flex h-full items-center justify-center bg-background">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="flex h-full items-center justify-center bg-background" role="status" aria-label="Loading">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" aria-hidden="true" />
+        <span className="sr-only">Loading chat...</span>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex flex-col h-full bg-background" role="region" aria-label="AI Shopping Assistant">
       <div className="flex-1 overflow-y-auto p-4 pb-32">
         {messages.length === 0 && !isLoading ? (
           <div className="h-full flex flex-col items-center justify-center text-center">
-            <div className="w-14 h-14 rounded-xl bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-white mb-4 shadow-lg shadow-primary/20">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-white mb-4 shadow-lg shadow-primary/20" aria-hidden="true">
               <Sparkles className="w-7 h-7" />
             </div>
             <h3 className="text-lg font-bold mb-1">How can I help?</h3>
@@ -67,7 +68,7 @@ export function EmbedChatPanel({
             </p>
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto space-y-6">
+          <div className="max-w-4xl mx-auto space-y-6" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions">
             {displayMessages.map((msg, i) => (
               <MessageBubble key={messageKey(messages[i], i)} message={msg} />
             ))}

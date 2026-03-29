@@ -94,15 +94,20 @@ export default function HomePage() {
                 className="w-full border-border bg-background focus-within:ring-primary/50"
                 inputClassName="text-foreground placeholder:text-muted-foreground"
               />
-              <input
-                type="password"
-                placeholder="Dev auth secret"
-                value={devSecret}
-                onChange={e => setDevSecret(e.target.value)}
-                className="w-full rounded-xl border border-border bg-background px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
+              <div className="space-y-1">
+                <label htmlFor="dev-secret" className="sr-only">Dev auth secret</label>
+                <input
+                  id="dev-secret"
+                  type="password"
+                  placeholder="Dev auth secret"
+                  value={devSecret}
+                  onChange={e => setDevSecret(e.target.value)}
+                  className="w-full rounded-xl border border-border bg-background px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  aria-describedby={loginError ? "login-error" : undefined}
+                />
+              </div>
               {loginError && (
-                <p className="text-sm text-red-500">{loginError}</p>
+                <p id="login-error" className="text-sm text-red-500" role="alert">{loginError}</p>
               )}
               <Button type="submit" disabled={loggingIn || !loginDomain.trim()} className="w-full rounded-xl">
                 {loggingIn ? "Signing in..." : "Sign In"}
@@ -190,18 +195,18 @@ function StoreCard({ store }: { store: StoreInfo }) {
 
       <div className="grid grid-cols-3 gap-2 mt-auto">
         <Link href={`/${store.storeDomain}/chat`} className="col-span-1">
-          <Button variant="secondary" className="w-full bg-secondary/50 hover:bg-secondary rounded-xl tooltip-trigger" title="Test Chat">
-            <MessageSquare className="w-4 h-4" />
+          <Button variant="secondary" className="w-full bg-secondary/50 hover:bg-secondary rounded-xl tooltip-trigger" title="Test Chat" aria-label="Test Chat">
+            <MessageSquare className="w-4 h-4" aria-hidden="true" />
           </Button>
         </Link>
         <Link href={`/${store.storeDomain}/settings`} className="col-span-1">
-          <Button variant="secondary" className="w-full bg-secondary/50 hover:bg-secondary rounded-xl tooltip-trigger" title="Settings">
-            <Settings className="w-4 h-4" />
+          <Button variant="secondary" className="w-full bg-secondary/50 hover:bg-secondary rounded-xl tooltip-trigger" title="Settings" aria-label="Settings">
+            <Settings className="w-4 h-4" aria-hidden="true" />
           </Button>
         </Link>
         <Link href={`/${store.storeDomain}/analytics`} className="col-span-1">
-          <Button variant="secondary" className="w-full bg-secondary/50 hover:bg-secondary rounded-xl tooltip-trigger" title="Analytics">
-            <Activity className="w-4 h-4" />
+          <Button variant="secondary" className="w-full bg-secondary/50 hover:bg-secondary rounded-xl tooltip-trigger" title="Analytics" aria-label="Analytics">
+            <Activity className="w-4 h-4" aria-hidden="true" />
           </Button>
         </Link>
       </div>

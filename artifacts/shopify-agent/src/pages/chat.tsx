@@ -129,8 +129,9 @@ export default function ChatPage() {
   if (!sessionId) {
     return (
       <AppLayout storeDomain={storeDomain}>
-        <div className="flex h-full items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <div className="flex h-full items-center justify-center" role="status" aria-label="Loading">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" aria-hidden="true" />
+          <span className="sr-only">Loading chat...</span>
         </div>
       </AppLayout>
     );
@@ -157,8 +158,8 @@ export default function ChatPage() {
               </div>
               <h2 className="font-bold text-sm">Shopping Assistant</h2>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setShowPrefs(!showPrefs)} className="rounded-lg" title="Preferences">
-              <Settings2 className="w-4 h-4" />
+            <Button variant="ghost" size="icon" onClick={() => setShowPrefs(!showPrefs)} className="rounded-lg" title="Preferences" aria-label="Toggle preferences" aria-expanded={showPrefs}>
+              <Settings2 className="w-4 h-4" aria-hidden="true" />
             </Button>
           </div>
 
@@ -168,7 +169,7 @@ export default function ChatPage() {
             {messages.length === 0 ? (
               <ChatEmptyState storeDomain={storeDomain} onPresetClick={setInput} />
             ) : (
-              <div className="max-w-4xl mx-auto space-y-6">
+              <div className="max-w-4xl mx-auto space-y-6" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions">
                 {displayMessages.map((msg, i) => (
                   <MessageBubble key={messageKey(messages[i], i)} message={msg} />
                 ))}

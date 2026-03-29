@@ -3,7 +3,7 @@ import { MessageSquare, Settings, BarChart2, Store as StoreIcon, ShoppingBag, Me
 import { useCartStore } from "@/store/use-cart-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
 import { useState } from "react";
 
 interface AppLayoutProps {
@@ -102,7 +102,7 @@ export function AppLayout({ children, storeDomain }: AppLayoutProps) {
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-[280px] flex-col border-r border-border/50 bg-card/30 backdrop-blur-xl relative z-10">
+      <aside className="hidden md:flex w-[280px] flex-col border-r border-border/50 bg-card/30 backdrop-blur-xl relative z-10" aria-label="Main navigation">
         <NavLinks />
       </aside>
 
@@ -122,20 +122,21 @@ export function AppLayout({ children, storeDomain }: AppLayoutProps) {
           
           <div className="flex items-center gap-2">
             {storeDomain && (
-              <Button variant="ghost" size="icon" className="relative" onClick={() => cartStore.setIsOpen(true)}>
-                <ShoppingBag className="w-5 h-5" />
+              <Button variant="ghost" size="icon" className="relative" onClick={() => cartStore.setIsOpen(true)} aria-label={`Open cart${cartStore.totalItems > 0 ? ` (${cartStore.totalItems} items)` : ''}`}>
+                <ShoppingBag className="w-5 h-5" aria-hidden="true" />
                 {cartStore.totalItems > 0 && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" aria-hidden="true" />
                 )}
               </Button>
             )}
             <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <Menu className="w-5 h-5" />
+                <Button variant="ghost" size="icon" aria-label="Open navigation menu">
+                  <Menu className="w-5 h-5" aria-hidden="true" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="p-0 w-[280px]">
+              <SheetContent side="left" className="p-0 w-[280px]" aria-describedby={undefined}>
+                <SheetTitle className="sr-only">Navigation menu</SheetTitle>
                 <NavLinks />
               </SheetContent>
             </Sheet>

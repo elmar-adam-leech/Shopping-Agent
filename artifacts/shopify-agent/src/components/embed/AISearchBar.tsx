@@ -96,10 +96,12 @@ export function AISearchBar({ storeDomain }: AISearchBarProps) {
 
   return (
     <div className="flex flex-col h-full bg-background p-4">
-      <form onSubmit={handleSubmit} className="relative mb-4">
+      <form onSubmit={handleSubmit} className="relative mb-4" role="search" aria-label="AI product search">
         <div className="relative flex items-center bg-card border border-border rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/50 transition-all">
-          <Search className="w-5 h-5 text-muted-foreground ml-4 flex-shrink-0" />
+          <Search className="w-5 h-5 text-muted-foreground ml-4 flex-shrink-0" aria-hidden="true" />
+          <label htmlFor="ai-search-input" className="sr-only">Search products with AI</label>
           <input
+            id="ai-search-input"
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -107,32 +109,39 @@ export function AISearchBar({ storeDomain }: AISearchBarProps) {
             className="flex-1 bg-transparent border-0 outline-none px-3 py-3.5 text-sm"
           />
           {query && (
-            <button type="button" onClick={clearSearch} className="p-2 text-muted-foreground hover:text-foreground">
-              <X className="w-4 h-4" />
+            <button type="button" onClick={clearSearch} className="p-2 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring rounded" aria-label="Clear search">
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           )}
-          {isSearching && <Loader2 className="w-5 h-5 animate-spin text-primary mr-3" />}
+          {isSearching && (
+            <div className="mr-3" role="status" aria-label="Searching">
+              <Loader2 className="w-5 h-5 animate-spin text-primary" aria-hidden="true" />
+              <span className="sr-only">Searching...</span>
+            </div>
+          )}
         </div>
       </form>
 
-      <div className="flex-1 overflow-y-auto space-y-3">
+      <div className="flex-1 overflow-y-auto space-y-3" aria-live="polite" aria-relevant="additions text">
         {results.length > 0 && (
-          <div className="space-y-2">
+          <div className="space-y-2" role="list" aria-label="Search results">
             {results.map((product, i) => (
-              <ProductCard key={product.handle || product.id || i} product={product} />
+              <div key={product.handle || product.id || i} role="listitem">
+                <ProductCard product={product} />
+              </div>
             ))}
           </div>
         )}
 
         {searchSummary && (
-          <div className="text-sm text-muted-foreground bg-secondary/30 rounded-xl p-4 mt-2">
+          <div className="text-sm text-muted-foreground bg-secondary/30 rounded-xl p-4 mt-2" role="status">
             {searchSummary}
           </div>
         )}
 
         {!isSearching && !results.length && !searchSummary && (
           <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-            <Search className="w-10 h-10 mb-3 opacity-30" />
+            <Search className="w-10 h-10 mb-3 opacity-30" aria-hidden="true" />
             <p className="text-sm">Search for products using natural language</p>
           </div>
         )}
