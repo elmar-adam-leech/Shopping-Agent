@@ -1,3 +1,13 @@
+/**
+ * Tenant (store) validation middleware.
+ *
+ * Ensures the `:storeDomain` route parameter refers to a registered and
+ * valid Shopify store. Validated stores are cached in an LRU cache (60 s TTL,
+ * 500 entries) to reduce database hits.
+ *
+ * On success the full `Store` object is attached to `req.store`.
+ */
+
 import type { Request, Response, NextFunction } from "express";
 import { db, storesTable } from "@workspace/db";
 import type { Store } from "@workspace/db/schema";
@@ -16,6 +26,7 @@ declare global {
 
 const storeCache = new LRUCache<Store>(500, 60_000);
 
+/** Remove a store from the in-memory cache, forcing the next lookup to hit the database. */
 export function invalidateStoreCache(storeDomain: string): void {
   storeCache.delete(storeDomain);
 }
@@ -36,6 +47,12 @@ async function getCachedStore(storeDomain: string): Promise<Store | null> {
   return store ?? null;
 }
 
+/**
+ * Express middleware that validates the `:storeDomain` route parameter.
+ * Checks format against `SHOPIFY_DOMAIN_PATTERN`, then looks up the store
+ * in the LRU cache or database. Attaches `req.store` on success;
+ * responds 400 (bad format) or 404 (not found) on failure.
+ */
 export async function validateStoreDomain(
   req: Request,
   res: Response,

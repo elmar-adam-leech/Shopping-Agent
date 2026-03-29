@@ -13,7 +13,7 @@ interface CartStoreActions {
   addItem: (item: { id: string; title: string; price: number; imageUrl?: string }) => void;
 }
 
-interface UseChatStreamOptions {
+export interface UseChatStreamOptions {
   storeDomain: string;
   sessionId: string | null;
   conversationId?: number | null;

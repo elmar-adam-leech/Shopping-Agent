@@ -2,12 +2,12 @@ import { memo } from "react";
 import { Plus, Trash2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { ChatMessageDisplay } from "./MessageBubble";
+import type { ChatMessage } from "@workspace/api-client-react";
 
 interface ConversationItem {
   id: number;
   title: string;
-  messages: ChatMessageDisplay[];
+  messages: ChatMessage[];
   updatedAt: string;
 }
 

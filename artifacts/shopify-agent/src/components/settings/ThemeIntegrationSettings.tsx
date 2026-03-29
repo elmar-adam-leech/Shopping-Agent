@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useGetStore, useUpdateStore } from "@workspace/api-client-react";
+import { useGetStore, useUpdateStore, getGetStoreQueryKey } from "@workspace/api-client-react";
 import { Code, MessageSquare, Search, Package, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -7,7 +7,9 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
 export function ThemeIntegrationSettings({ storeDomain }: { storeDomain: string }) {
-  const { data: store } = useGetStore(storeDomain);
+  const { data: store } = useGetStore(storeDomain, {
+    query: { queryKey: getGetStoreQueryKey(storeDomain), staleTime: 60_000 },
+  });
   const { mutateAsync: updateStore, isPending: updating } = useUpdateStore();
   const { toast } = useToast();
 

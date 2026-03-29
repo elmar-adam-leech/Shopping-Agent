@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useListKnowledge, useCreateKnowledge, useDeleteKnowledge, useUpdateKnowledge } from "@workspace/api-client-react";
+import { useListKnowledge, useCreateKnowledge, useDeleteKnowledge, useUpdateKnowledge, getListKnowledgeQueryKey } from "@workspace/api-client-react";
 import { Trash2, Plus, ArrowUp, ArrowDown, Edit2, Check, X, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,9 @@ export const CATEGORIES = [
 ];
 
 export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
-  const { data: knowledgeList, refetch } = useListKnowledge(storeDomain);
+  const { data: knowledgeList, refetch } = useListKnowledge(storeDomain, undefined, {
+    query: { queryKey: getListKnowledgeQueryKey(storeDomain), staleTime: 60_000 },
+  });
   const { mutateAsync: createKnowledge, isPending: creating } = useCreateKnowledge();
   const { mutateAsync: deleteKnowledge } = useDeleteKnowledge();
   const { mutateAsync: updateKnowledge } = useUpdateKnowledge();

@@ -1,6 +1,6 @@
 import { useRoute } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetAnalytics } from "@workspace/api-client-react";
+import { useGetAnalytics, getGetAnalyticsQueryKey } from "@workspace/api-client-react";
 import { MessageSquare, Users, TrendingUp, Loader2 } from "lucide-react";
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
 
@@ -8,7 +8,9 @@ export default function AnalyticsPage() {
   const [, params] = useRoute("/:storeDomain/analytics");
   const storeDomain = params?.storeDomain || "";
   
-  const { data, isLoading } = useGetAnalytics(storeDomain, { days: 7 });
+  const { data, isLoading } = useGetAnalytics(storeDomain, { days: 7 }, {
+    query: { queryKey: getGetAnalyticsQueryKey(storeDomain, { days: 7 }), staleTime: 30_000 },
+  });
 
   if (isLoading) {
     return (

@@ -1,8 +1,8 @@
-import { useState, useRef, useEffect } from "react";
-import { MessageBubble, type ChatMessageDisplay } from "@/components/chat/MessageBubble";
+import { useState } from "react";
+import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ChatComposer } from "@/components/chat/ChatComposer";
-import { useChatStream } from "@/hooks/use-chat-stream";
 import { useSession } from "@/hooks/use-session";
+import { useChatOrchestration, messageKey } from "@/hooks/use-chat-orchestration";
 import { ChatLoadingIndicator } from "@/components/chat/ChatLoadingIndicator";
 import { Sparkles, Loader2 } from "lucide-react";
 
@@ -22,40 +22,28 @@ export function EmbedChatPanel({
   initialMessage,
 }: EmbedChatPanelProps) {
   const { sessionId } = useSession(storeDomain);
-  const [input, setInput] = useState("");
   const [conversationId, setConversationId] = useState<number | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const sentInitialRef = useRef(false);
 
   const context = productHandle || collectionHandle || cartToken
     ? { productHandle, collectionHandle, cartToken }
     : undefined;
 
-  const { messages, isLoading, sendMessage } = useChatStream({
+  const {
+    displayMessages,
+    isLoading,
+    input,
+    setInput,
+    messagesEndRef,
+    handleSubmit,
+    messages,
+  } = useChatOrchestration({
     storeDomain,
     sessionId: sessionId || "",
     conversationId,
     context,
     onConversationId: (id) => setConversationId(id),
+    autoSendMessage: initialMessage,
   });
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  useEffect(() => {
-    if (initialMessage && sessionId && !sentInitialRef.current) {
-      sentInitialRef.current = true;
-      sendMessage(initialMessage);
-    }
-  }, [initialMessage, sessionId, sendMessage]);
-
-  const handleSubmit = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!input.trim() || isLoading) return;
-    sendMessage(input);
-    setInput("");
-  };
 
   if (!sessionId) {
     return (
@@ -80,8 +68,8 @@ export function EmbedChatPanel({
           </div>
         ) : (
           <div className="max-w-4xl mx-auto space-y-6">
-            {messages.map((msg, i) => (
-              <MessageBubble key={i} message={msg as ChatMessageDisplay} />
+            {displayMessages.map((msg, i) => (
+              <MessageBubble key={messageKey(messages[i], i)} message={msg} />
             ))}
             {isLoading && <ChatLoadingIndicator />}
             <div ref={messagesEndRef} />

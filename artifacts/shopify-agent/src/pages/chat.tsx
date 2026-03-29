@@ -1,20 +1,21 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useRoute } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { CartPanel } from "@/components/chat/cart-panel";
-import { MessageBubble, type ChatMessageDisplay } from "@/components/chat/MessageBubble";
+import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { PreferencesPanel } from "@/components/chat/PreferencesPanel";
 import { ChatEmptyState } from "@/components/chat/ChatEmptyState";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { useSession } from "@/hooks/use-session";
-import { useChatStream } from "@/hooks/use-chat-stream";
+import { useChatOrchestration, messageKey } from "@/hooks/use-chat-orchestration";
 import { useCartStore } from "@/store/use-cart-store";
-import { useListConversations, useGetPreferences, useUpdatePreferences, deleteConversation } from "@workspace/api-client-react";
+import { useListConversations, useGetPreferences, useUpdatePreferences, deleteConversation, getGetPreferencesQueryKey, type Conversation } from "@workspace/api-client-react";
 import { ChatLoadingIndicator } from "@/components/chat/ChatLoadingIndicator";
 import { Sparkles, Loader2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useEffect, useRef } from "react";
 
 export default function ChatPage() {
   const [, params] = useRoute("/:storeDomain/chat");
@@ -23,20 +24,19 @@ export default function ChatPage() {
   const cartStore = useCartStore();
   const { toast } = useToast();
 
-  const [input, setInput] = useState("");
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [showPrefs, setShowPrefs] = useState(false);
   const [convOffset, setConvOffset] = useState(0);
-  const [allConversations, setAllConversations] = useState<Array<{ id: number; title: string; messages: ChatMessageDisplay[]; updatedAt: string }>>([]);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [allConversations, setAllConversations] = useState<Conversation[]>([]);
 
   const CONV_PAGE_SIZE = 50;
-  const conversationsResult = useListConversations(storeDomain, { sessionId: sessionId || "", limit: String(CONV_PAGE_SIZE), offset: String(convOffset) } as { sessionId: string });
+  const convParams = { sessionId: sessionId || "", limit: String(CONV_PAGE_SIZE), offset: String(convOffset) };
+  const conversationsResult = useListConversations(storeDomain, convParams);
   const refetchConversations = conversationsResult.refetch;
 
   useEffect(() => {
     if (conversationsResult.data) {
-      const newData = conversationsResult.data as Array<{ id: number; title: string; messages: ChatMessageDisplay[]; updatedAt: string }>;
+      const newData = conversationsResult.data;
       if (convOffset === 0) {
         setAllConversations(newData);
       } else {
@@ -56,7 +56,17 @@ export default function ChatPage() {
     setConvOffset(prev => prev + CONV_PAGE_SIZE);
   }, []);
 
-  const { messages, isLoading, sendMessage, loadMessages } = useChatStream({
+  const {
+    displayMessages,
+    isLoading,
+    input,
+    setInput,
+    messagesEndRef,
+    handleSubmit,
+    loadMessages,
+    messages,
+    error,
+  } = useChatOrchestration({
     storeDomain,
     sessionId: sessionId || "",
     conversationId: activeConversationId,
@@ -66,13 +76,22 @@ export default function ChatPage() {
     onCartError: (msg) => toast({ title: "Cart Error", description: msg, variant: "destructive" }),
   });
 
-  const { data: prefsData } = useGetPreferences(storeDomain, { sessionId: sessionId || "" });
-  const { mutateAsync: updatePrefs } = useUpdatePreferences();
-  const userPrefs = (prefsData?.prefs || {}) as Record<string, string>;
-
+  const prevErrorRef = useRef<string | null>(null);
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (error && error !== prevErrorRef.current) {
+      toast({ title: "Chat Error", description: error, variant: "destructive" });
+    }
+    prevErrorRef.current = error;
+  }, [error, toast]);
+
+  const prefsParams = { sessionId: sessionId || "" };
+  const { data: prefsData } = useGetPreferences(storeDomain, prefsParams, {
+    query: { queryKey: getGetPreferencesQueryKey(storeDomain, prefsParams), staleTime: 30_000 },
+  });
+  const { mutateAsync: updatePrefs } = useUpdatePreferences();
+  const userPrefs: Record<string, string> = prefsData?.prefs
+    ? Object.fromEntries(Object.entries(prefsData.prefs).map(([k, v]) => [k, String(v ?? "")]))
+    : {};
 
   const handlePrefChange = useCallback(async (key: string, value: string) => {
     if (!sessionId) return;
@@ -83,20 +102,13 @@ export default function ChatPage() {
     }
   }, [sessionId, storeDomain, updatePrefs, userPrefs, toast]);
 
-  const handleSubmit = useCallback((e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!input.trim() || isLoading) return;
-    sendMessage(input);
-    setInput("");
-  }, [input, isLoading, sendMessage]);
-
   const startNewConversation = useCallback(() => {
     setActiveConversationId(null);
     setConvOffset(0);
     loadMessages([]);
   }, [loadMessages]);
 
-  const selectConversation = useCallback((conv: { id: number; messages: ChatMessageDisplay[] }) => {
+  const selectConversation = useCallback((conv: Conversation) => {
     setActiveConversationId(conv.id);
     loadMessages(conv.messages || []);
   }, [loadMessages]);
@@ -128,7 +140,7 @@ export default function ChatPage() {
     <AppLayout storeDomain={storeDomain}>
       <div className="flex h-full relative overflow-hidden">
         <ConversationSidebar
-          conversations={conversations as Array<{ id: number; title: string; messages: ChatMessageDisplay[]; updatedAt: string }> | undefined}
+          conversations={conversations}
           activeConversationId={activeConversationId}
           onNewConversation={startNewConversation}
           onSelectConversation={selectConversation}
@@ -157,8 +169,8 @@ export default function ChatPage() {
               <ChatEmptyState storeDomain={storeDomain} onPresetClick={setInput} />
             ) : (
               <div className="max-w-4xl mx-auto space-y-6">
-                {messages.map((msg, i) => (
-                  <MessageBubble key={i} message={msg as ChatMessageDisplay} />
+                {displayMessages.map((msg, i) => (
+                  <MessageBubble key={messageKey(messages[i], i)} message={msg} />
                 ))}
                 {isLoading && <ChatLoadingIndicator />}
                 <div ref={messagesEndRef} />

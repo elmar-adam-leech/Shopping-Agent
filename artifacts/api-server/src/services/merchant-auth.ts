@@ -1,3 +1,16 @@
+/**
+ * Merchant authentication service.
+ *
+ * Provides token-based authentication for merchant dashboard routes.
+ * Tokens use the `mtkn_` prefix and are stored as session rows in the
+ * database with a configurable TTL. Two middleware variants are exported:
+ *
+ * - `validateMerchantAuth` — expects a `:storeDomain` route param and
+ *   verifies the token belongs to that store.
+ * - `validateMerchantAuthForStoreList` — used on routes without a store
+ *   param; attaches the authenticated store domain to `req.merchantStoreDomain`.
+ */
+
 import crypto from "crypto";
 import { type Request, type Response, type NextFunction } from "express";
 import { eq, and, gt } from "drizzle-orm";
@@ -7,10 +20,15 @@ import { sendError } from "../lib/error-response";
 const MERCHANT_TOKEN_PREFIX = "mtkn_";
 const MERCHANT_SESSION_TTL_HOURS = 72;
 
+/** Generate a cryptographically random merchant authentication token with the `mtkn_` prefix. */
 export function generateMerchantToken(): string {
   return MERCHANT_TOKEN_PREFIX + crypto.randomBytes(32).toString("hex");
 }
 
+/**
+ * Create a new merchant session for the given store domain.
+ * Inserts a session row in the database and returns the generated token.
+ */
 export async function createMerchantSession(storeDomain: string): Promise<string> {
   const token = generateMerchantToken();
   const now = new Date();
@@ -82,6 +100,7 @@ async function validateMerchantAuthCore(
   next();
 }
 
+/** Express middleware that validates a merchant token and checks it matches the `:storeDomain` route param. */
 export async function validateMerchantAuth(
   req: Request,
   res: Response,
@@ -90,6 +109,7 @@ export async function validateMerchantAuth(
   return validateMerchantAuthCore(req, res, next, { requireStoreDomainParam: true });
 }
 
+/** Express middleware that validates a merchant token without a store param; sets `req.merchantStoreDomain`. */
 export async function validateMerchantAuthForStoreList(
   req: Request,
   res: Response,

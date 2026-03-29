@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useGetStore, useUpdateStore } from "@workspace/api-client-react";
+import { useGetStore, useUpdateStore, getGetStoreQueryKey } from "@workspace/api-client-react";
 import { Save, Key, Database, Globe, Shield, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 type ProviderValue = "openai" | "anthropic" | "xai";
 
 export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
-  const { data: store } = useGetStore(storeDomain);
+  const { data: store } = useGetStore(storeDomain, { query: { queryKey: getGetStoreQueryKey(storeDomain), staleTime: 60_000 } });
   const { mutateAsync: updateStore, isPending: updating } = useUpdateStore();
   const { toast } = useToast();
 

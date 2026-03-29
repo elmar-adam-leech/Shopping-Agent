@@ -24,8 +24,20 @@ const router: IRouter = Router();
 
 type ProviderValue = "openai" | "anthropic" | "xai";
 
-function storeToResponse(store: Store) {
-  const response: Record<string, unknown> = {
+interface StoreResponse {
+  storeDomain: string;
+  storefrontToken: string | null;
+  provider: string;
+  model: string;
+  hasApiKey: boolean;
+  ucpCompliant: boolean;
+  chatEnabled: boolean;
+  embedEnabled: boolean;
+  createdAt: Date;
+}
+
+function storeToResponse(store: Store): StoreResponse {
+  return {
     storeDomain: store.storeDomain,
     storefrontToken: store.storefrontToken,
     provider: store.provider,
@@ -36,8 +48,6 @@ function storeToResponse(store: Store) {
     embedEnabled: store.embedEnabled,
     createdAt: store.createdAt,
   };
-
-  return response;
 }
 
 router.get("/stores", validateMerchantAuthForStoreList, async (req, res): Promise<void> => {
