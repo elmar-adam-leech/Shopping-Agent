@@ -3,6 +3,8 @@ import crypto from "crypto";
 import { db, storesTable, pendingOAuthStatesTable } from "@workspace/db";
 import { eq, lt, gt, and, sql } from "drizzle-orm";
 import { createMerchantSession } from "../services/merchant-auth";
+import { encrypt } from "../services/encryption";
+import { SHOPIFY_DOMAIN_PATTERN } from "../lib/validation";
 
 const router: IRouter = Router();
 
@@ -13,8 +15,6 @@ const SCOPES = "unauthenticated_read_product_listings,unauthenticated_read_colle
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 const MAX_PENDING_STATES = 10000;
-
-const SHOPIFY_DOMAIN_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$/;
 
 async function cleanExpiredStates() {
   await db.delete(pendingOAuthStatesTable).where(lt(pendingOAuthStatesTable.expiresAt, new Date()));
@@ -71,7 +71,10 @@ router.get("/auth/install", async (req, res): Promise<void> => {
 });
 
 router.get("/auth/callback", async (req, res): Promise<void> => {
-  const { code, shop, hmac, state } = req.query as Record<string, string>;
+  const code = typeof req.query.code === "string" ? req.query.code : Array.isArray(req.query.code) ? String(req.query.code[0]) : undefined;
+  const shop = typeof req.query.shop === "string" ? req.query.shop : Array.isArray(req.query.shop) ? String(req.query.shop[0]) : undefined;
+  const hmac = typeof req.query.hmac === "string" ? req.query.hmac : Array.isArray(req.query.hmac) ? String(req.query.hmac[0]) : undefined;
+  const state = typeof req.query.state === "string" ? req.query.state : Array.isArray(req.query.state) ? String(req.query.state[0]) : undefined;
 
   if (!code || !shop || !hmac || !state) {
     res.status(400).json({ error: "Missing required parameters" });
@@ -106,8 +109,11 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
     return;
   }
 
-  const params = { ...req.query } as Record<string, string>;
-  delete params.hmac;
+  const params: Record<string, string> = {};
+  for (const [key, value] of Object.entries(req.query)) {
+    if (key === "hmac") continue;
+    params[key] = typeof value === "string" ? value : Array.isArray(value) ? String(value[0]) : String(value);
+  }
   const sortedParams = Object.keys(params)
     .sort()
     .map((key) => `${key}=${params[key]}`)
@@ -163,15 +169,17 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
       .from(storesTable)
       .where(eq(storesTable.storeDomain, shop));
 
+    const encryptedAccessToken = encrypt(tokenData.access_token);
+
     if (existing.length > 0) {
       await db
         .update(storesTable)
-        .set({ accessToken: tokenData.access_token })
+        .set({ accessToken: encryptedAccessToken })
         .where(eq(storesTable.storeDomain, shop));
     } else {
       await db.insert(storesTable).values({
         storeDomain: shop,
-        accessToken: tokenData.access_token,
+        accessToken: encryptedAccessToken,
         provider: "openai",
         model: "gpt-4o",
       });
@@ -187,7 +195,7 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
 });
 
 router.post("/auth/login", async (req, res): Promise<void> => {
-  if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV !== "development") {
     res.status(404).json({ error: "Not found" });
     return;
   }

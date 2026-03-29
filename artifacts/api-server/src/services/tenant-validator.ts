@@ -3,6 +3,7 @@ import { db, storesTable } from "@workspace/db";
 import type { Store } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { LRUCache } from "./lru-cache";
+import { SHOPIFY_DOMAIN_PATTERN } from "../lib/validation";
 
 declare global {
   namespace Express {
@@ -48,8 +49,7 @@ export async function validateStoreDomain(
     return;
   }
 
-  const domainPattern = /^[a-zA-Z0-9][a-zA-Z0-9-]*\.myshopify\.com$/;
-  if (!domainPattern.test(storeDomain)) {
+  if (!SHOPIFY_DOMAIN_PATTERN.test(storeDomain)) {
     res.status(400).json({ error: "Invalid store domain format" });
     return;
   }

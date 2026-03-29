@@ -90,7 +90,7 @@ router.post("/stores", validateMerchantAuthForStoreList, async (req, res): Promi
       storefrontToken: parsed.data.storefrontToken,
       provider: parsed.data.provider as ProviderValue,
       model: parsed.data.model,
-      apiKey: encryptedApiKey ?? parsed.data.apiKey,
+      apiKey: encryptedApiKey,
     })
     .returning();
 
