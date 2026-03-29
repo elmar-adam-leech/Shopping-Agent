@@ -15,6 +15,7 @@ import {
 import { validateMerchantAuth, validateMerchantAuthForStoreList } from "../services/merchant-auth";
 import { invalidateStoreCache } from "../services/tenant-validator";
 import { encrypt } from "../services/encryption";
+import { invalidateToolsListCache } from "../services/mcp-client";
 
 const router: IRouter = Router();
 
@@ -162,6 +163,9 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
   }
 
   invalidateStoreCache(params.data.storeDomain);
+  if (parsed.data.storefrontToken !== undefined || parsed.data.ucpCompliant !== undefined) {
+    invalidateToolsListCache(params.data.storeDomain);
+  }
   res.json(UpdateStoreResponse.parse(storeToResponse(store)));
 });
 

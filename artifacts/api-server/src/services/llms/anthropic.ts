@@ -95,6 +95,20 @@ function createAnthropicAdapter(): ProviderAdapter {
       return { text: "", contentBlocks: [], currentToolUse: null };
     },
 
+    /**
+     * Accumulates streaming SSE events into the assistant state for Anthropic's Messages API.
+     *
+     * Anthropic streams content as a series of block-level events:
+     * - "content_block_start": Signals a new content block (text or tool_use). For tool_use
+     *   blocks, we initialize a currentToolUse accumulator to collect streamed JSON input.
+     * - "content_block_delta": Delivers incremental content. Text deltas are appended to
+     *   the running text, while input_json_delta fragments are concatenated into the
+     *   currentToolUse's input string (Anthropic streams tool arguments as partial JSON).
+     * - "content_block_stop": Finalizes the current block. For tool_use, the accumulated
+     *   JSON input string is parsed into an object and pushed to contentBlocks. For text,
+     *   the accumulated text is pushed as a text block. This allows getToolCalls() to later
+     *   extract completed tool calls from contentBlocks.
+     */
     accumulateAssistantState(state: unknown, event: SSEEvent): void {
       let data: Record<string, unknown>;
       try {

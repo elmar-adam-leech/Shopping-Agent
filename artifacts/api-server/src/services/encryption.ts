@@ -6,14 +6,23 @@ const TAG_LENGTH = 16;
 const ENCODING = "base64" as const;
 const PREFIX = "enc:";
 
+let _cachedKey: Buffer | null | undefined;
+
 function getEncryptionKey(): Buffer | null {
+  if (_cachedKey !== undefined) return _cachedKey;
+
   const key = process.env.ENCRYPTION_KEY;
-  if (!key) return null;
+  if (!key) {
+    _cachedKey = null;
+    return null;
+  }
   const buf = Buffer.from(key, "hex");
   if (buf.length !== 32) {
     console.error("[encryption] ENCRYPTION_KEY must be 64 hex characters (32 bytes). Got", buf.length, "bytes.");
+    _cachedKey = null;
     return null;
   }
+  _cachedKey = buf;
   return buf;
 }
 

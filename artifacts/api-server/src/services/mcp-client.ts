@@ -50,6 +50,16 @@ import { LRUCache } from "./lru-cache";
 
 const ucpCache = new LRUCache<UCPDiscoveryDocument | null>(1000, 5 * 60 * 1000);
 
+interface ToolsListCacheEntry {
+  tools: MCPTool[];
+}
+
+const toolsListCache = new LRUCache<ToolsListCacheEntry>(500, 5 * 60 * 1000);
+
+export function invalidateToolsListCache(storeDomain: string): void {
+  toolsListCache.delete(storeDomain);
+}
+
 function nextId(): string {
   return crypto.randomUUID();
 }
@@ -206,32 +216,45 @@ function getUCPToolsForCapabilities(ucpDoc: UCPDiscoveryDocument): MCPTool[] {
 
 export async function listTools(storeDomain: string, storefrontToken: string, ucpEnabled: boolean = true): Promise<{ tools: MCPTool[]; ucpDoc: UCPDiscoveryDocument | null }> {
   let mcpTools: MCPTool[];
-  try {
-    const response = await fetch(`https://${storeDomain}/api/mcp`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Shopify-Storefront-Access-Token": storefrontToken,
-      },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: nextId(),
-        method: "tools/list",
-        params: {},
-      }),
-      signal: AbortSignal.timeout(15_000),
-    });
 
-    if (!response.ok) {
-      console.error(`[mcp-tools-list] store="${storeDomain}" status=${response.status} — falling back to default tools`);
+  const cached = toolsListCache.get(storeDomain);
+  if (cached) {
+    mcpTools = cached.tools;
+  } else {
+    let usedFallback = false;
+    try {
+      const response = await fetch(`https://${storeDomain}/api/mcp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Storefront-Access-Token": storefrontToken,
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: nextId(),
+          method: "tools/list",
+          params: {},
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+
+      if (!response.ok) {
+        console.error(`[mcp-tools-list] store="${storeDomain}" status=${response.status} — falling back to default tools`);
+        mcpTools = getDefaultTools();
+        usedFallback = true;
+      } else {
+        const data = (await response.json()) as JsonRpcResponse;
+        mcpTools = data.result?.tools || getDefaultTools();
+      }
+    } catch (err) {
+      console.error(`[mcp-tools-list] store="${storeDomain}" status=error error="${err instanceof Error ? err.message : "Unknown error"}" — falling back to default tools`);
       mcpTools = getDefaultTools();
-    } else {
-      const data = (await response.json()) as JsonRpcResponse;
-      mcpTools = data.result?.tools || getDefaultTools();
+      usedFallback = true;
     }
-  } catch (err) {
-    console.error(`[mcp-tools-list] store="${storeDomain}" status=error error="${err instanceof Error ? err.message : "Unknown error"}" — falling back to default tools`);
-    mcpTools = getDefaultTools();
+
+    if (!usedFallback) {
+      toolsListCache.set(storeDomain, { tools: mcpTools });
+    }
   }
 
   const ucpToolNames = new Set(getUCPTools().map(t => t.name));

@@ -4,7 +4,7 @@ import { db, conversationsTable, shopKnowledgeTable, analyticsLogsTable } from "
 import type { Conversation, ShopKnowledge } from "@workspace/db/schema";
 import { SendChatParams, SendChatBody } from "@workspace/api-zod";
 import { streamChatWithProvider } from "../services/llm-service";
-import { listTools, callTool, type MCPTool } from "../services/mcp-client";
+import { listTools, callTool, type MCPTool, type UCPDiscoveryDocument } from "../services/mcp-client";
 import { fetchBlogs, fetchCollections } from "../services/graphql-client";
 import { buildSystemPrompt } from "../services/system-prompt";
 import { validateStoreDomain } from "../services/tenant-validator";
@@ -13,6 +13,7 @@ import { LRUCache } from "../services/lru-cache";
 import { decrypt } from "../services/encryption";
 
 const MAX_USER_MESSAGE_LENGTH = 10_000;
+const MESSAGE_WINDOW_SIZE = 20;
 
 const router: IRouter = Router();
 
@@ -44,6 +45,13 @@ async function getCachedKnowledge(storeDomain: string): Promise<ShopKnowledge[]>
   return data;
 }
 
+/**
+ * Executes an MCP tool call with a GraphQL fallback for collections and blogs.
+ *
+ * First attempts the tool call via the MCP JSON-RPC endpoint. If it fails,
+ * checks whether the tool has a known GraphQL-based fallback (collections or blogs)
+ * and uses the Storefront API directly. If no fallback exists, returns a JSON error.
+ */
 async function executeToolWithFallback(
   storeDomain: string,
   storefrontToken: string,
@@ -74,6 +82,106 @@ async function executeToolWithFallback(
       return JSON.stringify(data);
     }
     return JSON.stringify({ error: `Tool ${toolName} failed and no fallback available` });
+  }
+}
+
+async function loadOrCreateConversation(
+  storeDomain: string,
+  sessionId: string,
+  conversationId: number | null | undefined,
+  messagePreview: string
+): Promise<{ conversation: Conversation; existingMessages: ChatMessageRecord[] }> {
+  let conversation: Conversation | null = null;
+  let existingMessages: ChatMessageRecord[] = [];
+
+  if (conversationId != null) {
+    const [conv] = await db
+      .select()
+      .from(conversationsTable)
+      .where(
+        and(
+          eq(conversationsTable.id, conversationId),
+          eq(conversationsTable.storeDomain, storeDomain),
+          eq(conversationsTable.sessionId, sessionId)
+        )
+      );
+    if (conv) {
+      conversation = conv;
+      existingMessages = (conv.messages as ChatMessageRecord[]) || [];
+    }
+  }
+
+  if (!conversation) {
+    const title = messagePreview.slice(0, 50) + (messagePreview.length > 50 ? "..." : "");
+    const [newConv] = await db
+      .insert(conversationsTable)
+      .values({
+        storeDomain,
+        sessionId,
+        title,
+        messages: [],
+      })
+      .returning();
+    conversation = newConv;
+  }
+
+  return { conversation, existingMessages };
+}
+
+/**
+ * Builds the LLM context by applying message windowing and constructing the system prompt.
+ *
+ * Windowing keeps only the most recent MESSAGE_WINDOW_SIZE messages to prevent
+ * context window overflow for long conversations. The system prompt is always
+ * included separately (not counted in the window).
+ */
+function buildLLMContext(
+  existingMessages: ChatMessageRecord[],
+  storeDomain: string,
+  knowledge: ShopKnowledge[],
+  ucpDoc: UCPDiscoveryDocument | null,
+  chatContext?: { productHandle?: string; collectionHandle?: string; cartToken?: string; searchMode?: boolean }
+) {
+  const windowedMessages = existingMessages.length > MESSAGE_WINDOW_SIZE
+    ? existingMessages.slice(-MESSAGE_WINDOW_SIZE)
+    : existingMessages;
+
+  const systemPrompt = buildSystemPrompt(storeDomain, knowledge, ucpDoc, chatContext);
+
+  const llmMessages = windowedMessages.map((m) => ({
+    role: m.role,
+    content: m.content,
+    tool_call_id: m.toolCallId,
+  }));
+
+  return { systemPrompt, llmMessages };
+}
+
+async function persistChatResult(
+  conversationId: number,
+  storeDomain: string,
+  sessionId: string,
+  messages: ChatMessageRecord[],
+  userQuery: string
+): Promise<void> {
+  try {
+    await db
+      .update(conversationsTable)
+      .set({ messages })
+      .where(eq(conversationsTable.id, conversationId));
+  } catch (err) {
+    console.error(`[chat] FAILED to save conversation id="${conversationId}" store="${storeDomain}":`, err);
+  }
+
+  try {
+    await db.insert(analyticsLogsTable).values({
+      storeDomain,
+      eventType: "chat",
+      query: userQuery.slice(0, 500),
+      sessionId,
+    });
+  } catch (err) {
+    console.error(`[chat] FAILED to insert analytics log store="${storeDomain}" session="${sessionId}":`, err);
   }
 }
 
@@ -134,39 +242,12 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
   try {
     const knowledge = await getCachedKnowledge(store.storeDomain);
 
-    let conversation: Conversation | null = null;
-    let existingMessages: ChatMessageRecord[] = [];
-
-    if (parsed.data.conversationId) {
-      const [conv] = await db
-        .select()
-        .from(conversationsTable)
-        .where(
-          and(
-            eq(conversationsTable.id, parsed.data.conversationId),
-            eq(conversationsTable.storeDomain, store.storeDomain),
-            eq(conversationsTable.sessionId, parsed.data.sessionId)
-          )
-        );
-      if (conv) {
-        conversation = conv;
-        existingMessages = (conv.messages as ChatMessageRecord[]) || [];
-      }
-    }
-
-    if (!conversation) {
-      const title = parsed.data.message.slice(0, 50) + (parsed.data.message.length > 50 ? "..." : "");
-      const [newConv] = await db
-        .insert(conversationsTable)
-        .values({
-          storeDomain: store.storeDomain,
-          sessionId: parsed.data.sessionId,
-          title,
-          messages: [],
-        })
-        .returning();
-      conversation = newConv;
-    }
+    const { conversation, existingMessages } = await loadOrCreateConversation(
+      store.storeDomain,
+      parsed.data.sessionId,
+      parsed.data.conversationId,
+      parsed.data.message
+    );
 
     const truncatedMessage = parsed.data.message.length > MAX_USER_MESSAGE_LENGTH
       ? parsed.data.message.slice(0, MAX_USER_MESSAGE_LENGTH)
@@ -200,13 +281,13 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       searchMode: parsed.data.context.searchMode,
     } : undefined;
 
-    const systemPrompt = buildSystemPrompt(store.storeDomain, knowledge, ucpDoc, chatContext);
-
-    const llmMessages = existingMessages.map((m) => ({
-      role: m.role,
-      content: m.content,
-      tool_call_id: m.toolCallId,
-    }));
+    const { systemPrompt, llmMessages } = buildLLMContext(
+      existingMessages,
+      store.storeDomain,
+      knowledge,
+      ucpDoc,
+      chatContext
+    );
 
     let fullAssistantContent = "";
     const toolCalls: Array<{ id: string; name: string; arguments: string }> = [];
@@ -250,17 +331,13 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
 
     existingMessages.push(assistantMessage);
 
-    await db
-      .update(conversationsTable)
-      .set({ messages: existingMessages })
-      .where(eq(conversationsTable.id, conversation.id));
-
-    await db.insert(analyticsLogsTable).values({
-      storeDomain: store.storeDomain,
-      eventType: "chat",
-      query: truncatedMessage.slice(0, 500),
-      sessionId: parsed.data.sessionId,
-    });
+    await persistChatResult(
+      conversation.id,
+      store.storeDomain,
+      parsed.data.sessionId,
+      existingMessages,
+      truncatedMessage
+    );
   } catch (err: unknown) {
     if (clientDisconnected) return;
     console.error(`Chat error for store="${store.storeDomain}" session="${parsed.data.sessionId}":`, err);

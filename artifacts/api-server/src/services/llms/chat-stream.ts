@@ -118,6 +118,11 @@ export async function* streamChat(
   let continueLoop = true;
   let iterations = 0;
 
+  // Tool-call loop: the LLM may request tool calls in its response. When it does,
+  // we execute those tools, append the results to the message history, and re-invoke
+  // the LLM so it can incorporate the tool output. This loop continues until either
+  // the LLM produces a final text response with no tool calls, the iteration limit
+  // is reached (preventing infinite loops), or the client disconnects (abort signal).
   while (continueLoop) {
     if (++iterations > maxToolRounds) {
       yield { type: "error", data: `Tool-call loop exceeded maximum of ${maxToolRounds} iterations` };
@@ -148,6 +153,8 @@ export async function* streamChat(
 
     const assistantState = adapter.createAssistantState();
 
+    // Stream SSE events from the provider, accumulating assistant state (text + tool calls)
+    // and forwarding parsed events to the caller for real-time SSE delivery to the client.
     for await (const sseEvent of parseSSE(response.body)) {
       if (signal?.aborted) return;
       if (adapter.isDone(sseEvent)) break;
@@ -164,6 +171,9 @@ export async function* streamChat(
 
     const toolCalls = adapter.getToolCalls(assistantState);
 
+    // If the LLM requested tool calls, execute them all in parallel, yield the results
+    // as SSE events, append the assistant message + tool results to the conversation,
+    // and set continueLoop=true so the LLM is re-invoked with the updated context.
     if (toolCalls.length > 0) {
       for (const tc of toolCalls) {
         yield { type: "tool_call", data: { id: tc.id, name: tc.name, arguments: tc.arguments } };

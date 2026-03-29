@@ -44,10 +44,15 @@ async function lookupValidSession(token: string) {
   return session ?? null;
 }
 
-export async function validateMerchantAuth(
+interface MerchantAuthOptions {
+  requireStoreDomainParam: boolean;
+}
+
+async function validateMerchantAuthCore(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
+  options: MerchantAuthOptions
 ): Promise<void> {
   const token = extractToken(req);
 
@@ -63,13 +68,25 @@ export async function validateMerchantAuth(
     return;
   }
 
-  const storeDomain = req.params.storeDomain;
-  if (storeDomain && session.storeDomain !== storeDomain) {
-    res.status(403).json({ error: "Access denied: token does not match store" });
-    return;
+  if (options.requireStoreDomainParam) {
+    const storeDomain = req.params.storeDomain;
+    if (storeDomain && session.storeDomain !== storeDomain) {
+      res.status(403).json({ error: "Access denied: token does not match store" });
+      return;
+    }
+  } else {
+    (req as Request & { merchantStoreDomain: string }).merchantStoreDomain = session.storeDomain;
   }
 
   next();
+}
+
+export async function validateMerchantAuth(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  return validateMerchantAuthCore(req, res, next, { requireStoreDomainParam: true });
 }
 
 export async function validateMerchantAuthForStoreList(
@@ -77,20 +94,5 @@ export async function validateMerchantAuthForStoreList(
   res: Response,
   next: NextFunction
 ): Promise<void> {
-  const token = extractToken(req);
-
-  if (!token || !token.startsWith(MERCHANT_TOKEN_PREFIX)) {
-    res.status(401).json({ error: "Merchant authentication required" });
-    return;
-  }
-
-  const session = await lookupValidSession(token);
-
-  if (!session) {
-    res.status(401).json({ error: "Invalid or expired merchant session" });
-    return;
-  }
-
-  (req as Request & { merchantStoreDomain: string }).merchantStoreDomain = session.storeDomain;
-  next();
+  return validateMerchantAuthCore(req, res, next, { requireStoreDomainParam: false });
 }
