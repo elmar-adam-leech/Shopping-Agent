@@ -13,8 +13,7 @@ export async function readSSEStream(
   const reader = body.getReader();
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
-  const MAX_FAILED_LINES = 50;
-  const failedLines = new Set<string>();
+  let pendingRetry: string | null = null;
 
   try {
     while (true) {
@@ -26,6 +25,12 @@ export async function readSSEStream(
       const lines = buffer.split("\n");
       buffer = lines.pop() || "";
 
+      if (pendingRetry !== null) {
+        lines.unshift(pendingRetry);
+      }
+      const retryingLine: string | null = pendingRetry;
+      pendingRetry = null;
+
       for (const line of lines) {
         if (!line.startsWith("data: ")) continue;
         const dataStr = line.substring(6).trim();
@@ -34,18 +39,14 @@ export async function readSSEStream(
         try {
           const event = JSON.parse(dataStr) as SSEEvent;
           onEvent(event);
-          failedLines.delete(line);
         } catch {
-          if (failedLines.has(line)) {
+          const isRetry = retryingLine !== null && line === retryingLine;
+          if (isRetry) {
             console.warn("[sse-parser] Discarding unparseable SSE line after retry:", line.slice(0, 200));
-            failedLines.delete(line);
+          } else if (pendingRetry === null) {
+            pendingRetry = line;
           } else {
-            if (failedLines.size >= MAX_FAILED_LINES) {
-              console.warn("[sse-parser] failedLines limit reached, clearing buffer");
-              failedLines.clear();
-            }
-            failedLines.add(line);
-            buffer = line + "\n" + buffer;
+            console.warn("[sse-parser] Discarding unparseable SSE line:", line.slice(0, 200));
           }
         }
       }

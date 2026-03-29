@@ -32,19 +32,16 @@ export default function AnalyticsPage() {
           <StatCard 
             title="Total Conversations" 
             value={data?.totalChats ?? 0} 
-            trend="+0%" 
             icon={<MessageSquare className="w-5 h-5 text-primary" />} 
           />
           <StatCard 
             title="Active Sessions" 
             value={data?.totalSessions ?? 0} 
-            trend="+0%" 
             icon={<Users className="w-5 h-5 text-emerald-500" />} 
           />
           <StatCard 
             title="Conversion Lift" 
             value="--" 
-            trend="--" 
             icon={<TrendingUp className="w-5 h-5 text-amber-500" />} 
           />
         </div>
@@ -98,16 +95,13 @@ export default function AnalyticsPage() {
   );
 }
 
-function StatCard({ title, value, trend, icon }: { title: string, value: string | number, trend: string, icon: React.ReactNode }) {
+function StatCard({ title, value, icon }: { title: string, value: string | number, icon: React.ReactNode }) {
   return (
     <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
       <div className="absolute -right-6 -top-6 w-24 h-24 bg-gradient-to-bl from-primary/10 to-transparent rounded-full blur-xl group-hover:scale-150 transition-transform duration-500" />
       <div className="flex justify-between items-start mb-4 relative z-10">
         <div className="p-3 bg-secondary/50 rounded-xl">
           {icon}
-        </div>
-        <div className="px-2.5 py-1 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs font-bold rounded-full">
-          {trend}
         </div>
       </div>
       <div className="relative z-10">

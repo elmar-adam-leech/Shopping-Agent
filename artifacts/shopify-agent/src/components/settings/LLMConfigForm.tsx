@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
 type ProviderValue = "openai" | "anthropic" | "xai";
@@ -103,15 +104,10 @@ export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
               <p className="font-medium text-sm">Enable Chat Widget</p>
               <p className="text-xs text-muted-foreground mt-0.5">Allow customers to interact with your AI shopping assistant</p>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={chatEnabled}
-              onClick={() => setChatEnabled(!chatEnabled)}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${chatEnabled ? 'bg-blue-600' : 'bg-muted'}`}
-            >
-              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${chatEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
-            </button>
+            <Switch
+              checked={chatEnabled}
+              onCheckedChange={setChatEnabled}
+            />
           </div>
           {!chatEnabled && (
             <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
@@ -143,15 +139,10 @@ export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
               <p className="font-medium text-sm">Enable UCP Discovery</p>
               <p className="text-xs text-muted-foreground mt-0.5">Discover and use UCP checkout, order, and payment primitives via MCP</p>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={ucpCompliant}
-              onClick={() => setUcpCompliant(!ucpCompliant)}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${ucpCompliant ? 'bg-violet-600' : 'bg-muted'}`}
-            >
-              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${ucpCompliant ? 'translate-x-5' : 'translate-x-0'}`} />
-            </button>
+            <Switch
+              checked={ucpCompliant}
+              onCheckedChange={setUcpCompliant}
+            />
           </div>
         </div>
       </section>

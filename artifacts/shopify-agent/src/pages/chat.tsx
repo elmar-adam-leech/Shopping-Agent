@@ -11,9 +11,9 @@ import { useSession } from "@/hooks/use-session";
 import { useChatStream } from "@/hooks/use-chat-stream";
 import { useCartStore } from "@/store/use-cart-store";
 import { useListConversations, useGetPreferences, useUpdatePreferences, deleteConversation } from "@workspace/api-client-react";
+import { ChatLoadingIndicator } from "@/components/chat/ChatLoadingIndicator";
 import { Sparkles, Loader2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Avatar } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ChatPage() {
@@ -62,7 +62,8 @@ export default function ChatPage() {
     conversationId: activeConversationId,
     cartStore,
     onConversationId: (id) => setActiveConversationId(id),
-    onSuccess: () => { setConvOffset(0); refetchConversations(); }
+    onSuccess: () => { setConvOffset(0); refetchConversations(); },
+    onCartError: (msg) => toast({ title: "Cart Error", description: msg, variant: "destructive" }),
   });
 
   const { data: prefsData } = useGetPreferences(storeDomain, { sessionId: sessionId || "" });
@@ -159,16 +160,7 @@ export default function ChatPage() {
                 {messages.map((msg, i) => (
                   <MessageBubble key={i} message={msg as ChatMessageDisplay} />
                 ))}
-                {isLoading && (
-                  <div className="flex gap-4 max-w-[85%]">
-                    <Avatar className="w-10 h-10 border border-primary/20 bg-primary/5 flex items-center justify-center text-primary">
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    </Avatar>
-                    <div className="flex items-center text-sm text-muted-foreground bg-secondary/30 px-4 py-3 rounded-2xl rounded-tl-sm">
-                      Agent is thinking...
-                    </div>
-                  </div>
-                )}
+                {isLoading && <ChatLoadingIndicator />}
                 <div ref={messagesEndRef} />
               </div>
             )}

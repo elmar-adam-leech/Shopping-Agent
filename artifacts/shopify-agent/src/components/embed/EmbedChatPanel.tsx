@@ -3,8 +3,8 @@ import { MessageBubble, type ChatMessageDisplay } from "@/components/chat/Messag
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { useChatStream } from "@/hooks/use-chat-stream";
 import { useSession } from "@/hooks/use-session";
+import { ChatLoadingIndicator } from "@/components/chat/ChatLoadingIndicator";
 import { Sparkles, Loader2 } from "lucide-react";
-import { Avatar } from "@/components/ui/avatar";
 
 interface EmbedChatPanelProps {
   storeDomain: string;
@@ -83,16 +83,7 @@ export function EmbedChatPanel({
             {messages.map((msg, i) => (
               <MessageBubble key={i} message={msg as ChatMessageDisplay} />
             ))}
-            {isLoading && (
-              <div className="flex gap-4 max-w-[85%]">
-                <Avatar className="w-10 h-10 border border-primary/20 bg-primary/5 flex items-center justify-center text-primary">
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                </Avatar>
-                <div className="flex items-center text-sm text-muted-foreground bg-secondary/30 px-4 py-3 rounded-2xl rounded-tl-sm">
-                  Thinking...
-                </div>
-              </div>
-            )}
+            {isLoading && <ChatLoadingIndicator />}
             <div ref={messagesEndRef} />
           </div>
         )}
