@@ -16,9 +16,25 @@ import { type Request, type Response, type NextFunction } from "express";
 import { eq, and, gt } from "drizzle-orm";
 import { db, sessionsTable } from "@workspace/db";
 import { sendError } from "../lib/error-response";
+import { LRUCache } from "./lru-cache";
 
 const MERCHANT_TOKEN_PREFIX = "mtkn_";
 const MERCHANT_SESSION_TTL_HOURS = 72;
+
+interface CachedMerchantSession {
+  storeDomain: string;
+  expiresAt: number;
+}
+
+const merchantSessionCache = new LRUCache<CachedMerchantSession>(1000, 10_000);
+
+export function invalidateMerchantSessionCache(token: string): void {
+  merchantSessionCache.delete(token);
+}
+
+export function clearMerchantSessionCache(): void {
+  merchantSessionCache.clear();
+}
 
 /** Generate a cryptographically random merchant authentication token with the `mtkn_` prefix. */
 export function generateMerchantToken(): string {
@@ -50,7 +66,13 @@ function extractToken(req: Request): string | undefined {
   return authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : cookieToken;
 }
 
-async function lookupValidSession(token: string) {
+async function lookupValidSession(token: string): Promise<CachedMerchantSession | null> {
+  const cached = merchantSessionCache.get(token);
+  if (cached) {
+    if (cached.expiresAt > Date.now()) return cached;
+    merchantSessionCache.delete(token);
+  }
+
   const [session] = await db
     .select()
     .from(sessionsTable)
@@ -60,7 +82,15 @@ async function lookupValidSession(token: string) {
         gt(sessionsTable.expiresAt, new Date())
       )
     );
-  return session ?? null;
+
+  if (!session) return null;
+
+  const entry: CachedMerchantSession = {
+    storeDomain: session.storeDomain,
+    expiresAt: session.expiresAt.getTime(),
+  };
+  merchantSessionCache.set(token, entry);
+  return entry;
 }
 
 interface MerchantAuthOptions {

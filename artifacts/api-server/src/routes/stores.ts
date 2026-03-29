@@ -17,6 +17,7 @@ import { invalidateStoreCache, getCachedStorePublicInfo } from "../services/tena
 import { encrypt } from "../services/encryption";
 import { invalidateToolsListCache } from "../services/mcp-client";
 import { invalidateSessionCacheForDomain } from "../services/session-validator";
+import { clearMerchantSessionCache } from "../services/merchant-auth";
 import { invalidateKnowledgeCache } from "./chat";
 import { sendError, sendZodError } from "../lib/error-response";
 
@@ -207,6 +208,7 @@ router.delete("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pr
   await db.delete(storesTable).where(eq(storesTable.storeDomain, params.data.storeDomain));
   invalidateStoreCache(params.data.storeDomain);
   invalidateSessionCacheForDomain(params.data.storeDomain);
+  clearMerchantSessionCache();
   invalidateKnowledgeCache(params.data.storeDomain);
   invalidateToolsListCache(params.data.storeDomain);
   res.sendStatus(204);

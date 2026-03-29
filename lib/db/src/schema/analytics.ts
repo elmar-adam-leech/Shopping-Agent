@@ -19,6 +19,7 @@ export const analyticsLogsTable = pgTable("analytics_logs", {
   index("idx_analytics_store_created_event").on(table.storeDomain, table.createdAt, table.eventType),
   index("idx_analytics_query_notnull").on(table.storeDomain, table.query).where(sql`query IS NOT NULL`),
   index("idx_analytics_session").on(table.sessionId),
+  index("idx_analytics_query_normalized").using("btree", sql`lower(trim(${table.query}))`).where(sql`${table.query} is not null`),
 ]);
 
 export const insertAnalyticsSchema = createInsertSchema(analyticsLogsTable).omit({ id: true, createdAt: true });
