@@ -398,7 +398,21 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
   } catch (err: unknown) {
     if (clientDisconnected) return;
     console.error(`[chat] Error store="${store.storeDomain}":`, err instanceof Error ? err.message : "Unknown error");
-    safeSend(`data: ${JSON.stringify({ type: "error", data: "An error occurred processing your message" })}\n\n`);
+
+    let errorMessage = "An error occurred processing your message. Please try again.";
+    if (err instanceof Error) {
+      if (err.name === "AbortError" || err.message.includes("aborted")) {
+        return;
+      }
+      if (err.message.includes("ECONNREFUSED") || err.message.includes("ENOTFOUND")) {
+        errorMessage = "Unable to reach the AI provider. Please check your internet connection and try again.";
+      } else if (err.message.includes("timeout") || err.message.includes("ETIMEDOUT")) {
+        errorMessage = "The request timed out. Please try again with a shorter message.";
+      } else if (err.message.includes("database") || err.message.includes("connection")) {
+        errorMessage = "A temporary service issue occurred. Please try again in a moment.";
+      }
+    }
+    safeSend(`data: ${JSON.stringify({ type: "error", data: errorMessage })}\n\n`);
   } finally {
     res.end();
   }

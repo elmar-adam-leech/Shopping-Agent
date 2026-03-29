@@ -30,15 +30,17 @@ app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 const chatLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
-  message: { error: "Too many requests, please wait a moment" },
+  message: { error: "Too many messages sent. Please wait about a minute before trying again." },
   keyGenerator: (req) => req.ip || "unknown",
+  standardHeaders: true,
+  legacyHeaders: false,
   validate: false,
 });
 
 const sessionLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
-  message: { error: "Too many session requests, please wait a moment" },
+  message: { error: "Too many session requests. Please wait about a minute before trying again." },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -46,7 +48,7 @@ const sessionLimiter = rateLimit({
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
-  message: { error: "Too many login attempts, please wait a moment" },
+  message: { error: "Too many login attempts. Please wait about a minute before trying again." },
   standardHeaders: true,
   legacyHeaders: false,
 });

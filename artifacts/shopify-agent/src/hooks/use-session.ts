@@ -16,6 +16,7 @@ interface UseSessionOptions {
 interface UseSessionResult {
   sessionId: string | null;
   chatDisabled: boolean;
+  sessionError: boolean;
   refreshSession: () => Promise<string | null>;
 }
 
@@ -73,6 +74,7 @@ export function useSession(storeDomain: string, options?: UseSessionOptions): Us
 
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [chatDisabled, setChatDisabled] = useState(false);
+  const [sessionError, setSessionError] = useState(false);
 
   const createNewSession = useCallback(async (key: string): Promise<string | null> => {
     try {
@@ -80,6 +82,7 @@ export function useSession(storeDomain: string, options?: UseSessionOptions): Us
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ storeDomain }),
+        signal: AbortSignal.timeout(15_000),
       });
 
       if (res.status === 403) {
@@ -87,22 +90,36 @@ export function useSession(storeDomain: string, options?: UseSessionOptions): Us
         return null;
       }
 
+      if (res.status === 429) {
+        console.warn("[useSession] Rate limited during session creation");
+        setSessionError(true);
+        return null;
+      }
+
       if (!res.ok) {
         console.warn("[useSession] Session creation failed:", res.status);
+        setSessionError(true);
         return null;
       }
 
       const data = await res.json();
       saveSession(key, data.sessionId, ttlMs);
       setSessionId(data.sessionId);
+      setSessionError(false);
       return data.sessionId;
     } catch (err) {
-      console.warn("[useSession] Failed to create session:", err);
+      if (err instanceof Error && err.name === 'TimeoutError') {
+        console.warn("[useSession] Session creation timed out");
+      } else {
+        console.warn("[useSession] Failed to create session:", err);
+      }
+      setSessionError(true);
       return null;
     }
   }, [storeDomain, ttlMs]);
 
   const refreshSession = useCallback(async (): Promise<string | null> => {
+    setSessionError(false);
     const key = getStorageKey(prefix, storeDomain);
     localStorage.removeItem(key);
     return createNewSession(key);
@@ -121,5 +138,5 @@ export function useSession(storeDomain: string, options?: UseSessionOptions): Us
     createNewSession(key);
   }, [storeDomain, prefix, ttlMs, createNewSession]);
 
-  return { sessionId, chatDisabled, refreshSession };
+  return { sessionId, chatDisabled, sessionError, refreshSession };
 }

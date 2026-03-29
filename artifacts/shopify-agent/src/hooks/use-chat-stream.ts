@@ -139,7 +139,24 @@ export function useChatStream({
       }
 
       if (!response.ok) {
-        throw new Error('Failed to send message');
+        let errorMessage = '';
+        try {
+          const errorBody = await response.json();
+          if (errorBody && typeof errorBody.error === 'string') {
+            errorMessage = errorBody.error;
+          }
+        } catch {
+        }
+        if (!errorMessage) {
+          if (response.status === 429) {
+            errorMessage = 'Too many messages sent. Please wait a moment before trying again.';
+          } else if (response.status === 503) {
+            errorMessage = 'The service is temporarily unavailable. Please try again in a moment.';
+          } else {
+            errorMessage = 'Something went wrong. Please try again.';
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       if (!response.body) throw new Error('No response body stream');
@@ -208,6 +225,12 @@ export function useChatStream({
               const d = event.data as { toolCallId: string; content: string };
               currentToolResults = [...currentToolResults, { toolCallId: d.toolCallId, content: d.content }];
               streamDirty = true;
+            } else if (event.type === 'error') {
+              const errorMsg = typeof event.data === 'string' ? event.data : 'An error occurred processing your message.';
+              setError(errorMsg);
+            } else if (event.type === 'warning') {
+              const warnMsg = typeof event.data === 'string' ? event.data : 'A warning occurred.';
+              console.warn('[useChatStream] Server warning:', warnMsg);
             }
           },
           controller.signal

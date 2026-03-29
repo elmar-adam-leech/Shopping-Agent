@@ -20,7 +20,7 @@ import { useEffect, useRef } from "react";
 export default function ChatPage() {
   const [, params] = useRoute("/:storeDomain/chat");
   const storeDomain = params?.storeDomain || "";
-  const { sessionId } = useSession(storeDomain);
+  const { sessionId, sessionError, chatDisabled, refreshSession } = useSession(storeDomain);
   const cartStore = useCartStore();
   const { toast } = useToast();
 
@@ -126,12 +126,33 @@ export default function ChatPage() {
     }
   }, [storeDomain, sessionId, activeConversationId, startNewConversation, refetchConversations, toast]);
 
+  if (chatDisabled) {
+    return (
+      <AppLayout storeDomain={storeDomain}>
+        <div className="flex h-full items-center justify-center">
+          <p className="text-muted-foreground">Chat is currently disabled for this store.</p>
+        </div>
+      </AppLayout>
+    );
+  }
+
   if (!sessionId) {
     return (
       <AppLayout storeDomain={storeDomain}>
         <div className="flex h-full items-center justify-center" role="status" aria-label="Loading">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" aria-hidden="true" />
-          <span className="sr-only">Loading chat...</span>
+          {sessionError ? (
+            <div className="text-center space-y-3">
+              <p className="text-muted-foreground">Unable to connect to the chat service.</p>
+              <Button variant="outline" onClick={() => refreshSession()}>
+                Try Again
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Loader2 className="w-8 h-8 animate-spin text-primary" aria-hidden="true" />
+              <span className="sr-only">Loading chat...</span>
+            </>
+          )}
         </div>
       </AppLayout>
     );

@@ -16,10 +16,18 @@ router.post("/sessions", async (req, res): Promise<void> => {
     return;
   }
 
-  const [store] = await db
-    .select()
-    .from(storesTable)
-    .where(eq(storesTable.storeDomain, parsed.data.storeDomain));
+  let store;
+  try {
+    const [result] = await db
+      .select()
+      .from(storesTable)
+      .where(eq(storesTable.storeDomain, parsed.data.storeDomain));
+    store = result;
+  } catch (err) {
+    console.error("[sessions] Database error during store lookup:", err instanceof Error ? err.message : err);
+    sendError(res, 503, "Service temporarily unavailable. Please try again in a moment.");
+    return;
+  }
 
   if (!store) {
     sendError(res, 404, "Store not found");
@@ -35,12 +43,18 @@ router.post("/sessions", async (req, res): Promise<void> => {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_TTL_HOURS * 60 * 60 * 1000);
 
-  await db.insert(sessionsTable).values({
-    id: sessionId,
-    storeDomain: parsed.data.storeDomain,
-    createdAt: now,
-    expiresAt,
-  });
+  try {
+    await db.insert(sessionsTable).values({
+      id: sessionId,
+      storeDomain: parsed.data.storeDomain,
+      createdAt: now,
+      expiresAt,
+    });
+  } catch (err) {
+    console.error("[sessions] Database error during session creation:", err instanceof Error ? err.message : err);
+    sendError(res, 503, "Service temporarily unavailable. Please try again in a moment.");
+    return;
+  }
 
   res.status(201).json({
     sessionId,

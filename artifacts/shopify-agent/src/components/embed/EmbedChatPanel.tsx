@@ -4,7 +4,7 @@ import { ChatComposer } from "@/components/chat/ChatComposer";
 import { useSession } from "@/hooks/use-session";
 import { useChatOrchestration, messageKey } from "@/hooks/use-chat-orchestration";
 import { ChatLoadingIndicator } from "@/components/chat/ChatLoadingIndicator";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, RefreshCw } from "lucide-react";
 
 interface EmbedChatPanelProps {
   storeDomain: string;
@@ -21,7 +21,7 @@ export function EmbedChatPanel({
   cartToken,
   initialMessage,
 }: EmbedChatPanelProps) {
-  const { sessionId } = useSession(storeDomain);
+  const { sessionId, sessionError, chatDisabled, refreshSession } = useSession(storeDomain);
   const [conversationId, setConversationId] = useState<number | null>(null);
 
   const context = productHandle || collectionHandle || cartToken
@@ -36,6 +36,7 @@ export function EmbedChatPanel({
     messagesEndRef,
     handleSubmit,
     messages,
+    error,
   } = useChatOrchestration({
     storeDomain,
     sessionId: sessionId || "",
@@ -45,11 +46,34 @@ export function EmbedChatPanel({
     autoSendMessage: initialMessage,
   });
 
+  if (chatDisabled) {
+    return (
+      <div className="flex h-full items-center justify-center bg-background p-4">
+        <p className="text-muted-foreground text-sm">Chat is currently unavailable.</p>
+      </div>
+    );
+  }
+
   if (!sessionId) {
     return (
       <div className="flex h-full items-center justify-center bg-background" role="status" aria-label="Loading">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" aria-hidden="true" />
-        <span className="sr-only">Loading chat...</span>
+        {sessionError ? (
+          <div className="text-center space-y-3 p-4">
+            <p className="text-muted-foreground text-sm">Unable to connect. Please try again.</p>
+            <button
+              onClick={() => refreshSession()}
+              className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Retry
+            </button>
+          </div>
+        ) : (
+          <>
+            <Loader2 className="w-8 h-8 animate-spin text-primary" aria-hidden="true" />
+            <span className="sr-only">Loading chat...</span>
+          </>
+        )}
       </div>
     );
   }
@@ -73,6 +97,11 @@ export function EmbedChatPanel({
               <MessageBubble key={messageKey(messages[i], i)} message={msg} />
             ))}
             {isLoading && <ChatLoadingIndicator />}
+            {error && !isLoading && (
+              <div className="text-center py-2">
+                <p className="text-sm text-destructive">{error}</p>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
         )}

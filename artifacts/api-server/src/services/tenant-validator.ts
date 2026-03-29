@@ -123,7 +123,14 @@ export async function validateStoreDomain(
     return;
   }
 
-  const store = await loadFullStore(storeDomain);
+  let store: Store | null;
+  try {
+    store = await loadFullStore(storeDomain);
+  } catch (err) {
+    console.error(`[tenant-validator] Database error looking up store="${storeDomain}":`, err instanceof Error ? err.message : err);
+    sendError(res, 503, "Service temporarily unavailable. Please try again in a moment.");
+    return;
+  }
 
   if (!store) {
     sendError(res, 404, "Store not found");

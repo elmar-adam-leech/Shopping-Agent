@@ -137,7 +137,7 @@
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ storeDomain: config.storeDomain }),
-      signal: signal
+      signal: signal || AbortSignal.timeout(15000)
     })
       .then(function (response) {
         if (destroyed) return;
@@ -501,7 +501,59 @@
             sendChatMessage(message, retryCount + 1);
           });
         }
-        if (!response.ok) throw new Error("Chat request failed: " + response.status);
+        if (response.status === 429) {
+          state.isLoading = false;
+          currentAbortController = null;
+          state.messages.push({
+            role: "assistant",
+            content: "Too many messages sent. Please wait a moment before trying again.",
+            timestamp: new Date().toISOString(),
+            isError: true,
+            failedMessage: message,
+            errorType: "chat"
+          });
+          renderMessages();
+          scrollToBottom();
+          return;
+        }
+        if (response.status === 503) {
+          state.isLoading = false;
+          currentAbortController = null;
+          state.messages.push({
+            role: "assistant",
+            content: "The service is temporarily unavailable. Please try again in a moment.",
+            timestamp: new Date().toISOString(),
+            isError: true,
+            failedMessage: message,
+            errorType: "chat"
+          });
+          renderMessages();
+          scrollToBottom();
+          return;
+        }
+        if (!response.ok) {
+          return response.text().then(function (body) {
+            var errorMsg = "Sorry, something went wrong. Please try again.";
+            try {
+              var parsed = JSON.parse(body);
+              if (parsed && typeof parsed.error === "string") {
+                errorMsg = parsed.error;
+              }
+            } catch (e) {}
+            state.isLoading = false;
+            currentAbortController = null;
+            state.messages.push({
+              role: "assistant",
+              content: errorMsg,
+              timestamp: new Date().toISOString(),
+              isError: true,
+              failedMessage: message,
+              errorType: "chat"
+            });
+            renderMessages();
+            scrollToBottom();
+          });
+        }
         if (!response.body) throw new Error("No response body");
 
         var reader = response.body.getReader();

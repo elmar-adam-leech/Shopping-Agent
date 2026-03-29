@@ -141,9 +141,32 @@ export async function* streamChat(
     });
 
     if (!response.ok) {
-      try { await response.text(); } catch {}
-      console.error(`[llm] API error status=${response.status}`);
-      yield { type: "error", data: "Failed to get response from AI provider" };
+      const errorBody = await response.text().catch(() => "");
+      const status = response.status;
+
+      let userMessage: string;
+      if (status === 401 || status === 403) {
+        userMessage = "Your AI provider API key is invalid or expired. Please update it in your store settings.";
+      } else if (status === 429) {
+        let retryAfter = "";
+        const retryHeader = response.headers.get("retry-after");
+        if (retryHeader) {
+          const seconds = parseInt(retryHeader, 10);
+          if (!isNaN(seconds)) {
+            retryAfter = ` Please wait ${seconds} seconds before trying again.`;
+          }
+        }
+        userMessage = `The AI provider is rate-limiting requests. Please wait a moment and try again.${retryAfter}`;
+      } else if (status === 404) {
+        userMessage = "The configured AI model was not found. Please check your model name in store settings.";
+      } else if (status >= 500) {
+        userMessage = "The AI provider is experiencing issues. Please try again in a few moments.";
+      } else {
+        userMessage = "An unexpected error occurred with the AI provider. Please try again.";
+      }
+
+      console.error(`[llm] API error status=${status} body=${errorBody.slice(0, 500)}`);
+      yield { type: "error", data: userMessage };
       return;
     }
 

@@ -70,16 +70,24 @@ export async function validateSession(
     sessionCache.delete(cacheKey);
   }
 
-  const [session] = await db
-    .select()
-    .from(sessionsTable)
-    .where(
-      and(
-        eq(sessionsTable.id, sessionId),
-        eq(sessionsTable.storeDomain, storeDomain),
-        gt(sessionsTable.expiresAt, new Date())
-      )
-    );
+  let session;
+  try {
+    const [result] = await db
+      .select()
+      .from(sessionsTable)
+      .where(
+        and(
+          eq(sessionsTable.id, sessionId),
+          eq(sessionsTable.storeDomain, storeDomain),
+          gt(sessionsTable.expiresAt, new Date())
+        )
+      );
+    session = result;
+  } catch (err) {
+    console.error(`[session-validator] Database error validating session for store="${storeDomain}":`, err instanceof Error ? err.message : err);
+    sendError(res, 503, "Service temporarily unavailable. Please try again in a moment.");
+    return;
+  }
 
   if (!session) {
     sendError(res, 401, "Invalid or expired session");
