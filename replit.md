@@ -45,6 +45,23 @@ The frontend is built with React 18, Vite, Tailwind CSS, and shadcn/ui, providin
 - **Universal Commerce Protocol (UCP)**: Integration with UCP for enhanced commerce capabilities, including discovery and standardized checkout tools.
 - **Theme Integration**: Script-tag and iframe-based embedding options for various AI assistant functionalities directly within Shopify themes.
 
+## Load & Stress Testing
+- **Location**: `load-tests/` directory (workspace package `@workspace/load-tests`)
+- **Scripts**: Node.js/TypeScript-based load test suite using native `fetch` and `node:http`
+- **Tests available**:
+  - `test:health` — Baseline throughput via health endpoint
+  - `test:sessions` — Concurrent session creation load
+  - `test:chat` — Concurrent chat with SSE streaming (10/25/50/100 sessions)
+  - `test:sse` — SSE connection scalability limits
+  - `test:db-pool` — Database connection pool exhaustion testing
+  - `test:memory` — Memory stability over 15+ minutes sustained load
+  - `test:rate-limit` — Per-client rate limiter correctness
+  - `test:analytics` — Analytics aggregation query performance
+  - `test:journey` — Full user journey simulation (session → chat → conversations)
+  - `test:all` — Run all tests except memory (which runs separately)
+- **Configuration**: Set `LOAD_TEST_URL`, `LOAD_TEST_STORE`, `LOAD_TEST_MERCHANT_PASSWORD` env vars
+- **Results**: See `load-tests/RESULTS.md` for architecture analysis and bottleneck documentation
+
 ## External Dependencies
 - **Shopify API**: For OAuth, accessing store data, and interacting with the Shopify platform.
 - **Shopify Storefront MCP**: JSON-RPC client for product search, cart management, and checkout operations.

@@ -1,0 +1,25 @@
+{
+  "name": "@workspace/load-tests",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:health": "tsx src/test-health.ts",
+    "test:sessions": "tsx src/test-sessions.ts",
+    "test:chat": "tsx src/test-chat-concurrent.ts",
+    "test:sse": "tsx src/test-sse-scalability.ts",
+    "test:db-pool": "tsx src/test-db-pool.ts",
+    "test:memory": "tsx src/test-memory-stability.ts",
+    "test:rate-limit": "tsx src/test-rate-limiter.ts",
+    "test:analytics": "tsx src/test-analytics-load.ts",
+    "test:journey": "tsx src/test-full-journey.ts",
+    "test:all": "tsx src/run-all.ts"
+  },
+  "dependencies": {
+    "@workspace/db": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:"
+  }
+}
