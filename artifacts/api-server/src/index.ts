@@ -29,6 +29,10 @@ async function start() {
     throw new Error(`Invalid PORT value: "${rawPort}"`);
   }
 
+  if (process.env.DEV_AUTH_SECRET && process.env.NODE_ENV !== "development") {
+    console.warn("[security] DEV_AUTH_SECRET is set in a non-development environment. This endpoint should not be accessible in production.");
+  }
+
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
     startDbMaintenance();

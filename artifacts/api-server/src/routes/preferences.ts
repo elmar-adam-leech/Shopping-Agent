@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-zod";
 import { validateStoreDomain } from "../services/tenant-validator";
 import { validateSession } from "../services/session-validator";
+import { sendZodError } from "../lib/error-response";
 
 const router: IRouter = Router();
 
@@ -28,13 +29,13 @@ function prefsToResponse(prefs: typeof userPreferencesTable.$inferSelect) {
 router.get("/stores/:storeDomain/preferences", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
   const params = GetPreferencesParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendZodError(res, params.error, "GET /stores/:storeDomain/preferences", req.params);
     return;
   }
 
   const query = GetPreferencesQueryParams.safeParse(req.query);
   if (!query.success) {
-    res.status(400).json({ error: query.error.message });
+    sendZodError(res, query.error, "GET /stores/:storeDomain/preferences query", req.query);
     return;
   }
 
@@ -69,13 +70,13 @@ router.get("/stores/:storeDomain/preferences", validateStoreDomain, validateSess
 router.put("/stores/:storeDomain/preferences", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
   const params = UpdatePreferencesParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendZodError(res, params.error, "PUT /stores/:storeDomain/preferences", req.params);
     return;
   }
 
   const parsed = UpdatePreferencesBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    sendZodError(res, parsed.error, "PUT /stores/:storeDomain/preferences body", req.body);
     return;
   }
 

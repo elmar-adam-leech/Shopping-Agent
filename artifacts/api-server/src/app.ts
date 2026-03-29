@@ -3,6 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import router from "./routes";
+import { sendError } from "./lib/error-response";
 
 const app: Express = express();
 
@@ -57,7 +58,7 @@ app.use("/api", router);
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error("Unhandled error:", err);
-  res.status(500).json({ error: "Internal server error" });
+  sendError(res, 500, "Internal server error");
 });
 
 export default app;

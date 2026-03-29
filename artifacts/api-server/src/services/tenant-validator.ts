@@ -4,6 +4,7 @@ import type { Store } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { LRUCache } from "./lru-cache";
 import { SHOPIFY_DOMAIN_PATTERN } from "../lib/validation";
+import { sendError } from "../lib/error-response";
 
 declare global {
   namespace Express {
@@ -45,19 +46,19 @@ export async function validateStoreDomain(
     : req.params.storeDomain;
 
   if (!storeDomain) {
-    res.status(400).json({ error: "Store domain is required" });
+    sendError(res, 400, "Store domain is required");
     return;
   }
 
   if (!SHOPIFY_DOMAIN_PATTERN.test(storeDomain)) {
-    res.status(400).json({ error: "Invalid store domain format" });
+    sendError(res, 400, "Invalid store domain format");
     return;
   }
 
   const store = await getCachedStore(storeDomain);
 
   if (!store) {
-    res.status(404).json({ error: "Store not found" });
+    sendError(res, 404, "Store not found");
     return;
   }
 

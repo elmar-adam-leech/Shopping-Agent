@@ -11,6 +11,8 @@ import { validateStoreDomain } from "../services/tenant-validator";
 import { validateSession } from "../services/session-validator";
 import { LRUCache } from "../services/lru-cache";
 import { decrypt } from "../services/encryption";
+import { filterPromptInjection } from "../lib/prompt-filter";
+import { sendError, sendZodError } from "../lib/error-response";
 
 const MAX_USER_MESSAGE_LENGTH = 10_000;
 const MESSAGE_WINDOW_SIZE = 20;
@@ -163,13 +165,17 @@ async function persistChatResult(
   sessionId: string,
   messages: ChatMessageRecord[],
   userQuery: string
-): Promise<void> {
+): Promise<{ conversationSaved: boolean; analyticsSaved: boolean }> {
+  let conversationSaved = true;
+  let analyticsSaved = true;
+
   try {
     await db
       .update(conversationsTable)
       .set({ messages })
       .where(eq(conversationsTable.id, conversationId));
   } catch (err) {
+    conversationSaved = false;
     console.error(`[chat] FAILED to save conversation id="${conversationId}" store="${storeDomain}":`, err);
   }
 
@@ -181,43 +187,46 @@ async function persistChatResult(
       sessionId,
     });
   } catch (err) {
+    analyticsSaved = false;
     console.error(`[chat] FAILED to insert analytics log store="${storeDomain}" session="${sessionId}":`, err);
   }
+
+  return { conversationSaved, analyticsSaved };
 }
 
 router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
   const params = SendChatParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendZodError(res, params.error, "POST /stores/:storeDomain/chat", req.params);
     return;
   }
 
   const parsed = SendChatBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    sendZodError(res, parsed.error, "POST /stores/:storeDomain/chat body", req.body);
     return;
   }
 
   const store = req.store!;
 
   if (!store.chatEnabled) {
-    res.status(403).json({ error: "Chat is currently disabled for this store" });
+    sendError(res, 403, "Chat is currently disabled for this store");
     return;
   }
 
   if (!store.apiKey) {
-    res.status(400).json({ error: "Store has no LLM API key configured. Please add one in settings." });
+    sendError(res, 400, "Store has no LLM API key configured. Please add one in settings.");
     return;
   }
 
   if (!store.storefrontToken) {
-    res.status(400).json({ error: "Store has no Storefront Access Token configured." });
+    sendError(res, 400, "Store has no Storefront Access Token configured.");
     return;
   }
 
   const isEmbedRequest = req.headers['x-embed-mode'] === 'true' || parsed.data.context?.searchMode;
   if (isEmbedRequest && !store.embedEnabled) {
-    res.status(403).json({ error: "Theme embed mode is not enabled for this store." });
+    sendError(res, 403, "Theme embed mode is not enabled for this store.");
     return;
   }
 
@@ -253,9 +262,14 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       ? parsed.data.message.slice(0, MAX_USER_MESSAGE_LENGTH)
       : parsed.data.message;
 
+    const { message: filteredMessage, filtered } = filterPromptInjection(truncatedMessage);
+    if (filtered) {
+      console.warn(`[prompt-filter] Filtered injection attempt from store="${store.storeDomain}" session="${parsed.data.sessionId}"`);
+    }
+
     const userMessage: ChatMessageRecord = {
       role: "user",
-      content: truncatedMessage,
+      content: filteredMessage,
       timestamp: new Date().toISOString(),
     };
 
@@ -293,7 +307,14 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     const toolCalls: Array<{ id: string; name: string; arguments: string }> = [];
     const toolResults: Array<{ toolCallId: string; content: string }> = [];
 
-    const decryptedApiKey = decrypt(store.apiKey);
+    let decryptedApiKey: string;
+    try {
+      decryptedApiKey = decrypt(store.apiKey);
+    } catch (err) {
+      console.error(`[chat] Decryption failed for store="${store.storeDomain}":`, err instanceof Error ? err.message : err);
+      safeSend(`data: ${JSON.stringify({ type: "error", data: "API key configuration error. Please re-save your API key in settings." })}\n\n`);
+      return;
+    }
 
     const stream = streamChatWithProvider(
       store.provider,
@@ -331,13 +352,20 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
 
     existingMessages.push(assistantMessage);
 
-    await persistChatResult(
+    const { conversationSaved, analyticsSaved } = await persistChatResult(
       conversation.id,
       store.storeDomain,
       parsed.data.sessionId,
       existingMessages,
-      truncatedMessage
+      filteredMessage
     );
+
+    if (!conversationSaved) {
+      safeSend(`data: ${JSON.stringify({ type: "warning", data: "Your conversation may not have been saved. Responses might be lost on refresh." })}\n\n`);
+    }
+    if (!analyticsSaved) {
+      console.warn(`[chat] Analytics persistence failed for store="${store.storeDomain}" session="${parsed.data.sessionId}"`);
+    }
   } catch (err: unknown) {
     if (clientDisconnected) return;
     console.error(`Chat error for store="${store.storeDomain}" session="${parsed.data.sessionId}":`, err);

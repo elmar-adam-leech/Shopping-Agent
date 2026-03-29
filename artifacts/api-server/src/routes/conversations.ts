@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-zod";
 import { validateStoreDomain } from "../services/tenant-validator";
 import { validateSession } from "../services/session-validator";
+import { sendError, sendZodError } from "../lib/error-response";
 
 const router: IRouter = Router();
 
@@ -29,13 +30,13 @@ function convToResponse(conv: typeof conversationsTable.$inferSelect) {
 router.get("/stores/:storeDomain/conversations", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
   const params = ListConversationsParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendZodError(res, params.error, "GET /stores/:storeDomain/conversations", req.params);
     return;
   }
 
   const query = ListConversationsQueryParams.safeParse(req.query);
   if (!query.success) {
-    res.status(400).json({ error: query.error.message });
+    sendZodError(res, query.error, "GET /stores/:storeDomain/conversations query", req.query);
     return;
   }
 
@@ -61,13 +62,13 @@ router.get("/stores/:storeDomain/conversations", validateStoreDomain, validateSe
 router.get("/stores/:storeDomain/conversations/:conversationId", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
   const params = GetConversationParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendZodError(res, params.error, "GET /stores/:storeDomain/conversations/:conversationId", req.params);
     return;
   }
 
   const sessionId = (req as import("express").Request & { validatedSessionId: string }).validatedSessionId;
   if (!sessionId) {
-    res.status(401).json({ error: "Session ID is required" });
+    sendError(res, 401, "Session ID is required");
     return;
   }
 
@@ -83,7 +84,7 @@ router.get("/stores/:storeDomain/conversations/:conversationId", validateStoreDo
     );
 
   if (!conv) {
-    res.status(404).json({ error: "Conversation not found" });
+    sendError(res, 404, "Conversation not found");
     return;
   }
 
@@ -93,13 +94,13 @@ router.get("/stores/:storeDomain/conversations/:conversationId", validateStoreDo
 router.delete("/stores/:storeDomain/conversations/:conversationId", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
   const params = DeleteConversationParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendZodError(res, params.error, "DELETE /stores/:storeDomain/conversations/:conversationId", req.params);
     return;
   }
 
   const sessionId = (req as import("express").Request & { validatedSessionId: string }).validatedSessionId;
   if (!sessionId) {
-    res.status(401).json({ error: "Session ID is required" });
+    sendError(res, 401, "Session ID is required");
     return;
   }
 
@@ -115,7 +116,7 @@ router.delete("/stores/:storeDomain/conversations/:conversationId", validateStor
     .returning({ id: conversationsTable.id });
 
   if (!deleted) {
-    res.status(404).json({ error: "Conversation not found" });
+    sendError(res, 404, "Conversation not found");
     return;
   }
 

@@ -16,6 +16,7 @@ import {
 import { validateStoreDomain } from "../services/tenant-validator";
 import { validateMerchantAuth } from "../services/merchant-auth";
 import { invalidateKnowledgeCache } from "./chat";
+import { sendError, sendZodError } from "../lib/error-response";
 
 const router: IRouter = Router();
 
@@ -24,7 +25,7 @@ type KnowledgeCategory = ShopKnowledge["category"];
 router.get("/stores/:storeDomain/knowledge", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
   const params = ListKnowledgeParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendZodError(res, params.error, "GET /stores/:storeDomain/knowledge", req.params);
     return;
   }
 
@@ -47,13 +48,13 @@ router.get("/stores/:storeDomain/knowledge", validateStoreDomain, validateMercha
 router.post("/stores/:storeDomain/knowledge", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
   const params = CreateKnowledgeParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendZodError(res, params.error, "POST /stores/:storeDomain/knowledge", req.params);
     return;
   }
 
   const parsed = CreateKnowledgeBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    sendZodError(res, parsed.error, "POST /stores/:storeDomain/knowledge body", req.body);
     return;
   }
 
@@ -75,13 +76,13 @@ router.post("/stores/:storeDomain/knowledge", validateStoreDomain, validateMerch
 router.patch("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
   const params = UpdateKnowledgeParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendZodError(res, params.error, "PATCH /stores/:storeDomain/knowledge/:knowledgeId", req.params);
     return;
   }
 
   const parsed = UpdateKnowledgeBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    sendZodError(res, parsed.error, "PATCH /stores/:storeDomain/knowledge/:knowledgeId body", req.body);
     return;
   }
 
@@ -103,7 +104,7 @@ router.patch("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain,
     .returning();
 
   if (!entry) {
-    res.status(404).json({ error: "Knowledge entry not found" });
+    sendError(res, 404, "Knowledge entry not found");
     return;
   }
 
@@ -114,7 +115,7 @@ router.patch("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain,
 router.delete("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
   const params = DeleteKnowledgeParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendZodError(res, params.error, "DELETE /stores/:storeDomain/knowledge/:knowledgeId", req.params);
     return;
   }
 

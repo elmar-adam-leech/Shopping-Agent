@@ -5,6 +5,7 @@ import { eq, lt, gt, and, sql } from "drizzle-orm";
 import { createMerchantSession } from "../services/merchant-auth";
 import { encrypt } from "../services/encryption";
 import { SHOPIFY_DOMAIN_PATTERN } from "../lib/validation";
+import { sendError } from "../lib/error-response";
 
 const router: IRouter = Router();
 
@@ -34,17 +35,17 @@ router.get("/auth/install", async (req, res): Promise<void> => {
   const shop = Array.isArray(req.query.shop) ? req.query.shop[0] : req.query.shop;
 
   if (!shop || typeof shop !== "string") {
-    res.status(400).json({ error: "Missing shop parameter" });
+    sendError(res, 400, "Missing shop parameter");
     return;
   }
 
   if (!SHOPIFY_DOMAIN_PATTERN.test(shop)) {
-    res.status(400).json({ error: "Invalid shop domain. Must be a valid .myshopify.com domain." });
+    sendError(res, 400, "Invalid shop domain. Must be a valid .myshopify.com domain.");
     return;
   }
 
   if (!SHOPIFY_API_KEY || !SHOPIFY_API_SECRET || !APP_URL) {
-    res.status(500).json({ error: "Shopify app not configured. Set SHOPIFY_API_KEY, SHOPIFY_API_SECRET, and APP_URL." });
+    sendError(res, 500, "Shopify app not configured. Set SHOPIFY_API_KEY, SHOPIFY_API_SECRET, and APP_URL.");
     return;
   }
 
@@ -56,7 +57,7 @@ router.get("/auth/install", async (req, res): Promise<void> => {
 
   if (pendingCount >= MAX_PENDING_STATES) {
     console.warn(`[auth] OAuth pending states at capacity (${MAX_PENDING_STATES}), rejecting new install`);
-    res.status(503).json({ error: "Server is busy, please try again later" });
+    sendError(res, 503, "Server is busy, please try again later");
     return;
   }
 
@@ -77,19 +78,19 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
   const state = typeof req.query.state === "string" ? req.query.state : Array.isArray(req.query.state) ? String(req.query.state[0]) : undefined;
 
   if (!code || !shop || !hmac || !state) {
-    res.status(400).json({ error: "Missing required parameters" });
+    sendError(res, 400, "Missing required parameters");
     return;
   }
 
   if (!SHOPIFY_DOMAIN_PATTERN.test(shop)) {
-    res.status(400).json({ error: "Invalid shop domain format" });
+    sendError(res, 400, "Invalid shop domain format");
     return;
   }
 
   await cleanExpiredStates();
 
   if (!SHOPIFY_API_SECRET) {
-    res.status(500).json({ error: "SHOPIFY_API_SECRET is required for OAuth callback" });
+    sendError(res, 500, "SHOPIFY_API_SECRET is required for OAuth callback");
     return;
   }
 
@@ -105,7 +106,7 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
     .returning({ state: pendingOAuthStatesTable.state });
 
   if (deletedRows.length === 0) {
-    res.status(403).json({ error: "Invalid or expired OAuth state" });
+    sendError(res, 403, "Invalid or expired OAuth state");
     return;
   }
 
@@ -124,7 +125,7 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
     .digest("hex");
 
   if (!hmac || !/^[0-9a-f]+$/i.test(hmac)) {
-    res.status(403).json({ error: "HMAC verification failed" });
+    sendError(res, 403, "HMAC verification failed");
     return;
   }
 
@@ -132,7 +133,7 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
   const hmacBuf = Buffer.from(hmac, "hex");
 
   if (digestBuf.length !== hmacBuf.length || !crypto.timingSafeEqual(digestBuf, hmacBuf)) {
-    res.status(403).json({ error: "HMAC verification failed" });
+    sendError(res, 403, "HMAC verification failed");
     return;
   }
 
@@ -158,7 +159,7 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
       } catch {}
       const redactedBody = errorBody.replace(/("access_token"|"api_key"|"secret")[^,}]*/gi, '$1":"[REDACTED]"');
       console.error(`[auth] Shopify token exchange failed (${tokenResponse.status}):`, redactedBody.slice(0, 500));
-      res.status(500).json({ error: "Failed to exchange OAuth code" });
+      sendError(res, 500, "Failed to exchange OAuth code");
       return;
     }
 
@@ -190,31 +191,38 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
     res.redirect(`/${encodeURIComponent(shop)}/settings`);
   } catch (err: unknown) {
     console.error("OAuth callback error:", err);
-    res.status(500).json({ error: "OAuth callback failed" });
+    sendError(res, 500, "OAuth callback failed");
   }
 });
 
 router.post("/auth/login", async (req, res): Promise<void> => {
   if (process.env.NODE_ENV !== "development") {
-    res.status(404).json({ error: "Not found" });
+    sendError(res, 404, "Not found");
     return;
   }
 
   const devSecret = process.env.DEV_AUTH_SECRET;
   if (!devSecret) {
-    res.status(403).json({ error: "DEV_AUTH_SECRET is not configured" });
+    sendError(res, 403, "DEV_AUTH_SECRET is not configured");
     return;
   }
 
   const { storeDomain, secret } = req.body as { storeDomain?: string; secret?: string };
 
-  if (secret !== devSecret) {
-    res.status(403).json({ error: "Invalid dev auth secret" });
+  if (!secret || typeof secret !== "string") {
+    sendError(res, 403, "Invalid dev auth secret");
+    return;
+  }
+
+  const secretBuf = Buffer.from(secret);
+  const devSecretBuf = Buffer.from(devSecret);
+  if (secretBuf.length !== devSecretBuf.length || !crypto.timingSafeEqual(secretBuf, devSecretBuf)) {
+    sendError(res, 403, "Invalid dev auth secret");
     return;
   }
 
   if (!storeDomain || typeof storeDomain !== "string") {
-    res.status(400).json({ error: "storeDomain is required" });
+    sendError(res, 400, "storeDomain is required");
     return;
   }
 
@@ -224,7 +232,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     .where(eq(storesTable.storeDomain, storeDomain));
 
   if (!store) {
-    res.status(404).json({ error: "Store not found" });
+    sendError(res, 404, "Store not found");
     return;
   }
 

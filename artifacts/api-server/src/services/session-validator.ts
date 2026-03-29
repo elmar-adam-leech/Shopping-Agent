@@ -2,6 +2,7 @@ import { type Request, type Response, type NextFunction } from "express";
 import { eq, and, gt } from "drizzle-orm";
 import { db, sessionsTable } from "@workspace/db";
 import { LRUCache } from "./lru-cache";
+import { sendError } from "../lib/error-response";
 
 interface CachedSession {
   expiresAt: number;
@@ -17,6 +18,10 @@ export function invalidateSessionCache(sessionId: string, storeDomain: string): 
   sessionCache.delete(sessionCacheKey(sessionId, storeDomain));
 }
 
+export function invalidateSessionCacheForDomain(storeDomain: string): void {
+  sessionCache.deleteByPrefix(`${storeDomain}::`);
+}
+
 export async function validateSession(
   req: Request,
   res: Response,
@@ -28,7 +33,7 @@ export async function validateSession(
     (req.headers["x-session-id"] as string | undefined);
 
   if (!sessionId) {
-    res.status(401).json({ error: "Session ID is required" });
+    sendError(res, 401, "Session ID is required");
     return;
   }
 
@@ -58,7 +63,7 @@ export async function validateSession(
     );
 
   if (!session) {
-    res.status(401).json({ error: "Invalid or expired session" });
+    sendError(res, 401, "Invalid or expired session");
     return;
   }
 

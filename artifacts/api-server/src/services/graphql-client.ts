@@ -23,12 +23,14 @@ export async function shopifyGraphQL(
   );
 
   if (!response.ok) {
-    throw new Error(`Shopify GraphQL error: ${response.status}`);
+    console.error(`[graphql] Shopify API returned ${response.status} for store="${storeDomain}"`);
+    throw new Error(`Shopify API request failed (status ${response.status})`);
   }
 
   const data = (await response.json()) as GraphQLResponse;
   if (data.errors) {
-    throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+    console.error(`[graphql] GraphQL errors for store="${storeDomain}":`, JSON.stringify(data.errors));
+    throw new Error("Shopify GraphQL request returned errors");
   }
 
   return data.data || {};

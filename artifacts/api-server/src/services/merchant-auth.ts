@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { type Request, type Response, type NextFunction } from "express";
 import { eq, and, gt } from "drizzle-orm";
 import { db, sessionsTable } from "@workspace/db";
+import { sendError } from "../lib/error-response";
 
 const MERCHANT_TOKEN_PREFIX = "mtkn_";
 const MERCHANT_SESSION_TTL_HOURS = 72;
@@ -57,21 +58,21 @@ async function validateMerchantAuthCore(
   const token = extractToken(req);
 
   if (!token || !token.startsWith(MERCHANT_TOKEN_PREFIX)) {
-    res.status(401).json({ error: "Merchant authentication required" });
+    sendError(res, 401, "Merchant authentication required");
     return;
   }
 
   const session = await lookupValidSession(token);
 
   if (!session) {
-    res.status(401).json({ error: "Invalid or expired merchant session" });
+    sendError(res, 401, "Invalid or expired merchant session");
     return;
   }
 
   if (options.requireStoreDomainParam) {
     const storeDomain = req.params.storeDomain;
     if (storeDomain && session.storeDomain !== storeDomain) {
-      res.status(403).json({ error: "Access denied: token does not match store" });
+      sendError(res, 403, "Access denied: token does not match store");
       return;
     }
   } else {

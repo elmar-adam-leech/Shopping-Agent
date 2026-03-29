@@ -16,6 +16,9 @@ import { validateMerchantAuth, validateMerchantAuthForStoreList } from "../servi
 import { invalidateStoreCache } from "../services/tenant-validator";
 import { encrypt } from "../services/encryption";
 import { invalidateToolsListCache } from "../services/mcp-client";
+import { invalidateSessionCacheForDomain } from "../services/session-validator";
+import { invalidateKnowledgeCache } from "./chat";
+import { sendError, sendZodError } from "../lib/error-response";
 
 const router: IRouter = Router();
 
@@ -48,13 +51,13 @@ router.get("/stores", validateMerchantAuthForStoreList, async (req, res): Promis
 router.post("/stores", validateMerchantAuthForStoreList, async (req, res): Promise<void> => {
   const parsed = CreateStoreBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    sendZodError(res, parsed.error, "POST /stores", req.body);
     return;
   }
 
   const merchantDomain = (req as Request & { merchantStoreDomain: string }).merchantStoreDomain;
   if (parsed.data.storeDomain !== merchantDomain) {
-    res.status(403).json({ error: "Cannot create store for a different domain" });
+    sendError(res, 403, "Cannot create store for a different domain");
     return;
   }
 
@@ -64,7 +67,7 @@ router.post("/stores", validateMerchantAuthForStoreList, async (req, res): Promi
     .where(eq(storesTable.storeDomain, parsed.data.storeDomain));
 
   if (existing.length > 0) {
-    res.status(409).json({ error: "Store already exists" });
+    sendError(res, 409, "Store already exists");
     return;
   }
 
@@ -73,7 +76,7 @@ router.post("/stores", validateMerchantAuthForStoreList, async (req, res): Promi
     try {
       encryptedApiKey = encrypt(parsed.data.apiKey);
     } catch (err) {
-      res.status(503).json({ error: "Server encryption is not configured. Cannot store API keys." });
+      sendError(res, 503, "Server encryption is not configured. Cannot store API keys.");
       return;
     }
   }
@@ -95,7 +98,7 @@ router.post("/stores", validateMerchantAuthForStoreList, async (req, res): Promi
 router.get("/stores/:storeDomain", validateMerchantAuth, async (req, res): Promise<void> => {
   const params = GetStoreParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendZodError(res, params.error, "GET /stores/:storeDomain", req.params);
     return;
   }
 
@@ -105,7 +108,7 @@ router.get("/stores/:storeDomain", validateMerchantAuth, async (req, res): Promi
     .where(eq(storesTable.storeDomain, params.data.storeDomain));
 
   if (!store) {
-    res.status(404).json({ error: "Store not found" });
+    sendError(res, 404, "Store not found");
     return;
   }
 
@@ -115,13 +118,13 @@ router.get("/stores/:storeDomain", validateMerchantAuth, async (req, res): Promi
 router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Promise<void> => {
   const params = UpdateStoreParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendZodError(res, params.error, "PATCH /stores/:storeDomain", req.params);
     return;
   }
 
   const parsed = UpdateStoreBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+    sendZodError(res, parsed.error, "PATCH /stores/:storeDomain body", req.body);
     return;
   }
 
@@ -134,7 +137,7 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
       try {
         updateData.apiKey = encrypt(parsed.data.apiKey);
       } catch (err) {
-        res.status(503).json({ error: "Server encryption is not configured. Cannot store API keys." });
+        sendError(res, 503, "Server encryption is not configured. Cannot store API keys.");
         return;
       }
     } else {
@@ -152,7 +155,7 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
     .returning();
 
   if (!store) {
-    res.status(404).json({ error: "Store not found" });
+    sendError(res, 404, "Store not found");
     return;
   }
 
@@ -166,7 +169,7 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
 router.get("/stores/:storeDomain/public", async (req, res): Promise<void> => {
   const { storeDomain } = req.params;
   if (!storeDomain) {
-    res.status(400).json({ error: "Missing storeDomain" });
+    sendError(res, 400, "Missing storeDomain");
     return;
   }
 
@@ -176,7 +179,7 @@ router.get("/stores/:storeDomain/public", async (req, res): Promise<void> => {
     .where(eq(storesTable.storeDomain, storeDomain));
 
   if (!store) {
-    res.status(404).json({ error: "Store not found" });
+    sendError(res, 404, "Store not found");
     return;
   }
 
@@ -189,12 +192,15 @@ router.get("/stores/:storeDomain/public", async (req, res): Promise<void> => {
 router.delete("/stores/:storeDomain", validateMerchantAuth, async (req, res): Promise<void> => {
   const params = DeleteStoreParams.safeParse(req.params);
   if (!params.success) {
-    res.status(400).json({ error: params.error.message });
+    sendZodError(res, params.error, "DELETE /stores/:storeDomain", req.params);
     return;
   }
 
   await db.delete(storesTable).where(eq(storesTable.storeDomain, params.data.storeDomain));
   invalidateStoreCache(params.data.storeDomain);
+  invalidateSessionCacheForDomain(params.data.storeDomain);
+  invalidateKnowledgeCache(params.data.storeDomain);
+  invalidateToolsListCache(params.data.storeDomain);
   res.sendStatus(204);
 });
 
