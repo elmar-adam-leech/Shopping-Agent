@@ -1,4 +1,4 @@
-import { pgTable, serial, text, jsonb, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, jsonb, timestamp, index, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { storesTable } from "./stores";
@@ -11,6 +11,7 @@ export const conversationsTable = pgTable("conversations", {
   sessionId: text("session_id").notNull(),
   title: text("title").notNull().default("New Chat"),
   messages: jsonb("messages").notNull().default([]),
+  messageCount: integer("message_count").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [

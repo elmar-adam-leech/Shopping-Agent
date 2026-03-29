@@ -1,6 +1,7 @@
 import { execSync } from "child_process";
 import app from "./app";
 import { startDbMaintenance } from "./services/db-maintenance";
+import { backfillMessageCounts } from "./services/db-backfill";
 
 async function start() {
   try {
@@ -14,6 +15,8 @@ async function start() {
     console.error("Database migration failed:", err);
     process.exit(1);
   }
+
+  await backfillMessageCounts();
 
   const rawPort = process.env["PORT"];
 

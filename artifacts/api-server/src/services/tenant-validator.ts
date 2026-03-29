@@ -16,23 +16,48 @@ import { LRUCache } from "./lru-cache";
 import { SHOPIFY_DOMAIN_PATTERN } from "../lib/validation";
 import { sendError } from "../lib/error-response";
 
+interface CachedStoreValidation {
+  storeDomain: string;
+  provider: "openai" | "anthropic" | "xai";
+  model: string;
+  ucpCompliant: boolean;
+  chatEnabled: boolean;
+  embedEnabled: boolean;
+  createdAt: Date;
+}
+
 declare global {
   namespace Express {
     interface Request {
       store?: Store;
+      storeValidation?: CachedStoreValidation;
     }
   }
 }
 
-const storeCache = new LRUCache<Store>(500, 60_000);
+const storeValidationCache = new LRUCache<CachedStoreValidation>(500, 60_000, "store-validation");
+const storeCredentialCache = new LRUCache<Store>(200, 30_000, "store-credentials");
 
 /** Remove a store from the in-memory cache, forcing the next lookup to hit the database. */
 export function invalidateStoreCache(storeDomain: string): void {
-  storeCache.delete(storeDomain);
+  storeValidationCache.delete(storeDomain);
+  storeCredentialCache.delete(storeDomain);
 }
 
-async function getCachedStore(storeDomain: string): Promise<Store | null> {
-  const cached = storeCache.get(storeDomain);
+function toValidationEntry(store: Store): CachedStoreValidation {
+  return {
+    storeDomain: store.storeDomain,
+    provider: store.provider,
+    model: store.model,
+    ucpCompliant: store.ucpCompliant,
+    chatEnabled: store.chatEnabled,
+    embedEnabled: store.embedEnabled,
+    createdAt: store.createdAt,
+  };
+}
+
+export async function getCachedStorePublicInfo(storeDomain: string): Promise<CachedStoreValidation | null> {
+  const cached = storeValidationCache.get(storeDomain);
   if (cached) return cached;
 
   const [store] = await db
@@ -41,7 +66,26 @@ async function getCachedStore(storeDomain: string): Promise<Store | null> {
     .where(eq(storesTable.storeDomain, storeDomain));
 
   if (store) {
-    storeCache.set(storeDomain, store);
+    const entry = toValidationEntry(store);
+    storeValidationCache.set(storeDomain, entry);
+    return entry;
+  }
+
+  return null;
+}
+
+export async function loadFullStore(storeDomain: string): Promise<Store | null> {
+  const cachedFull = storeCredentialCache.get(storeDomain);
+  if (cachedFull) return cachedFull;
+
+  const [store] = await db
+    .select()
+    .from(storesTable)
+    .where(eq(storesTable.storeDomain, storeDomain));
+
+  if (store) {
+    storeValidationCache.set(storeDomain, toValidationEntry(store));
+    storeCredentialCache.set(storeDomain, store);
   }
 
   return store ?? null;
@@ -72,7 +116,14 @@ export async function validateStoreDomain(
     return;
   }
 
-  const store = await getCachedStore(storeDomain);
+  const cached = storeValidationCache.get(storeDomain);
+  if (cached) {
+    req.storeValidation = cached;
+    next();
+    return;
+  }
+
+  const store = await loadFullStore(storeDomain);
 
   if (!store) {
     sendError(res, 404, "Store not found");
@@ -80,5 +131,6 @@ export async function validateStoreDomain(
   }
 
   req.store = store;
+  req.storeValidation = toValidationEntry(store);
   next();
 }

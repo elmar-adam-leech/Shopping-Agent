@@ -19,7 +19,7 @@ interface CachedSession {
   expiresAt: number;
 }
 
-const sessionCache = new LRUCache<CachedSession>(5000, 30_000);
+const sessionCache = new LRUCache<CachedSession>(5000, 30_000, "session");
 
 function sessionCacheKey(sessionId: string, storeDomain: string): string {
   return `${storeDomain}::${sessionId}`;

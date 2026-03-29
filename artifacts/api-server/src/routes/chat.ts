@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db, conversationsTable, shopKnowledgeTable, analyticsLogsTable } from "@workspace/db";
 import type { Conversation, ShopKnowledge } from "@workspace/db/schema";
 import { SendChatParams, SendChatBody } from "@workspace/api-zod";
@@ -7,7 +7,7 @@ import { streamChatWithProvider } from "../services/llm-service";
 import { listTools, callTool, type MCPTool, type UCPDiscoveryDocument } from "../services/mcp-client";
 import { fetchBlogs, fetchCollections } from "../services/graphql-client";
 import { buildSystemPrompt } from "../services/system-prompt";
-import { validateStoreDomain } from "../services/tenant-validator";
+import { validateStoreDomain, loadFullStore } from "../services/tenant-validator";
 import { validateSession } from "../services/session-validator";
 import { LRUCache } from "../services/lru-cache";
 import { decrypt } from "../services/encryption";
@@ -16,6 +16,7 @@ import { sendError, sendZodError } from "../lib/error-response";
 
 const MAX_USER_MESSAGE_LENGTH = 10_000;
 const MESSAGE_WINDOW_SIZE = 20;
+const MAX_MESSAGES_PER_CONVERSATION = 200;
 
 const router: IRouter = Router();
 
@@ -28,7 +29,7 @@ interface ChatMessageRecord {
   timestamp: string;
 }
 
-const knowledgeCache = new LRUCache<ShopKnowledge[]>(500, 120_000);
+const knowledgeCache = new LRUCache<ShopKnowledge[]>(500, 120_000, "knowledge");
 
 export function invalidateKnowledgeCache(storeDomain: string): void {
   knowledgeCache.delete(storeDomain);
@@ -159,21 +160,43 @@ function buildLLMContext(
   return { systemPrompt, llmMessages };
 }
 
+async function appendMessages(
+  conversationId: number,
+  newMessages: ChatMessageRecord[]
+): Promise<void> {
+  const newMessagesJson = JSON.stringify(newMessages);
+  const newMsgCount = newMessages.length;
+
+  await db
+    .update(conversationsTable)
+    .set({
+      messages: sql`CASE
+        WHEN ${conversationsTable.messageCount} + ${newMsgCount} > ${MAX_MESSAGES_PER_CONVERSATION}
+        THEN (
+          SELECT COALESCE(jsonb_agg(elem ORDER BY ord), '[]'::jsonb)
+          FROM jsonb_array_elements(${conversationsTable.messages}::jsonb || ${newMessagesJson}::jsonb)
+          WITH ORDINALITY AS t(elem, ord)
+          WHERE t.ord > (${conversationsTable.messageCount} + ${newMsgCount} - ${MAX_MESSAGES_PER_CONVERSATION})
+        )
+        ELSE ${conversationsTable.messages}::jsonb || ${newMessagesJson}::jsonb
+      END`,
+      messageCount: sql`LEAST(${conversationsTable.messageCount} + ${newMsgCount}, ${MAX_MESSAGES_PER_CONVERSATION})`,
+    })
+    .where(eq(conversationsTable.id, conversationId));
+}
+
 async function persistChatResult(
   conversationId: number,
   storeDomain: string,
   sessionId: string,
-  messages: ChatMessageRecord[],
+  newMessages: ChatMessageRecord[],
   userQuery: string
 ): Promise<{ conversationSaved: boolean; analyticsSaved: boolean }> {
   let conversationSaved = true;
   let analyticsSaved = true;
 
   try {
-    await db
-      .update(conversationsTable)
-      .set({ messages })
-      .where(eq(conversationsTable.id, conversationId));
+    await appendMessages(conversationId, newMessages);
   } catch (err) {
     conversationSaved = false;
     console.error(`[chat] FAILED to save conversation id="${conversationId}" store="${storeDomain}":`, err);
@@ -207,7 +230,13 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     return;
   }
 
-  const store = req.store!;
+  const storeDomainParam = req.params.storeDomain as string;
+  const store = req.store ?? await loadFullStore(storeDomainParam);
+
+  if (!store) {
+    sendError(res, 404, "Store not found");
+    return;
+  }
 
   if (!store.chatEnabled) {
     sendError(res, 403, "Chat is currently disabled for this store");
@@ -350,13 +379,13 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       timestamp: new Date().toISOString(),
     };
 
-    existingMessages.push(assistantMessage);
+    const newMessages = [userMessage, assistantMessage];
 
     const { conversationSaved, analyticsSaved } = await persistChatResult(
       conversation.id,
       store.storeDomain,
       parsed.data.sessionId,
-      existingMessages,
+      newMessages,
       filteredMessage
     );
 

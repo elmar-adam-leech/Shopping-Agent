@@ -13,7 +13,7 @@ import {
   DeleteStoreParams,
 } from "@workspace/api-zod";
 import { validateMerchantAuth, validateMerchantAuthForStoreList } from "../services/merchant-auth";
-import { invalidateStoreCache } from "../services/tenant-validator";
+import { invalidateStoreCache, getCachedStorePublicInfo } from "../services/tenant-validator";
 import { encrypt } from "../services/encryption";
 import { invalidateToolsListCache } from "../services/mcp-client";
 import { invalidateSessionCacheForDomain } from "../services/session-validator";
@@ -183,10 +183,7 @@ router.get("/stores/:storeDomain/public", async (req, res): Promise<void> => {
     return;
   }
 
-  const [store] = await db
-    .select()
-    .from(storesTable)
-    .where(eq(storesTable.storeDomain, storeDomain));
+  const store = await getCachedStorePublicInfo(storeDomain);
 
   if (!store) {
     sendError(res, 404, "Store not found");
