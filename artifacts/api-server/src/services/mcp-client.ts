@@ -14,11 +14,6 @@ export interface MCPTool {
   inputSchema: Record<string, unknown>;
 }
 
-export interface MCPToolResult {
-  content: Array<{ type: string; text?: string; [key: string]: unknown }>;
-  isError?: boolean;
-}
-
 interface JsonRpcResponse {
   result?: {
     tools?: MCPTool[];

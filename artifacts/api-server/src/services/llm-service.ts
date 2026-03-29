@@ -3,8 +3,6 @@ import { streamChat as streamAnthropicChat } from "./llms/anthropic";
 import { streamChat as streamXAIChat } from "./llms/xai";
 import type { LLMStreamEvent, LLMMessage, MCPToolDef } from "./llms/types";
 
-export type { LLMStreamEvent, LLMMessage, MCPToolDef };
-
 export async function* streamChatWithProvider(
   provider: "openai" | "anthropic" | "xai",
   apiKey: string,

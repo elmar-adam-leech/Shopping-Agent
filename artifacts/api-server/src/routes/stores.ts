@@ -21,8 +21,6 @@ const router: IRouter = Router();
 
 type ProviderValue = "openai" | "anthropic" | "xai";
 
-const SENSITIVE_FIELDS = new Set(["accessToken", "apiKey"]);
-
 function storeToResponse(store: Store) {
   const response: Record<string, unknown> = {
     storeDomain: store.storeDomain,
@@ -35,10 +33,6 @@ function storeToResponse(store: Store) {
     embedEnabled: store.embedEnabled,
     createdAt: store.createdAt,
   };
-
-  for (const field of SENSITIVE_FIELDS) {
-    delete response[field];
-  }
 
   return response;
 }
