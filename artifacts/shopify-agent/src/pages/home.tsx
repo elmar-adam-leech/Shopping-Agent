@@ -12,7 +12,7 @@ export default function HomePage() {
   const [loginError, setLoginError] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
 
-  const isUnauthorized = error && "status" in (error as unknown as object) && (error as unknown as { status: number }).status === 401;
+  const isUnauthorized = error && typeof error === 'object' && 'status' in error && (error as { status: number }).status === 401;
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();

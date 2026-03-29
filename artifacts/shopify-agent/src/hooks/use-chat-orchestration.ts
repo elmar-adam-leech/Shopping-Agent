@@ -15,6 +15,9 @@ export function toChatMessageDisplay(msg: ChatMessage): ChatMessageDisplay {
 }
 
 export function messageKey(msg: ChatMessage, index: number): string {
+  if ('_id' in msg && typeof (msg as { _id: unknown })._id === 'string') {
+    return (msg as { _id: string })._id;
+  }
   return `${msg.timestamp}-${msg.role}-${index}`;
 }
 
@@ -31,8 +34,15 @@ export function useChatOrchestration(options: UseChatOrchestrationOptions) {
   const chatStream = useChatStream(streamOptions);
   const { messages, isLoading, sendMessage, error } = chatStream;
 
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    scrollTimeoutRef.current = setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 150);
+    return () => {
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    };
   }, [messages]);
 
   useEffect(() => {

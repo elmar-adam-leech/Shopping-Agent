@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useRoute, useSearch } from "wouter";
 import { ChatLoadingIndicator } from "@/components/chat/ChatLoadingIndicator";
 import { Send, Sparkles, Loader2, ShoppingBag } from "lucide-react";
@@ -51,24 +51,31 @@ export default function ShopForMePage() {
       .catch(() => setStoreNotFound(true));
   }, [storeDomain]);
 
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    scrollTimeoutRef.current = setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 150);
+    return () => {
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    };
   }, [messages, isLoading]);
 
-  const handleSend = () => {
+  const handleSend = useCallback(() => {
     if (!input.trim() || isLoading || !sessionId) return;
     const msg = input;
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     sendMessage(msg);
-  };
+  }, [input, isLoading, sessionId, sendMessage]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
-  };
+  }, [handleSend]);
 
   const storeName = formatStoreName(storeDomain);
   const isChatDisabled = chatDisabled || (storeInfo && !storeInfo.chatEnabled);
@@ -130,8 +137,8 @@ export default function ShopForMePage() {
           )}
 
           <div className="space-y-4">
-            {messages.map((msg, i) => (
-              <div key={i}>
+            {messages.map((msg) => (
+              <div key={msg._id}>
                 {msg.toolCalls && msg.toolCalls.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-2">
                     {msg.toolCalls.map((tc: ToolCall) => (

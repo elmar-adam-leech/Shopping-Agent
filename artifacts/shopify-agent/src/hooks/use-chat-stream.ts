@@ -2,6 +2,15 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import type { ChatMessage, ToolCall, ToolResult } from '@workspace/api-client-react';
 import { readSSEStream } from '@/lib/sse-parser';
 
+export interface ChatMessageWithId extends ChatMessage {
+  _id: string;
+}
+
+let _msgIdCounter = 0;
+function generateMessageId(): string {
+  return `msg-${Date.now()}-${++_msgIdCounter}`;
+}
+
 interface ChatContext {
   productHandle?: string;
   collectionHandle?: string;
@@ -36,7 +45,7 @@ export function useChatStream({
   onSessionExpired,
   onCartError,
 }: UseChatStreamOptions) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessageWithId[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [internalConversationId, setInternalConversationId] = useState<number | null>(null);
@@ -89,7 +98,8 @@ export function useChatStream({
     abortControllerRef.current = null;
 
     if (retryCount === 0) {
-      const userMessage: ChatMessage = {
+      const userMessage: ChatMessageWithId = {
+        _id: generateMessageId(),
         role: 'user',
         content,
         timestamp: new Date().toISOString()
@@ -139,9 +149,10 @@ export function useChatStream({
       let currentToolResults: ToolResult[] = [];
       let streamDirty = false;
 
+      const assistantMsgId = generateMessageId();
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: '', timestamp: new Date().toISOString() }
+        { _id: assistantMsgId, role: 'assistant', content: '', timestamp: new Date().toISOString() }
       ]);
 
       const flushStreamUpdate = () => {
@@ -218,7 +229,7 @@ export function useChatStream({
       if (onSessionExpiredRef.current && !onConversationIdRef.current) {
         setMessages(prev => [
           ...prev,
-          { role: 'assistant', content: 'Sorry, something went wrong. Please try again.', timestamp: new Date().toISOString() }
+          { _id: generateMessageId(), role: 'assistant', content: 'Sorry, something went wrong. Please try again.', timestamp: new Date().toISOString() }
         ]);
       }
     } finally {
@@ -238,7 +249,12 @@ export function useChatStream({
   }, []);
 
   const loadMessages = useCallback((initialMessages: ChatMessage[]) => {
-    setMessages(initialMessages);
+    setMessages(initialMessages.map(msg => ({
+      ...msg,
+      _id: ('_id' in msg && typeof (msg as ChatMessageWithId)._id === 'string')
+        ? (msg as ChatMessageWithId)._id
+        : generateMessageId(),
+    })));
   }, []);
 
   return {
