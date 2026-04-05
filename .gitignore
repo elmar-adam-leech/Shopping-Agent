@@ -64,3 +64,13 @@ attached_assets/
 
 # Drizzle migration artifacts
 drizzle/
+
+# Generated API client/Zod code
+lib/api-client-react/src/generated/
+lib/api-zod/src/generated/
+
+# Mockup sandbox generated files
+artifacts/mockup-sandbox/src/.generated/
+
+# Load test results
+load-tests/RESULTS.md
