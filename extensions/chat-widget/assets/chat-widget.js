@@ -77,6 +77,15 @@
     return "#" + Math.round(r).toString(16).padStart(2, "0") + Math.round(g).toString(16).padStart(2, "0") + Math.round(b).toString(16).padStart(2, "0");
   }
 
+  function setSVGIcon(el, svgString) {
+    var parser = new DOMParser();
+    var doc = parser.parseFromString(svgString, "image/svg+xml");
+    var svg = doc.documentElement;
+    if (svg && svg.nodeName === "svg") {
+      el.appendChild(svg);
+    }
+  }
+
   function loadSession() {
     try {
       var stored = localStorage.getItem(SESSION_KEY);
@@ -206,9 +215,9 @@
     onClick: togglePanel
   });
   var chatIcon = el("span", "mcp-chat-icon");
-  chatIcon.innerHTML = ICONS[config.bubbleIcon] || ICONS.chat;
+  setSVGIcon(chatIcon, ICONS[config.bubbleIcon] || ICONS.chat);
   var closeIcon = el("span", "mcp-close-icon");
-  closeIcon.innerHTML = ICONS.close;
+  setSVGIcon(closeIcon, ICONS.close);
   bubble.appendChild(chatIcon);
   bubble.appendChild(closeIcon);
 
@@ -220,7 +229,7 @@
 
   var header = el("div", "mcp-header");
   var headerIcon = el("div", "mcp-header-icon", { "aria-hidden": "true" });
-  headerIcon.innerHTML = ICONS.sparkle;
+  setSVGIcon(headerIcon, ICONS.sparkle);
   var headerText = el("div", "mcp-header-text");
   var headerTitle = el("div", "mcp-header-title");
   headerTitle.textContent = config.widgetTitle;
@@ -248,7 +257,7 @@
     "aria-label": "Send message",
     onClick: handleSend
   });
-  sendBtn.innerHTML = ICONS.send;
+  setSVGIcon(sendBtn, ICONS.send);
 
   function onTextareaKeydown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -701,7 +710,7 @@
       messagesContainer.replaceChildren();
       var welcome = el("div", "mcp-welcome");
       var wIcon = el("div", "mcp-welcome-icon");
-      wIcon.innerHTML = ICONS.sparkle;
+      setSVGIcon(wIcon, ICONS.sparkle);
       var wText = el("div", "mcp-welcome-text");
       wText.textContent = config.welcomeMessage;
       welcome.appendChild(wIcon);
@@ -773,7 +782,7 @@
         var label = TOOL_LABELS[tc.name] || tc.name;
         var badge = el("span", "mcp-tool-badge");
         var badgeIconSpan = el("span", "", { "aria-hidden": "true" });
-        badgeIconSpan.innerHTML = ICONS.tool;
+        setSVGIcon(badgeIconSpan, ICONS.tool);
         badge.appendChild(badgeIconSpan);
         var badgeText = document.createTextNode(" " + label);
         badge.appendChild(badgeText);
@@ -821,7 +830,7 @@
         })(msg.failedMessage)
       });
       var retryIcon = el("span", "mcp-retry-icon", { "aria-hidden": "true" });
-      retryIcon.innerHTML = ICONS.retry;
+      setSVGIcon(retryIcon, ICONS.retry);
       retryBtn.appendChild(retryIcon);
       retryBtn.appendChild(document.createTextNode(" Retry"));
       wrapper.appendChild(retryBtn);
