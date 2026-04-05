@@ -16,6 +16,8 @@ export interface ChatContext {
   collectionHandle?: string;
   cartToken?: string;
   searchMode?: boolean;
+  customerAccountConnected?: boolean;
+  customerAccountStoreDomain?: string;
 }
 
 export function buildSystemPrompt(storeDomain: string, knowledge: ShopKnowledge[], ucpDoc?: UCPDiscoveryDocument | null, context?: ChatContext): string {
@@ -63,6 +65,11 @@ Use these UCP tools for all checkout and order operations when available. They p
 
   if (context) {
     prompt += `\n\n## Current Customer Context`;
+    if (context.customerAccountConnected && context.customerAccountStoreDomain) {
+      prompt += `\nYou are connected to the customer's account for ${context.customerAccountStoreDomain} and can access order history, account details, and other customer-specific information. Use the authenticated MCP tools to provide personalized assistance.`;
+    } else if (context.customerAccountConnected === false) {
+      prompt += `\nThe customer's account is not connected. If the customer asks about order history, account details, returns, or other personalized information, you MUST tell them: "To access your order history and account details, please connect your customer account using the 'Connect Account' button in the chat header." Do NOT attempt to look up orders or account information without a connected account — inform the customer they need to connect first.`;
+    }
     if (context.productHandle) {
       prompt += `\nThe customer is currently viewing the product "${context.productHandle}". Help them with questions about this product. Use the get_product tool to fetch details about this product if needed.`;
     }

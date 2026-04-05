@@ -36,6 +36,11 @@ async function start() {
     console.warn("[security] DEV_AUTH_SECRET is set in a non-development environment. This endpoint should not be accessible in production.");
   }
 
+  const replitAppUrl = process.env.REPLIT_APP_URL;
+  if (!replitAppUrl) {
+    console.warn("[customer-account-mcp] REPLIT_APP_URL is not set. OAuth callbacks for Customer Account MCP will fail. Set this to your app's public URL.");
+  }
+
   app.listen(port, () => {
     console.log(`Server listening on port ${port}`);
     startDbMaintenance();

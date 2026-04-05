@@ -7,6 +7,7 @@ import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { PreferencesPanel } from "@/components/chat/PreferencesPanel";
 import { ChatEmptyState } from "@/components/chat/ChatEmptyState";
 import { ChatComposer } from "@/components/chat/ChatComposer";
+import { CustomerAccountConnect } from "@/components/chat/CustomerAccountConnect";
 import { useSession } from "@/hooks/use-session";
 import { useChatOrchestration, messageKey } from "@/hooks/use-chat-orchestration";
 import { useCartStore } from "@/store/use-cart-store";
@@ -179,9 +180,12 @@ export default function ChatPage() {
               </div>
               <h2 className="font-bold text-sm">Shopping Assistant</h2>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setShowPrefs(!showPrefs)} className="rounded-lg" title="Preferences" aria-label="Toggle preferences" aria-expanded={showPrefs}>
-              <Settings2 className="w-4 h-4" aria-hidden="true" />
-            </Button>
+            <div className="flex items-center gap-2">
+              {sessionId && <CustomerAccountConnect storeDomain={storeDomain} sessionId={sessionId} />}
+              <Button variant="ghost" size="icon" onClick={() => setShowPrefs(!showPrefs)} className="rounded-lg" title="Preferences" aria-label="Toggle preferences" aria-expanded={showPrefs}>
+                <Settings2 className="w-4 h-4" aria-hidden="true" />
+              </Button>
+            </div>
           </div>
 
           {showPrefs && <PreferencesPanel userPrefs={userPrefs} onPrefChange={handlePrefChange} />}

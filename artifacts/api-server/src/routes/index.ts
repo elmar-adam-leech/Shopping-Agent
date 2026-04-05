@@ -8,11 +8,13 @@ import preferencesRouter from "./preferences";
 import analyticsRouter from "./analytics";
 import sessionsRouter from "./sessions";
 import authRouter from "./auth";
+import mcpAuthRouter from "./mcp-auth";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use(mcpAuthRouter);
 router.use(sessionsRouter);
 router.use(storesRouter);
 router.use(knowledgeRouter);

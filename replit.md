@@ -44,6 +44,7 @@ The frontend is built with React 18, Vite, Tailwind CSS, and shadcn/ui, providin
 - **LLM Provider System**: Decoupled LLM provider implementations with a factory for dynamic selection.
 - **Universal Commerce Protocol (UCP)**: Integration with UCP for enhanced commerce capabilities, including discovery and standardized checkout tools.
 - **Theme Integration**: Script-tag and iframe-based embedding options for various AI assistant functionalities directly within Shopify themes.
+- **Customer Account MCP**: OAuth 2.0 + PKCE flow for connecting shoppers to their Shopify customer accounts via the Customer Accounts MCP endpoint. Discovers endpoints via `/.well-known/customer-account-api`, stores encrypted tokens in `mcp_connections` table, auto-refreshes expired tokens, and routes tool calls through the authenticated endpoint when available. Fallback to public Storefront MCP when not connected. Frontend shows a "Connect Account" button in the chat header with connection status badges and disconnect functionality. Client ID resolved per-store (`customer_account_client_id` column) or via global `SHOPIFY_CUSTOMER_ACCOUNT_API_CLIENT_ID` env var. Requires `REPLIT_APP_URL` for OAuth callback URL.
 
 ## Load & Stress Testing
 - **Location**: `load-tests/` directory (workspace package `@workspace/load-tests`)

@@ -13,6 +13,8 @@ import { LRUCache } from "../services/lru-cache";
 import { decrypt } from "../services/encryption";
 import { filterPromptInjection } from "../lib/prompt-filter";
 import { sendError, sendZodError } from "../lib/error-response";
+import { getActiveConnection, callAuthenticatedMCPTool, listAuthenticatedMCPTools } from "../services/customer-account-mcp";
+import type { McpConnection } from "@workspace/db/schema";
 
 const MAX_USER_MESSAGE_LENGTH = 10_000;
 const MESSAGE_WINDOW_SIZE = 20;
@@ -317,12 +319,44 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       console.warn(`Failed to list MCP tools for store="${store.storeDomain}":`, err instanceof Error ? err.message : err);
     }
 
+    const validatedSessionId = (req as unknown as { validatedSessionId: string }).validatedSessionId;
+    let customerAccountConnection: McpConnection | null = null;
+    try {
+      customerAccountConnection = await getActiveConnection(store.storeDomain, validatedSessionId);
+    } catch (err) {
+      console.warn(`[chat] Failed to check customer account connection:`, err instanceof Error ? err.message : err);
+    }
+
+    const authenticatedToolNames = new Set<string>();
+    if (customerAccountConnection) {
+      try {
+        const authTools = await listAuthenticatedMCPTools(customerAccountConnection);
+        if (authTools.length > 0) {
+          const existingNames = new Set(tools.map(t => t.name));
+          for (const tool of authTools) {
+            if (!existingNames.has(tool.name)) {
+              tools.push(tool);
+              authenticatedToolNames.add(tool.name);
+            }
+          }
+          console.log(`[chat] Merged ${authTools.length} authenticated MCP tools for store="${store.storeDomain}"`);
+        }
+      } catch (err) {
+        console.warn(`[chat] Failed to list authenticated MCP tools:`, err instanceof Error ? err.message : err);
+      }
+    }
+
     const chatContext = parsed.data.context ? {
       productHandle: parsed.data.context.productHandle,
       collectionHandle: parsed.data.context.collectionHandle,
       cartToken: parsed.data.context.cartToken,
       searchMode: parsed.data.context.searchMode,
-    } : undefined;
+      customerAccountConnected: !!customerAccountConnection,
+      customerAccountStoreDomain: customerAccountConnection ? store.storeDomain : undefined,
+    } : {
+      customerAccountConnected: !!customerAccountConnection,
+      customerAccountStoreDomain: customerAccountConnection ? store.storeDomain : undefined,
+    };
 
     const { systemPrompt, llmMessages } = buildLLMContext(
       existingMessages,
@@ -345,6 +379,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       return;
     }
 
+    const activeConnection = customerAccountConnection;
     const stream = streamChatWithProvider(
       store.provider,
       decryptedApiKey,
@@ -353,6 +388,26 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       llmMessages,
       tools,
       async (toolName: string, args: Record<string, unknown>) => {
+        if (authenticatedToolNames.has(toolName) && !activeConnection) {
+          return JSON.stringify({
+            error: "customer_account_required",
+            message: "This tool requires a connected customer account. Please connect your customer account using the 'Connect Account' button in the chat header to access order history, account details, and other personalized features.",
+          });
+        }
+        if (activeConnection) {
+          try {
+            const result = await callAuthenticatedMCPTool(activeConnection, toolName, args);
+            let parsed: unknown;
+            try { parsed = JSON.parse(result); } catch { return result; }
+            if (parsed && typeof parsed === "object" && (parsed as Record<string, unknown>).error) {
+              console.warn(`[chat] Authenticated MCP tool "${toolName}" returned error, falling back to public MCP`);
+            } else {
+              return result;
+            }
+          } catch (err) {
+            console.warn(`[chat] Authenticated MCP call failed, falling back to public:`, err instanceof Error ? err.message : err);
+          }
+        }
         return executeToolWithFallback(store.storeDomain, store.storefrontToken!, toolName, args, ucpEnabled);
       },
       abortController.signal

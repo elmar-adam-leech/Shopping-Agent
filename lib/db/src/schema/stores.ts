@@ -14,6 +14,7 @@ export const storesTable = pgTable("stores", {
   ucpCompliant: boolean("ucp_compliant").notNull().default(true),
   chatEnabled: boolean("chat_enabled").notNull().default(true),
   embedEnabled: boolean("embed_enabled").notNull().default(false),
+  customerAccountClientId: text("customer_account_client_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
