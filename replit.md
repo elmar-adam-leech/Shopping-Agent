@@ -3,6 +3,21 @@
 ## Overview
 This project is a multi-tenant Shopify AI Shopping Agent designed to enhance e-commerce customer interactions. It allows merchants to configure an AI assistant with their store's knowledge, enabling customers to chat for product search, cart management, and checkout. The agent integrates with Shopify's Storefront MCP and supports various LLM providers. Its core purpose is to provide an intelligent, automated shopping assistant that streamlines the customer journey and leverages advanced AI capabilities within the Shopify ecosystem. The project aims to become a leading AI solution for Shopify merchants, offering a seamless and personalized shopping experience that drives sales and customer satisfaction.
 
+## Engineering Standards
+This project follows 14 universal engineering standards defined in `MY_STANDARDS.md` at the project root. All agents and contributors must read and follow these standards. Key standards include:
+- **Real implementations only** — no mocks, fakes, or placeholders in production code
+- **Soft delete over hard delete** — use `deleted_at` columns, never permanently erase user data
+- **Audit trails** — log all mutations to important data with who/what/when
+- **Centralize shared logic** — no duplicate code across packages
+- **TypeScript strict mode** — zero `any` casts, strict enabled everywhere
+- **Dark mode** — all UI must support dark mode with a user toggle
+- **Security defaults** — HTTP-only cookies, encrypted secrets, scoped tokens, input validation
+- **Background work survives restarts** — graceful shutdown, persistent job queues
+- **Mobile-first** — test at 375px, 44×44px touch targets
+- **One source of truth** — no dual-write patterns, clear data ownership
+
+A gap analysis against these standards is documented in `STANDARDS_AUDIT.md`.
+
 ## User Preferences
 - I prefer simple language.
 - I like functional programming.
