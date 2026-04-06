@@ -16,8 +16,18 @@ import { getCachedKnowledge } from "../services/knowledge-cache";
 import { buildLLMContext } from "../services/llm-context";
 import { fireOutputAudit } from "../services/output-audit";
 import { createToolExecutor } from "../services/tool-guard";
+import { eq, and } from "drizzle-orm";
+import { db, userPreferencesTable } from "@workspace/db";
+import { type UserPreferencesContext } from "../services/system-prompt";
+import { extractAndSavePreferences } from "../services/preference-extractor";
 
 const MAX_USER_MESSAGE_LENGTH = 10_000;
+
+const ALLOWED_PREF_KEYS = new Set([
+  "displayName", "units", "budget", "style",
+  "topSize", "bottomSize", "shoeSize",
+  "materials", "brands", "colors", "lifestyle",
+]);
 
 const router: IRouter = Router();
 
@@ -169,6 +179,33 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       }
     }
 
+    let userPreferences: UserPreferencesContext | null = null;
+    try {
+      const [prefsRow] = await db
+        .select()
+        .from(userPreferencesTable)
+        .where(
+          and(
+            eq(userPreferencesTable.storeDomain, store.storeDomain),
+            eq(userPreferencesTable.sessionId, parsed.data.sessionId)
+          )
+        );
+      if (prefsRow && prefsRow.prefs && typeof prefsRow.prefs === "object") {
+        const raw = prefsRow.prefs as Record<string, unknown>;
+        const cleaned: UserPreferencesContext = {};
+        for (const [k, v] of Object.entries(raw)) {
+          if (ALLOWED_PREF_KEYS.has(k) && v && typeof v === "string" && v.trim()) {
+            cleaned[k] = v.trim();
+          }
+        }
+        if (Object.keys(cleaned).length > 0) {
+          userPreferences = cleaned;
+        }
+      }
+    } catch (err) {
+      console.warn("[chat] Failed to fetch user preferences:", err instanceof Error ? err.message : err);
+    }
+
     const chatContext = parsed.data.context ? {
       productHandle: parsed.data.context.productHandle,
       collectionHandle: parsed.data.context.collectionHandle,
@@ -191,7 +228,8 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
         brandVoice: store.brandVoice,
         customInstructions: store.customInstructions,
         recommendationStrategy: store.recommendationStrategy,
-      }
+      },
+      userPreferences
     );
 
     let fullAssistantContent = "";
@@ -270,6 +308,20 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     if (!analyticsSaved) {
       console.warn(`[chat] Analytics persistence failed for store="${store.storeDomain}" session="${parsed.data.sessionId}"`);
     }
+
+    extractAndSavePreferences(
+      store.storeDomain,
+      parsed.data.sessionId,
+      truncatedMessage,
+      fullAssistantContent
+    ).then((extracted) => {
+      if (extracted) {
+        console.log(`[chat] Auto-extracted preferences for store="${store.storeDomain}" session="${parsed.data.sessionId}":`, Object.keys(extracted).join(", "));
+        safeSend(`data: ${JSON.stringify({ type: "preferences_updated", data: extracted })}\n\n`);
+      }
+    }).catch((err) => {
+      console.warn("[chat] Preference extraction failed:", err instanceof Error ? err.message : err);
+    });
 
     if (fullAssistantContent && conversationSaved) {
       const toolResultTexts = toolResults.map(tr => tr.content);

@@ -5,6 +5,7 @@ import { CartPanel } from "@/components/chat/cart-panel";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ConversationSidebar } from "@/components/chat/ConversationSidebar";
 import { PreferencesPanel } from "@/components/chat/PreferencesPanel";
+import { MemoryPanel } from "@/components/chat/MemoryPanel";
 import { ChatEmptyState } from "@/components/chat/ChatEmptyState";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { CustomerAccountConnect } from "@/components/chat/CustomerAccountConnect";
@@ -13,6 +14,7 @@ import { useSession } from "@/hooks/use-session";
 import { useChatOrchestration, messageKey } from "@/hooks/use-chat-orchestration";
 import { useCartStore } from "@/store/use-cart-store";
 import { useListConversations, useGetPreferences, useUpdatePreferences, deleteConversation, getGetPreferencesQueryKey, useGetStorePublic, type Conversation } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChatLoadingIndicator } from "@/components/chat/ChatLoadingIndicator";
 import { Sparkles, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +30,7 @@ export default function ChatPage() {
   const cartStore = useCartStore();
   const { toast } = useToast();
   const { data: storePublic } = useGetStorePublic(storeDomain);
+  const queryClient = useQueryClient();
 
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [showPrefs, setShowPrefs] = useState(false);
@@ -61,6 +64,11 @@ export default function ChatPage() {
     setConvOffset(prev => prev + CONV_PAGE_SIZE);
   }, []);
 
+  const handlePreferencesUpdated = useCallback(() => {
+    const prefsQueryKey = getGetPreferencesQueryKey(storeDomain, { sessionId: sessionId || "" });
+    queryClient.invalidateQueries({ queryKey: prefsQueryKey });
+  }, [storeDomain, sessionId, queryClient]);
+
   const {
     displayMessages,
     isLoading,
@@ -80,6 +88,7 @@ export default function ChatPage() {
     onConversationId: (id) => setActiveConversationId(id),
     onSuccess: () => { setConvOffset(0); refetchConversations(); },
     onCartError: (msg) => toast({ title: "Cart Error", description: msg, variant: "destructive" }),
+    onPreferencesUpdated: handlePreferencesUpdated,
   });
 
   const prevErrorRef = useRef<string | null>(null);
@@ -105,6 +114,17 @@ export default function ChatPage() {
       await updatePrefs({ storeDomain, data: { sessionId, prefs: { ...userPrefs, [key]: value } } });
     } catch {
       toast({ title: "Failed to update preference", description: "Please try again.", variant: "destructive" });
+    }
+  }, [sessionId, storeDomain, updatePrefs, userPrefs, toast]);
+
+  const handlePrefDelete = useCallback(async (key: string) => {
+    if (!sessionId) return;
+    try {
+      const newPrefs = { ...userPrefs };
+      delete newPrefs[key];
+      await updatePrefs({ storeDomain, data: { sessionId, prefs: newPrefs } });
+    } catch {
+      toast({ title: "Failed to delete preference", description: "Please try again.", variant: "destructive" });
     }
   }, [sessionId, storeDomain, updatePrefs, userPrefs, toast]);
 
@@ -227,6 +247,7 @@ export default function ChatPage() {
                 <ChatEmptyState storeDomain={storeDomain} onPresetClick={setInput} welcomeMessage={storePublic?.welcomeMessage} />
               ) : (
                 <div className="max-w-4xl mx-auto space-y-6" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions">
+                  <MemoryPanel userPrefs={userPrefs} onPrefChange={handlePrefChange} onPrefDelete={handlePrefDelete} />
                   {displayMessages.map((msg, i) => (
                     <MessageBubble key={messageKey(messages[i], i)} message={msg} />
                   ))}

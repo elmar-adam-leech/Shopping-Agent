@@ -35,6 +35,7 @@ export interface UseChatStreamOptions {
   onSuccess?: () => void;
   onSessionExpired?: () => Promise<string | null>;
   onCartError?: (message: string) => void;
+  onPreferencesUpdated?: (extracted: Record<string, string>) => void;
 }
 
 export function useChatStream({
@@ -47,6 +48,7 @@ export function useChatStream({
   onSuccess,
   onSessionExpired,
   onCartError,
+  onPreferencesUpdated,
 }: UseChatStreamOptions) {
   const [messages, setMessages] = useState<ChatMessageWithId[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -80,6 +82,9 @@ export function useChatStream({
 
   const onCartErrorRef = useRef(onCartError);
   onCartErrorRef.current = onCartError;
+
+  const onPreferencesUpdatedRef = useRef(onPreferencesUpdated);
+  onPreferencesUpdatedRef.current = onPreferencesUpdated;
 
   useEffect(() => {
     return () => {
@@ -246,6 +251,9 @@ export function useChatStream({
             } else if (event.type === 'warning') {
               const warnMsg = typeof event.data === 'string' ? event.data : 'A warning occurred.';
               console.warn('[useChatStream] Server warning:', warnMsg);
+            } else if (event.type === 'preferences_updated') {
+              const extracted = event.data as Record<string, string>;
+              onPreferencesUpdatedRef.current?.(extracted);
             }
           },
           controller.signal

@@ -87,7 +87,7 @@ The frontend is built with React 18, Vite, Tailwind CSS, and shadcn/ui, providin
 - **Knowledge Management**: CRUD for categorized shop knowledge entries.
 - **Chat**: Real-time SSE streaming for AI chat interactions, persisting conversations. The chat route (`routes/chat.ts`) is a thin orchestrator that delegates to focused services: `conversation-service.ts` (load/create/persist conversations), `knowledge-cache.ts` (LRU-cached knowledge), `llm-context.ts` (message windowing + system prompt), `output-audit.ts` (async retraction), and `tool-guard.ts` (tool execution with fallback + response guarding).
 - **Analytics**: Comprehensive merchant analytics dashboard with: conversation metrics, tool usage breakdown, conversion funnel (chat → cart → checkout → purchase), top recommended products, abandoned cart tracking, and estimated revenue from AI-assisted checkouts. Supports date range selection (7d, 30d, 90d) with auto-refresh. Analytics events logged include `chat`, `tool_call`, `cart_created`, `checkout_started`, `checkout_completed`, and `product_recommended`. Enhanced API endpoint at `/stores/:storeDomain/analytics/enhanced` provides server-side aggregated data.
-- **Preferences**: Storage of user preferences.
+- **Preferences & Personalization**: User preferences (display name, units, budget, style, clothing sizes, material/brand/color preferences, lifestyle filters) are stored per session+store. Preferences are injected into the LLM system prompt for personalized responses. A regex-based preference extractor automatically detects and saves preferences mentioned in conversation (e.g., "I wear size 10"). The "What I remember" panel in the chat UI shows stored preferences with inline edit/delete controls.
 - **LLM Provider System**: Decoupled LLM provider implementations with a factory for dynamic selection.
 - **Universal Commerce Protocol (UCP)**: Dynamic capability negotiation per UCP 2026-01-11 spec. Discovery, DB persistence with configurable refresh, dynamic tool generation from advertised capabilities (checkout, orders, subscriptions, loyalty, discounts, preorders, wishlists, gifting), LLM context injection, graceful non-UCP fallback, and analytics logging.
 - **Theme Integration**: Script-tag and iframe-based embedding options for various AI assistant functionalities directly within Shopify themes.
@@ -126,4 +126,3 @@ The frontend is built with React 18, Vite, Tailwind CSS, and shadcn/ui, providin
 - **OpenAI SDK**: Integration with OpenAI's large language models.
 - **Anthropic SDK**: Integration with Anthropic's large language models.
 - **xAI (via OpenAI SDK)**: Integration with xAI's models using the OpenAI SDK compatible interface.
-- **PostgreSQL**: Relational database for persistent storage.
