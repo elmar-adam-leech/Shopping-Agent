@@ -26,6 +26,8 @@ tags:
     description: Session management
   - name: auth
     description: Shopify OAuth
+  - name: experiments
+    description: A/B prompt experiments
 
 paths:
   /healthz:
@@ -672,6 +674,164 @@ paths:
               schema:
                 $ref: "#/components/schemas/DailyQueriesData"
 
+  /stores/{storeDomain}/experiments:
+    get:
+      operationId: listExperiments
+      tags: [experiments]
+      summary: List all experiments for a store
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of experiments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PromptExperiment"
+    post:
+      operationId: createExperiment
+      tags: [experiments]
+      summary: Create a new A/B prompt experiment
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateExperimentBody"
+      responses:
+        "201":
+          description: Experiment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptExperiment"
+        "409":
+          description: An active experiment already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /stores/{storeDomain}/experiments/{experimentId}:
+    get:
+      operationId: getExperiment
+      tags: [experiments]
+      summary: Get an experiment by ID
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Experiment details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptExperiment"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /stores/{storeDomain}/experiments/{experimentId}/complete:
+    post:
+      operationId: completeExperiment
+      tags: [experiments]
+      summary: Complete an experiment and declare a winner
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteExperimentBody"
+      responses:
+        "200":
+          description: Experiment completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptExperiment"
+
+  /stores/{storeDomain}/experiments/{experimentId}/archive:
+    post:
+      operationId: archiveExperiment
+      tags: [experiments]
+      summary: Archive an experiment
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Experiment archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptExperiment"
+
+  /stores/{storeDomain}/experiments/{experimentId}/analytics:
+    get:
+      operationId: getExperimentAnalytics
+      tags: [experiments]
+      summary: Get side-by-side analytics for an experiment
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Experiment analytics comparison
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExperimentAnalytics"
+
 components:
   schemas:
     HealthStatus:
@@ -1208,3 +1368,136 @@ components:
         - date
         - queries
         - totalEvents
+
+    ExperimentVariantConfig:
+      type: object
+      properties:
+        brandVoice:
+          type: ["object", "null"]
+          properties:
+            tone:
+              type: string
+              enum: [friendly, professional, playful, luxury]
+            personality:
+              type: string
+            greeting:
+              type: string
+            signOff:
+              type: string
+        customInstructions:
+          type: ["string", "null"]
+        recommendationStrategy:
+          type: string
+
+    PromptExperiment:
+      type: object
+      properties:
+        id:
+          type: string
+        storeDomain:
+          type: string
+        name:
+          type: string
+        variantA:
+          $ref: "#/components/schemas/ExperimentVariantConfig"
+        variantB:
+          $ref: "#/components/schemas/ExperimentVariantConfig"
+        splitRatio:
+          type: integer
+        status:
+          type: string
+          enum: [active, completed, archived]
+        winner:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - id
+        - storeDomain
+        - name
+        - variantA
+        - variantB
+        - splitRatio
+        - status
+        - createdAt
+
+    CreateExperimentBody:
+      type: object
+      properties:
+        name:
+          type: string
+        variantA:
+          $ref: "#/components/schemas/ExperimentVariantConfig"
+        variantB:
+          $ref: "#/components/schemas/ExperimentVariantConfig"
+        splitRatio:
+          type: integer
+          default: 50
+      required:
+        - name
+        - variantA
+        - variantB
+
+    CompleteExperimentBody:
+      type: object
+      properties:
+        winner:
+          type: string
+          enum: [A, B]
+      required:
+        - winner
+
+    VariantMetrics:
+      type: object
+      properties:
+        variant:
+          type: string
+        sessionCount:
+          type: integer
+        totalChats:
+          type: integer
+        avgMessagesPerSession:
+          type: number
+        cartCreated:
+          type: integer
+        checkoutCompleted:
+          type: integer
+        conversionRate:
+          type: number
+        toolUsage:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolUsageItem"
+      required:
+        - variant
+        - sessionCount
+        - totalChats
+        - avgMessagesPerSession
+        - cartCreated
+        - checkoutCompleted
+        - conversionRate
+        - toolUsage
+
+    ExperimentAnalytics:
+      type: object
+      properties:
+        experimentId:
+          type: string
+        experimentName:
+          type: string
+        status:
+          type: string
+        variantA:
+          $ref: "#/components/schemas/VariantMetrics"
+        variantB:
+          $ref: "#/components/schemas/VariantMetrics"
+      required:
+        - experimentId
+        - experimentName
+        - status
+        - variantA
+        - variantB

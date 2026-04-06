@@ -18,7 +18,7 @@ import { fireOutputAudit } from "../services/output-audit";
 import { createToolExecutor } from "../services/tool-guard";
 import { trackSSEConnection, isServerShuttingDown } from "../services/shutdown";
 import { eq, and } from "drizzle-orm";
-import { db, userPreferencesTable, userConsentsTable } from "@workspace/db";
+import { db, userPreferencesTable, userConsentsTable, sessionsTable, promptExperimentsTable, withTenantScope } from "@workspace/db";
 import type { ConsentCategories } from "@workspace/db/schema";
 import { type UserPreferencesContext } from "../services/system-prompt";
 import { extractAndSavePreferences } from "../services/preference-extractor";
@@ -297,17 +297,62 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       customerAccountStoreDomain: customerAccountConnection ? store.storeDomain : undefined,
     };
 
+    let customization = {
+      brandVoice: store.brandVoice,
+      customInstructions: store.customInstructions,
+      recommendationStrategy: store.recommendationStrategy,
+    };
+
+    try {
+      const [sessionRow] = await withTenantScope(store.storeDomain, async (scopedDb) => {
+        return scopedDb
+          .select({
+            experimentId: sessionsTable.experimentId,
+            experimentVariant: sessionsTable.experimentVariant,
+          })
+          .from(sessionsTable)
+          .where(eq(sessionsTable.id, parsed.data.sessionId))
+          .limit(1);
+      });
+
+      if (sessionRow?.experimentId && sessionRow?.experimentVariant) {
+        const [experiment] = await withTenantScope(store.storeDomain, async (scopedDb) => {
+          return scopedDb
+            .select()
+            .from(promptExperimentsTable)
+            .where(
+              eq(promptExperimentsTable.id, sessionRow.experimentId!)
+            )
+            .limit(1);
+        });
+
+        if (experiment) {
+          const variantConfig = sessionRow.experimentVariant === "A"
+            ? experiment.variantA
+            : experiment.variantB;
+
+          customization = {
+            brandVoice: variantConfig.brandVoice !== undefined
+              ? variantConfig.brandVoice as typeof store.brandVoice
+              : store.brandVoice,
+            customInstructions: variantConfig.customInstructions !== undefined
+              ? variantConfig.customInstructions
+              : store.customInstructions,
+            recommendationStrategy: variantConfig.recommendationStrategy || store.recommendationStrategy,
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("[chat] Failed to load experiment variant:", err instanceof Error ? err.message : err);
+    }
+
     const { systemPrompt, llmMessages } = buildLLMContext(
       existingMessages,
       store.storeDomain,
       knowledge,
       ucpDoc,
       chatContext,
-      {
-        brandVoice: store.brandVoice,
-        customInstructions: store.customInstructions,
-        recommendationStrategy: store.recommendationStrategy,
-      },
+      customization,
       userPreferences
     );
 

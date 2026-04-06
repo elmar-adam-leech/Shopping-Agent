@@ -2,6 +2,7 @@ import type { ShopKnowledge } from "@workspace/db";
 import type { BrandVoice } from "@workspace/db/schema";
 import type { UCPDiscoveryDocument } from "./ucp-client";
 import { extractAllCapabilities, generateToolsFromCapabilities } from "./ucp-client";
+import { SYSTEM_PROMPT_HARDENING } from "./prompt-guard";
 
 const UCP_SAFE_PATTERN = /^[a-zA-Z0-9._\-: ]{1,100}$/;
 
@@ -11,132 +12,166 @@ function sanitizeUCPValue(value: string, maxLen = 100): string {
   return trimmed.replace(/[^a-zA-Z0-9._\-: ]/g, "");
 }
 
-export type UserPreferencesContext = Record<string, string>;
+const CATEGORY_LABELS: Record<string, string> = {
+  general: "General Store Information",
+  sizing: "Sizing & Recommendations",
+  compatibility: "Compatibility Rules",
+  required_accessories: "Required Accessories",
+  restrictions: "Restrictions & Limitations",
+  policies: "Policies (Returns, Shipping, Warranty)",
+  custom: "Additional Information",
+};
+
+const RECOMMENDATION_STRATEGY_LABELS: Record<string, string> = {
+  bestsellers_first: "Prioritize best-selling products when making recommendations",
+  new_arrivals_first: "Prioritize newest arrivals when making recommendations",
+  price_low_to_high: "Prioritize lower-priced options first when making recommendations",
+  personalized: "Personalize recommendations based on the customer's expressed preferences and browsing context",
+};
+
+export interface ChatContext {
+  productHandle?: string;
+  collectionHandle?: string;
+  cartToken?: string;
+  searchMode?: boolean;
+  customerAccountConnected?: boolean;
+  customerAccountStoreDomain?: string;
+}
 
 export interface StoreCustomization {
   brandVoice?: BrandVoice | null;
   customInstructions?: string | null;
-  recommendationStrategy?: string | null;
+  recommendationStrategy?: string;
 }
+
+export type UserPreferencesContext = Record<string, string>;
 
 export function buildSystemPrompt(
   storeDomain: string,
   knowledge: ShopKnowledge[],
-  ucpDoc: UCPDiscoveryDocument | null,
-  chatContext?: {
-    productHandle?: string;
-    collectionHandle?: string;
-    cartToken?: string;
-    searchMode?: boolean;
-    customerAccountConnected?: boolean;
-    customerAccountStoreDomain?: string;
-  },
+  ucpDoc?: UCPDiscoveryDocument | null,
+  context?: ChatContext,
   customization?: StoreCustomization,
   userPreferences?: UserPreferencesContext | null
 ): string {
-  const parts: string[] = [];
+  let prompt = `You are a fully UCP-compliant Shopify Agent and helpful, knowledgeable shopping assistant for the store "${storeDomain}". Use the Universal Commerce Protocol primitives via MCP for all commerce actions (capability discovery, checkout negotiation, orders, post-purchase). Your job is to help customers find products, understand their options, and make informed purchasing decisions.
 
-  parts.push(`You are the AI shopping assistant for ${storeDomain}.`);
-  parts.push("Help customers find products, answer questions, and provide personalized shopping recommendations.");
-  parts.push("Be helpful, accurate, and concise. Only discuss topics related to the store and its products.");
+## Your Capabilities
+- Use MCP tools to search products, view product details, browse collections, and manage shopping carts
+- Use GraphQL to fetch blog posts and articles when customers ask about content
+- Remember customer preferences mentioned during the conversation
+- Provide expert advice based on the store's knowledge base below
+
+## Guidelines
+- Be friendly, professional, and concise
+- Always use tools to look up current product information rather than guessing
+- When recommending products, explain WHY based on the customer's needs
+- If a product has compatibility requirements or required accessories, always mention them
+- If you're unsure about something, say so honestly
+- Help customers build complete solutions, not just individual products
+- When adding items to cart, confirm the selection with the customer first`;
 
   if (customization?.brandVoice) {
     const bv = customization.brandVoice;
-    parts.push(`\n## Brand Voice`);
-    parts.push(`Tone: ${bv.tone}`);
-    if (bv.personality) parts.push(`Personality: ${bv.personality}`);
-    if (bv.greeting) parts.push(`Greeting style: ${bv.greeting}`);
-    if (bv.signOff) parts.push(`Sign-off style: ${bv.signOff}`);
+    prompt += `\n\n## Brand Voice & Persona`;
+    prompt += `\nAdopt the following brand voice in all your responses:`;
+    prompt += `\n- **Tone**: ${bv.tone}`;
+    if (bv.personality) {
+      prompt += `\n- **Personality**: ${bv.personality}`;
+    }
+    if (bv.greeting) {
+      prompt += `\n- **Greeting style**: When greeting customers, use a style similar to: "${bv.greeting}"`;
+    }
+    if (bv.signOff) {
+      prompt += `\n- **Sign-off style**: When ending conversations, use a style similar to: "${bv.signOff}"`;
+    }
   }
 
   if (customization?.customInstructions) {
-    parts.push(`\n## Custom Instructions\n${customization.customInstructions}`);
+    prompt += `\n\n## Store-Specific Instructions`;
+    prompt += `\nThe store owner has provided the following instructions for you to follow:`;
+    prompt += `\n${customization.customInstructions}`;
   }
 
   if (customization?.recommendationStrategy) {
-    const strategyMap: Record<string, string> = {
-      bestsellers_first: "Prioritize bestselling products in recommendations.",
-      new_arrivals_first: "Prioritize new arrivals in recommendations.",
-      price_low_to_high: "When showing multiple products, order by price from low to high.",
-      personalized: "Personalize recommendations based on customer preferences and browsing context.",
-    };
-    const strategyHint = strategyMap[customization.recommendationStrategy];
-    
-    if (customization.recommendationStrategy !== "personalized" || strategyHint) {
-       parts.push(`\n## Recommendation Strategy`);
-       if (strategyHint) {
-         parts.push(strategyHint);
-       } else {
-         parts.push(`Prefer showing products using the "${customization.recommendationStrategy}" strategy when making recommendations.`);
-       }
-    }
-  }
-
-  if (knowledge.length > 0) {
-    parts.push("\n## Store Knowledge");
-    const grouped: Record<string, ShopKnowledge[]> = {};
-    for (const k of knowledge) {
-      const cat = k.category || "general";
-      if (!grouped[cat]) grouped[cat] = [];
-      grouped[cat].push(k);
-    }
-    for (const [category, items] of Object.entries(grouped)) {
-      parts.push(`\n### ${category}`);
-      for (const item of items) {
-        parts.push(`- **${item.title}**: ${item.content}`);
-      }
-    }
-  }
-
-  if (ucpDoc) {
-    try {
-      const capabilities = extractAllCapabilities(ucpDoc);
-      if (capabilities.length > 0) {
-        parts.push("\n## Available Capabilities");
-        const toolDescriptions = generateToolsFromCapabilities(capabilities);
-        for (const tool of toolDescriptions) {
-          parts.push(`- ${sanitizeUCPValue(tool.name)}: ${sanitizeUCPValue(tool.description || "", 200)}`);
-        }
-      }
-      if (ucpDoc.businessName) {
-        parts.push(`Business: ${sanitizeUCPValue(ucpDoc.businessName)}`);
-      }
-    } catch {
-    }
-  }
-
-  if (chatContext) {
-    if (chatContext.productHandle) {
-      parts.push(`\n## Contextual Information`);
-      parts.push(`The customer is currently viewing product: "${chatContext.productHandle}". Focus your assistance on this product unless they ask about something else.`);
-    }
-    if (chatContext.collectionHandle) {
-      if (!chatContext.productHandle) parts.push(`\n## Contextual Information`);
-      parts.push(`The customer is browsing collection: "${chatContext.collectionHandle}". Consider this context when making recommendations.`);
-    }
-    if (chatContext.cartToken) {
-      if (!chatContext.productHandle && !chatContext.collectionHandle) parts.push(`\n## Contextual Information`);
-      parts.push("The customer has an active cart. You can help them with cart-related questions.");
-    }
-    if (chatContext.searchMode) {
-      if (!chatContext.productHandle && !chatContext.collectionHandle && !chatContext.cartToken) parts.push(`\n## Contextual Information`);
-      parts.push("The customer is using the search feature. Help them find what they're looking for efficiently.");
-    }
-    if (chatContext.customerAccountConnected) {
-      if (!chatContext.productHandle && !chatContext.collectionHandle && !chatContext.cartToken && !chatContext.searchMode) parts.push(`\n## Contextual Information`);
-      parts.push("The customer has connected their account. You can access their order history and account details using the authenticated tools.");
+    const strategyLabel = RECOMMENDATION_STRATEGY_LABELS[customization.recommendationStrategy];
+    if (strategyLabel) {
+      prompt += `\n\n## Recommendation Strategy`;
+      prompt += `\n${strategyLabel}.`;
     }
   }
 
   if (userPreferences && Object.keys(userPreferences).length > 0) {
-    parts.push("\n## Customer Preferences");
+    prompt += `\n\n## Known Customer Preferences`;
+    prompt += `\nYou have learned the following about this customer from previous interactions:`;
     for (const [key, value] of Object.entries(userPreferences)) {
-      if (value) {
-        parts.push(`- ${key}: ${value}`);
-      }
+      prompt += `\n- **${key}**: ${value}`;
     }
-    parts.push("Use these preferences to personalize your recommendations, but always ask before assuming.");
+    prompt += `\nUse these preferences to personalize your recommendations and responses.`;
   }
 
-  return parts.join("\n");
+  if (ucpDoc) {
+    const capabilities = extractAllCapabilities(ucpDoc);
+    if (capabilities.length > 0) {
+      prompt += `\n\n## UCP Capabilities`;
+      prompt += `\nThis store supports the following Universal Commerce Protocol capabilities:`;
+      const tools = generateToolsFromCapabilities(capabilities);
+      for (const tool of tools) {
+        prompt += `\n- ${sanitizeUCPValue(tool.name)}: ${sanitizeUCPValue(tool.description, 200)}`;
+      }
+    }
+
+    if (ucpDoc.paymentHandlers && ucpDoc.paymentHandlers.length > 0) {
+      prompt += `\n\n## Payment Methods`;
+      for (const handler of ucpDoc.paymentHandlers) {
+        const hType = sanitizeUCPValue(handler.type);
+        const methods = handler.supportedMethods
+          ? handler.supportedMethods.map(m => sanitizeUCPValue(m)).join(", ")
+          : "";
+        prompt += `\n- ${hType}${methods ? `: ${methods}` : ""}`;
+      }
+    }
+  }
+
+  if (context) {
+    prompt += `\n\n## Current Customer Context`;
+    if (context.customerAccountConnected && context.customerAccountStoreDomain) {
+      prompt += `\nYou are connected to the customer's account for ${context.customerAccountStoreDomain} and can access order history, account details, and other customer-specific information. Use the authenticated MCP tools to provide personalized assistance.`;
+    } else if (context.customerAccountConnected === false) {
+      prompt += `\nThe customer's account is not connected. If the customer asks about order history, account details, returns, or other personalized information, you MUST tell them: "To access your order history and account details, please connect your customer account using the 'Connect Account' button in the chat header." Do NOT attempt to look up orders or account information without a connected account — inform the customer they need to connect first.`;
+    }
+    if (context.productHandle) {
+      prompt += `\nThe customer is currently viewing the product "${context.productHandle}". Help them with questions about this product. Use the get_product tool to fetch details about this product if needed.`;
+    }
+    if (context.collectionHandle) {
+      prompt += `\nThe customer is browsing the "${context.collectionHandle}" collection. Help them find products in this collection.`;
+    }
+    if (context.cartToken) {
+      prompt += `\nThe customer has an active cart (token: ${context.cartToken}). They may want help reviewing their cart or finding complementary products.`;
+    }
+    if (context.searchMode) {
+      prompt += `\nThe customer is using AI-powered search. Focus on finding and presenting relevant products. Use the search_products tool proactively.`;
+    }
+  }
+
+  if (knowledge.length > 0) {
+    prompt += `\n\n## Store Knowledge Base\nThe store owner has provided the following information to help you assist customers:\n`;
+
+    const grouped = knowledge.reduce<Record<string, ShopKnowledge[]>>((acc, entry) => {
+      (acc[entry.category] ??= []).push(entry);
+      return acc;
+    }, {});
+
+    for (const [category, entries] of Object.entries(grouped)) {
+      const label = CATEGORY_LABELS[category] || category;
+      prompt += `\n### ${label}\n`;
+      for (const entry of [...entries].sort((a, b) => a.sortOrder - b.sortOrder)) {
+        prompt += `\n**${entry.title}**\n${entry.content}\n`;
+      }
+    }
+  }
+
+  prompt += SYSTEM_PROMPT_HARDENING;
+
+  return prompt;
 }

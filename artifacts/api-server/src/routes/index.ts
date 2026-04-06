@@ -11,6 +11,7 @@ import sessionsRouter from "./sessions";
 import authRouter from "./auth";
 import mcpAuthRouter from "./mcp-auth";
 import consentsRouter from "./consents";
+import experimentsRouter from "./experiments";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use(conversationsRouter);
 router.use(preferencesRouter);
 router.use(analyticsRouter);
 router.use(consentsRouter);
+router.use(experimentsRouter);
 
 export default router;

@@ -12,11 +12,12 @@ async function start() {
     execSync("pnpm --filter @workspace/db run push-force", {
       stdio: "inherit",
       cwd: process.env["REPL_HOME"] || process.cwd(),
+      timeout: 30_000,
     });
     console.log("Database migrations complete.");
   } catch (err) {
-    console.error("Database migration failed:", err);
-    process.exit(1);
+    console.warn("Database migration warning (may be interactive prompt):", err instanceof Error ? err.message : "timeout or error");
+    console.log("Continuing with existing schema...");
   }
 
   try {

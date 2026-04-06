@@ -6,6 +6,7 @@ import { ThemeIntegrationSettings } from "@/components/settings/ThemeIntegration
 import { BrandVoiceSettings } from "@/components/settings/BrandVoiceSettings";
 import { CustomInstructionsSettings } from "@/components/settings/CustomInstructionsSettings";
 import { DataRetentionSettings } from "@/components/settings/DataRetentionSettings";
+import { ExperimentSettings } from "@/components/settings/ExperimentSettings";
 
 export default function SettingsPage() {
   const [, params] = useRoute("/:storeDomain/settings");
@@ -22,6 +23,8 @@ export default function SettingsPage() {
         <BrandVoiceSettings storeDomain={storeDomain} />
 
         <CustomInstructionsSettings storeDomain={storeDomain} />
+
+        <ExperimentSettings storeDomain={storeDomain} />
 
         <LLMConfigForm storeDomain={storeDomain} />
 
