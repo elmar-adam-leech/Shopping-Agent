@@ -14,7 +14,8 @@ import { LRUCache } from "../services/lru-cache";
 import { decrypt } from "../services/encryption";
 import { runPromptGuard, scanToolResponse, auditOutput, logGuardEvent, type GuardSensitivity } from "../services/prompt-guard";
 import { sendError, sendZodError } from "../lib/error-response";
-import { getActiveConnection, callAuthenticatedMCPTool, listAuthenticatedMCPTools } from "../services/customer-account-mcp";
+import { getActiveConnection } from "../services/customer-account-oauth";
+import { callAuthenticatedMCPTool, listAuthenticatedMCPTools } from "../services/customer-account-mcp";
 import type { McpConnection } from "@workspace/db/schema";
 
 const MAX_USER_MESSAGE_LENGTH = 10_000;

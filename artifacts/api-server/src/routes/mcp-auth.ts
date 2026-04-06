@@ -9,7 +9,7 @@ import {
   handleOAuthCallback,
   revokeConnection,
   getActiveConnection,
-} from "../services/customer-account-mcp";
+} from "../services/customer-account-oauth";
 
 const router: IRouter = Router();
 
