@@ -88,18 +88,12 @@ Use these UCP tools for all checkout and order operations when available. They p
   if (knowledge.length > 0) {
     prompt += `\n\n## Store Knowledge Base\nThe store owner has provided the following information to help you assist customers:\n`;
 
-    const grouped = new Map<string, ShopKnowledge[]>();
-    for (const entry of knowledge) {
-      const cat = entry.category;
-      if (!grouped.has(cat)) grouped.set(cat, []);
-      grouped.get(cat)!.push(entry);
-    }
+    const grouped = Map.groupBy(knowledge, (entry) => entry.category);
 
     for (const [category, entries] of grouped) {
       const label = CATEGORY_LABELS[category] || category;
       prompt += `\n### ${label}\n`;
-      const sorted = entries.sort((a, b) => a.sortOrder - b.sortOrder);
-      for (const entry of sorted) {
+      for (const entry of entries.toSorted((a, b) => a.sortOrder - b.sortOrder)) {
         prompt += `\n**${entry.title}**\n${entry.content}\n`;
       }
     }
