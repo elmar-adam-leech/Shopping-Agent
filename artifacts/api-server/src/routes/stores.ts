@@ -34,6 +34,8 @@ interface StoreResponse {
   ucpCompliant: boolean;
   chatEnabled: boolean;
   embedEnabled: boolean;
+  guardSensitivity: string;
+  blockedTopics: string[];
   createdAt: Date;
 }
 
@@ -47,6 +49,8 @@ function storeToResponse(store: Store): StoreResponse {
     ucpCompliant: store.ucpCompliant,
     chatEnabled: store.chatEnabled,
     embedEnabled: store.embedEnabled,
+    guardSensitivity: store.guardSensitivity,
+    blockedTopics: store.blockedTopics,
     createdAt: store.createdAt,
   };
 }
@@ -139,7 +143,7 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
     return;
   }
 
-  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey" | "ucpCompliant" | "chatEnabled" | "embedEnabled">> = {};
+  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey" | "ucpCompliant" | "chatEnabled" | "embedEnabled" | "guardSensitivity" | "blockedTopics">> = {};
   if (parsed.data.storefrontToken !== undefined) updateData.storefrontToken = parsed.data.storefrontToken;
   if (parsed.data.provider !== undefined) updateData.provider = parsed.data.provider as ProviderValue;
   if (parsed.data.model !== undefined) updateData.model = parsed.data.model;
@@ -158,6 +162,8 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
   if (parsed.data.ucpCompliant !== undefined) updateData.ucpCompliant = parsed.data.ucpCompliant;
   if (parsed.data.chatEnabled !== undefined) updateData.chatEnabled = parsed.data.chatEnabled;
   if (parsed.data.embedEnabled !== undefined) updateData.embedEnabled = parsed.data.embedEnabled;
+  if (parsed.data.guardSensitivity !== undefined) updateData.guardSensitivity = parsed.data.guardSensitivity as Store["guardSensitivity"];
+  if (parsed.data.blockedTopics !== undefined) updateData.blockedTopics = parsed.data.blockedTopics;
 
   const [store] = await db
     .update(storesTable)

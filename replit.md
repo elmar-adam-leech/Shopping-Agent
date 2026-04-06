@@ -48,6 +48,14 @@ The frontend is built with React 18, Vite, Tailwind CSS, and shadcn/ui, providin
 - **Performance & Caching**: LRU caches with hit/miss monitoring for stores, sessions, knowledge, MCP tools, and UCP discovery. Conversation messages use atomic JSONB append with a 200-message cap and automatic truncation. MCP tools/list and UCP discovery run in parallel with a circuit breaker (5 failures → 5min cooldown). Analytics queries backed by composite indexes on (store_domain, created_at, event_type), partial index on non-null queries, and session_id index.
 - **Rate Limiting**: Implemented on chat endpoints to prevent abuse.
 - **Security**: HMAC verification, strict body size limits, CORS configuration, and a global error handler. LLM tool-call loop has a configurable max-iterations guard (default 10). Markdown rendering is sanitized with DOMPurify to prevent XSS. Dev auth endpoint requires `DEV_AUTH_SECRET` env var. Session IDs in conversation routes use middleware-validated values. User messages are truncated to 10,000 chars before DB insertion. SSE parser failedLines set is bounded to 50 entries.
+- **Prompt Injection Guard**: Layered defense system in `artifacts/api-server/src/services/prompt-guard.ts`:
+  - **Layer 1 (Regex)**: Fast deterministic pattern matching against ~25 known injection patterns. Blocks instantly on match.
+  - **Layer 2 (LLM Classifier)**: Uses Replit AI integrations proxy (gpt-5-nano) for intent-based classification. Configurable confidence thresholds per sensitivity level (low=0.9, medium=0.7, high=0.4). Fail-open on timeout (2s) or errors. Does NOT use the merchant's API key or provider — free internal service.
+  - **Layer 3 (System Prompt Hardening)**: Explicit refusal instructions appended to every system prompt (refuse role changes, refuse prompt leaking, refuse instruction override).
+  - **Tool Response Scanning**: MCP/UCP tool results are scanned for indirect injection before being fed back to the LLM.
+  - **Async Output Auditing**: After response persistence, the assistant's output is audited for hallucinated claims, data leakage, and blocked topic violations. Flagged responses are retracted (stored message replaced, SSE retraction event pushed to frontend).
+  - **Merchant Controls**: `guard_sensitivity` (off/low/medium/high) and `blocked_topics` (text array) columns in stores table, exposed in settings UI.
+  - **Analytics**: Injection attempts logged with event types `prompt_injection_regex`, `prompt_injection_llm`, `tool_injection_llm`, `blocked_topic`, `output_retracted` with metadata in analytics_logs table.
 
 ### Feature Specifications
 - **Shopify OAuth**: Secure merchant authentication and app installation.

@@ -541,6 +541,13 @@ components:
           type: boolean
         embedEnabled:
           type: boolean
+        guardSensitivity:
+          type: string
+          enum: [off, low, medium, high]
+        blockedTopics:
+          type: array
+          items:
+            type: string
         createdAt:
           type: string
           format: date-time
@@ -551,6 +558,8 @@ components:
         - hasApiKey
         - ucpCompliant
         - chatEnabled
+        - guardSensitivity
+        - blockedTopics
         - createdAt
 
     StorePublicInfo:
@@ -603,6 +612,13 @@ components:
           type: boolean
         embedEnabled:
           type: boolean
+        guardSensitivity:
+          type: string
+          enum: [off, low, medium, high]
+        blockedTopics:
+          type: array
+          items:
+            type: string
 
     KnowledgeEntry:
       type: object
@@ -742,6 +758,8 @@ components:
         timestamp:
           type: string
           format: date-time
+        retracted:
+          type: boolean
       required:
         - role
         - content

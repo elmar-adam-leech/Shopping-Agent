@@ -4,6 +4,8 @@ import { readSSEStream } from '@/lib/sse-parser';
 
 export interface ChatMessageWithId extends ChatMessage {
   _id: string;
+  retracted?: boolean;
+  serverMessageId?: string;
 }
 
 let _msgIdCounter = 0;
@@ -225,6 +227,24 @@ export function useChatStream({
               const d = event.data as { toolCallId: string; content: string };
               currentToolResults = [...currentToolResults, { toolCallId: d.toolCallId, content: d.content }];
               streamDirty = true;
+            } else if (event.type === 'message_id') {
+              const serverMsgId = event.data as string;
+              setMessages(prev => {
+                const updated = [...prev];
+                const lastIdx = updated.length - 1;
+                if (lastIdx >= 0 && updated[lastIdx].role === 'assistant') {
+                  updated[lastIdx] = { ...updated[lastIdx], serverMessageId: serverMsgId };
+                }
+                return updated;
+              });
+            } else if (event.type === 'retraction') {
+              const d = event.data as { messageId: string; notice: string; reason: string };
+              setMessages(prev => prev.map(msg => {
+                if (msg.role === 'assistant' && msg.serverMessageId === d.messageId) {
+                  return { ...msg, content: d.notice, retracted: true };
+                }
+                return msg;
+              }));
             } else if (event.type === 'error') {
               const errorMsg = typeof event.data === 'string' ? event.data : 'An error occurred processing your message.';
               setError(errorMsg);

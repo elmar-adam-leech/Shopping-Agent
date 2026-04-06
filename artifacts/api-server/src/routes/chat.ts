@@ -1,4 +1,5 @@
-import { Router, type IRouter } from "express";
+import { randomUUID } from "node:crypto";
+import { Router, type IRouter, type Response } from "express";
 import { eq, and, sql } from "drizzle-orm";
 import { db, conversationsTable, shopKnowledgeTable, analyticsLogsTable } from "@workspace/db";
 import type { Conversation, ShopKnowledge } from "@workspace/db/schema";
@@ -11,7 +12,7 @@ import { validateStoreDomain, loadFullStore } from "../services/tenant-validator
 import { validateSession } from "../services/session-validator";
 import { LRUCache } from "../services/lru-cache";
 import { decrypt } from "../services/encryption";
-import { filterPromptInjection } from "../lib/prompt-filter";
+import { runPromptGuard, scanToolResponse, auditOutput, logGuardEvent, type GuardSensitivity } from "../services/prompt-guard";
 import { sendError, sendZodError } from "../lib/error-response";
 import { getActiveConnection, callAuthenticatedMCPTool, listAuthenticatedMCPTools } from "../services/customer-account-mcp";
 import type { McpConnection } from "@workspace/db/schema";
@@ -20,9 +21,70 @@ const MAX_USER_MESSAGE_LENGTH = 10_000;
 const MESSAGE_WINDOW_SIZE = 20;
 const MAX_MESSAGES_PER_CONVERSATION = 200;
 
+const RETRACTION_NOTICE = "⚠️ This response was corrected — please try again.";
+
+function fireOutputAudit(
+  assistantResponse: string,
+  toolResultTexts: string[],
+  blockedTopics: string[],
+  knowledgeContext: string,
+  conversationId: number,
+  storeDomain: string,
+  sessionId: string,
+  assistantMessageId: string,
+  safeSendFn: (data: string) => boolean,
+  endStream: () => void
+): void {
+  auditOutput(assistantResponse, toolResultTexts, blockedTopics, knowledgeContext)
+    .then(async (auditResult) => {
+      if (!auditResult.flagged) return;
+
+      console.warn(`[prompt-guard] Output flagged for retraction store="${storeDomain}" reason="${auditResult.reason}" category="${auditResult.category}"`);
+
+      try {
+        const [conv] = await db
+          .select()
+          .from(conversationsTable)
+          .where(eq(conversationsTable.id, conversationId));
+
+        if (conv) {
+          const messages = (conv.messages as Array<{ role: string; content: string; id?: string }>) || [];
+          const updatedMessages = messages.map((m) => {
+            if (m.role === "assistant" && m.id === assistantMessageId && m.content === assistantResponse) {
+              return { ...m, content: RETRACTION_NOTICE, retracted: true };
+            }
+            return m;
+          });
+
+          await db
+            .update(conversationsTable)
+            .set({ messages: updatedMessages })
+            .where(eq(conversationsTable.id, conversationId));
+        }
+      } catch (err) {
+        console.error(`[prompt-guard] Failed to retract message:`, err instanceof Error ? err.message : err);
+      }
+
+      safeSendFn(`data: ${JSON.stringify({ type: "retraction", data: { messageId: assistantMessageId, notice: RETRACTION_NOTICE, reason: auditResult.reason } })}\n\n`);
+
+      logGuardEvent(storeDomain, sessionId, "output_retracted", assistantResponse.slice(0, 500), {
+        reason: auditResult.reason,
+        category: auditResult.category,
+        originalText: assistantResponse.slice(0, 1000),
+      });
+    })
+    .catch((err) => {
+      console.error(`[prompt-guard] Output audit error:`, err instanceof Error ? err.message : err);
+    })
+    .finally(() => {
+      endStream();
+    });
+}
+
 const router: IRouter = Router();
 
 interface ChatMessageRecord {
+  id: string;
   role: "user" | "assistant" | "tool";
   content: string;
   toolCallId?: string;
@@ -269,6 +331,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
 
   const abortController = new AbortController();
   let clientDisconnected = false;
+  let auditOwnsStream = false;
   req.on("close", () => {
     clientDisconnected = true;
     abortController.abort();
@@ -293,14 +356,34 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       ? parsed.data.message.slice(0, MAX_USER_MESSAGE_LENGTH)
       : parsed.data.message;
 
-    const { message: filteredMessage, filtered } = filterPromptInjection(truncatedMessage);
-    if (filtered) {
-      console.warn(`[prompt-filter] Filtered injection attempt from store="${store.storeDomain}" session="${parsed.data.sessionId}"`);
+    const guardSensitivity = (store.guardSensitivity ?? "medium") as GuardSensitivity;
+    const blockedTopics = store.blockedTopics ?? [];
+
+    const guardVerdict = await runPromptGuard(truncatedMessage, guardSensitivity, blockedTopics);
+    if (!guardVerdict.allowed) {
+      const eventType = guardVerdict.category === "blocked_topic"
+        ? "blocked_topic"
+        : guardVerdict.layer === "regex"
+          ? "prompt_injection_regex"
+          : "prompt_injection_llm";
+      console.warn(`[prompt-guard] Blocked attempt (${eventType}/${guardVerdict.layer}) from store="${store.storeDomain}" session="${parsed.data.sessionId}": ${guardVerdict.reason}`);
+      logGuardEvent(store.storeDomain, parsed.data.sessionId, eventType, truncatedMessage, {
+        layer: guardVerdict.layer,
+        category: guardVerdict.category,
+        reason: guardVerdict.reason,
+        confidence: guardVerdict.confidence,
+        patternsMatched: guardVerdict.patternsMatched,
+      });
+      safeSend(`data: ${JSON.stringify({ type: "conversation_id", data: conversation.id })}\n\n`);
+      safeSend(`data: ${JSON.stringify({ type: "text", data: "I'm here to help you shop! Could you rephrase your question about our products or services?" })}\n\n`);
+      res.end();
+      return;
     }
 
     const userMessage: ChatMessageRecord = {
+      id: randomUUID(),
       role: "user",
-      content: filteredMessage,
+      content: truncatedMessage,
       timestamp: new Date().toISOString(),
     };
 
@@ -380,6 +463,53 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     }
 
     const activeConnection = customerAccountConnection;
+
+    async function executeAndGuardTool(toolName: string, args: Record<string, unknown>): Promise<string> {
+      let result: string;
+      if (authenticatedToolNames.has(toolName) && !activeConnection) {
+        return JSON.stringify({
+          error: "customer_account_required",
+          message: "This tool requires a connected customer account. Please connect your customer account using the 'Connect Account' button in the chat header to access order history, account details, and other personalized features.",
+        });
+      }
+      if (activeConnection) {
+        try {
+          const authResult = await callAuthenticatedMCPTool(activeConnection, toolName, args);
+          let authParsed: unknown;
+          try { authParsed = JSON.parse(authResult); } catch { result = authResult; return await guardToolResult(result, toolName); }
+          if (authParsed && typeof authParsed === "object" && (authParsed as Record<string, unknown>).error) {
+            console.warn(`[chat] Authenticated MCP tool "${toolName}" returned error, falling back to public MCP`);
+          } else {
+            return await guardToolResult(authResult, toolName);
+          }
+        } catch (err) {
+          console.warn(`[chat] Authenticated MCP call failed, falling back to public:`, err instanceof Error ? err.message : err);
+        }
+      }
+      result = await executeToolWithFallback(store!.storeDomain, store!.storefrontToken!, toolName, args, ucpEnabled);
+      return await guardToolResult(result, toolName);
+    }
+
+    async function guardToolResult(result: string, toolName: string): Promise<string> {
+      const toolGuard = await scanToolResponse(result, guardSensitivity, blockedTopics);
+      if (!toolGuard.allowed) {
+        const toolEventType = toolGuard.category === "blocked_topic"
+          ? "blocked_topic"
+          : toolGuard.layer === "regex"
+            ? "tool_injection_regex"
+            : "tool_injection_llm";
+        console.warn(`[prompt-guard] Blocked tool response (${toolEventType}/${toolGuard.layer}) in "${toolName}": ${toolGuard.reason}`);
+        logGuardEvent(store!.storeDomain, parsed.data!.sessionId, toolEventType, toolName, {
+          layer: toolGuard.layer,
+          category: toolGuard.category,
+          reason: toolGuard.reason,
+          confidence: toolGuard.confidence,
+        });
+        return JSON.stringify({ error: "Tool response was filtered for security reasons." });
+      }
+      return result;
+    }
+
     const stream = streamChatWithProvider(
       store.provider,
       decryptedApiKey,
@@ -387,29 +517,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       systemPrompt,
       llmMessages,
       tools,
-      async (toolName: string, args: Record<string, unknown>) => {
-        if (authenticatedToolNames.has(toolName) && !activeConnection) {
-          return JSON.stringify({
-            error: "customer_account_required",
-            message: "This tool requires a connected customer account. Please connect your customer account using the 'Connect Account' button in the chat header to access order history, account details, and other personalized features.",
-          });
-        }
-        if (activeConnection) {
-          try {
-            const result = await callAuthenticatedMCPTool(activeConnection, toolName, args);
-            let parsed: unknown;
-            try { parsed = JSON.parse(result); } catch { return result; }
-            if (parsed && typeof parsed === "object" && (parsed as Record<string, unknown>).error) {
-              console.warn(`[chat] Authenticated MCP tool "${toolName}" returned error, falling back to public MCP`);
-            } else {
-              return result;
-            }
-          } catch (err) {
-            console.warn(`[chat] Authenticated MCP call failed, falling back to public:`, err instanceof Error ? err.message : err);
-          }
-        }
-        return executeToolWithFallback(store.storeDomain, store.storefrontToken!, toolName, args, ucpEnabled);
-      },
+      executeAndGuardTool,
       abortController.signal
     );
 
@@ -426,13 +534,17 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       }
     }
 
+    const assistantMessageId = randomUUID();
     const assistantMessage: ChatMessageRecord = {
+      id: assistantMessageId,
       role: "assistant",
       content: fullAssistantContent,
       toolCalls,
       toolResults,
       timestamp: new Date().toISOString(),
     };
+
+    safeSend(`data: ${JSON.stringify({ type: "message_id", data: assistantMessageId })}\n\n`);
 
     const newMessages = [userMessage, assistantMessage];
 
@@ -441,7 +553,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       store.storeDomain,
       parsed.data.sessionId,
       newMessages,
-      filteredMessage
+      truncatedMessage
     );
 
     if (!conversationSaved) {
@@ -449,6 +561,25 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     }
     if (!analyticsSaved) {
       console.warn(`[chat] Analytics persistence failed for store="${store.storeDomain}" session="${parsed.data.sessionId}"`);
+    }
+
+    if (fullAssistantContent && conversationSaved) {
+      const toolResultTexts = toolResults.map(tr => tr.content);
+      const knowledgeContext = knowledge.map(k => `[${k.category}] ${k.title}: ${k.content}`).join("\n");
+      auditOwnsStream = true;
+      fireOutputAudit(
+        fullAssistantContent,
+        toolResultTexts,
+        blockedTopics,
+        knowledgeContext,
+        conversation.id,
+        store.storeDomain,
+        parsed.data.sessionId,
+        assistantMessageId,
+        safeSend,
+        () => { try { res.end(); } catch {} }
+      );
+      return;
     }
   } catch (err: unknown) {
     if (clientDisconnected) return;
@@ -469,7 +600,9 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     }
     safeSend(`data: ${JSON.stringify({ type: "error", data: errorMessage })}\n\n`);
   } finally {
-    res.end();
+    if (!auditOwnsStream) {
+      res.end();
+    }
   }
 });
 

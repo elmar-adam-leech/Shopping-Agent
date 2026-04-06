@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const providerEnum = pgEnum("provider", ["openai", "anthropic", "xai"]);
+export const guardSensitivityEnum = pgEnum("guard_sensitivity", ["off", "low", "medium", "high"]);
 
 export const storesTable = pgTable("stores", {
   storeDomain: text("store_domain").primaryKey(),
@@ -15,6 +16,8 @@ export const storesTable = pgTable("stores", {
   chatEnabled: boolean("chat_enabled").notNull().default(true),
   embedEnabled: boolean("embed_enabled").notNull().default(false),
   customerAccountClientId: text("customer_account_client_id"),
+  guardSensitivity: guardSensitivityEnum("guard_sensitivity").notNull().default("medium"),
+  blockedTopics: text("blocked_topics").array().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, index, jsonb } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -12,6 +12,7 @@ export const analyticsLogsTable = pgTable("analytics_logs", {
   eventType: text("event_type").notNull(),
   query: text("query"),
   sessionId: text("session_id"),
+  metadata: jsonb("metadata"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("idx_analytics_store_created").on(table.storeDomain, table.createdAt),

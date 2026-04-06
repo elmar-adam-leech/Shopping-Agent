@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useGetStore, useUpdateStore, getGetStoreQueryKey } from "@workspace/api-client-react";
-import { Save, Key, Database, Globe, Shield, MessageSquare } from "lucide-react";
+import { Save, Key, Database, Globe, Shield, MessageSquare, ShieldAlert, X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
 type ProviderValue = "openai" | "anthropic" | "xai";
+type GuardSensitivityValue = "off" | "low" | "medium" | "high";
 
 export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
   const { data: store } = useGetStore(storeDomain, { query: { queryKey: getGetStoreQueryKey(storeDomain), staleTime: 60_000 } });
@@ -21,6 +22,9 @@ export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
   const [storefrontToken, setStorefrontToken] = useState("");
   const [ucpCompliant, setUcpCompliant] = useState(true);
   const [chatEnabled, setChatEnabled] = useState(true);
+  const [guardSensitivity, setGuardSensitivity] = useState<GuardSensitivityValue>("medium");
+  const [blockedTopics, setBlockedTopics] = useState<string[]>([]);
+  const [newTopic, setNewTopic] = useState("");
 
   useEffect(() => {
     if (store) {
@@ -31,8 +35,22 @@ export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
       }
       setUcpCompliant(store.ucpCompliant ?? true);
       setChatEnabled(store.chatEnabled ?? true);
+      setGuardSensitivity((store.guardSensitivity as GuardSensitivityValue) ?? "medium");
+      setBlockedTopics(store.blockedTopics ?? []);
     }
   }, [store]);
+
+  const addBlockedTopic = () => {
+    const topic = newTopic.trim();
+    if (topic && !blockedTopics.includes(topic)) {
+      setBlockedTopics(prev => [...prev, topic]);
+      setNewTopic("");
+    }
+  };
+
+  const removeBlockedTopic = (index: number) => {
+    setBlockedTopics(prev => prev.filter((_, i) => i !== index));
+  };
 
   const handleSaveStore = async () => {
     try {
@@ -44,6 +62,8 @@ export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
           storefrontToken: storefrontToken || undefined,
           ucpCompliant,
           chatEnabled,
+          guardSensitivity,
+          blockedTopics,
           ...(apiKey ? { apiKey } : {})
         }
       });
@@ -143,6 +163,76 @@ export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
               checked={ucpCompliant}
               onCheckedChange={setUcpCompliant}
             />
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-card border border-border/50 rounded-3xl p-6 md:p-8 shadow-sm">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="p-2 bg-red-500/10 text-red-600 rounded-xl">
+            <ShieldAlert className="w-5 h-5" />
+          </div>
+          <h2 className="text-xl font-bold font-display">Prompt Guard</h2>
+          <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+            guardSensitivity === 'off' 
+              ? 'bg-gray-100 dark:bg-gray-500/20 text-gray-700 dark:text-gray-300'
+              : guardSensitivity === 'high'
+                ? 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300'
+                : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300'
+          }`}>
+            {guardSensitivity === 'off' ? 'Disabled' : `${guardSensitivity.charAt(0).toUpperCase() + guardSensitivity.slice(1)} Sensitivity`}
+          </span>
+        </div>
+        
+        <div className="space-y-5">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Control how aggressively the AI guard blocks prompt injection attempts and off-topic messages. Higher sensitivity catches more attacks but may occasionally block legitimate messages.
+          </p>
+
+          <div className="space-y-3">
+            <Label>Guard Sensitivity</Label>
+            <Select value={guardSensitivity} onValueChange={(v) => setGuardSensitivity(v as GuardSensitivityValue)}>
+              <SelectTrigger className="rounded-xl h-12 bg-secondary/20">
+                <SelectValue placeholder="Select Sensitivity" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="off">Off - No LLM-based guard</SelectItem>
+                <SelectItem value="low">Low - Block only high-confidence attacks</SelectItem>
+                <SelectItem value="medium">Medium - Balanced protection (recommended)</SelectItem>
+                <SelectItem value="high">High - Aggressive blocking</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-3">
+            <Label>Blocked Topics</Label>
+            <p className="text-xs text-muted-foreground">
+              Define topics the AI should refuse to discuss (e.g., competitor names, off-brand subjects).
+            </p>
+            <div className="flex gap-2">
+              <Input 
+                value={newTopic}
+                onChange={(e) => setNewTopic(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBlockedTopic(); } }}
+                placeholder="e.g., competitor brand name"
+                className="rounded-xl h-10 bg-secondary/20"
+              />
+              <Button type="button" variant="outline" size="sm" onClick={addBlockedTopic} className="rounded-xl h-10 px-3">
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+            {blockedTopics.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {blockedTopics.map((topic, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 text-sm border border-red-200 dark:border-red-500/20">
+                    {topic}
+                    <button type="button" onClick={() => removeBlockedTopic(idx)} className="ml-1 hover:text-red-900 dark:hover:text-red-100">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </section>

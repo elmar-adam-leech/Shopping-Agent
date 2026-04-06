@@ -1,5 +1,6 @@
 import type { ShopKnowledge } from "@workspace/db";
 import type { UCPDiscoveryDocument } from "./mcp-client";
+import { SYSTEM_PROMPT_HARDENING } from "./prompt-guard";
 
 const CATEGORY_LABELS: Record<string, string> = {
   general: "General Store Information",
@@ -103,6 +104,8 @@ Use these UCP tools for all checkout and order operations when available. They p
       }
     }
   }
+
+  prompt += SYSTEM_PROMPT_HARDENING;
 
   return prompt;
 }
