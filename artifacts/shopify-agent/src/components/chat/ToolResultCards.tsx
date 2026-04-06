@@ -1,4 +1,7 @@
 import { ProductCard, type ProductCardData } from "./ProductCard";
+import { ProductCarousel } from "./ProductCarousel";
+import { ComparisonTable } from "./ComparisonTable";
+import { CartSummaryCard } from "./CartSummaryCard";
 import { CollectionCard, type CollectionCardData } from "./CollectionCard";
 import { ArticleCard, type BlogArticleData } from "./ArticleCard";
 
@@ -17,12 +20,16 @@ function tryParseToolResult(content: string): unknown {
 }
 
 export function ToolResultCards({ toolName, content }: { toolName: string; content: string }) {
+  if (toolName === 'add_to_cart') {
+    return <CartSummaryCard />;
+  }
+
   const parsed = tryParseToolResult(content);
   if (!parsed || typeof parsed !== 'object') return null;
 
   const data = parsed as Record<string, unknown>;
 
-  if (toolName === 'search_products' || toolName === 'get_product') {
+  if (toolName === 'search_products' || toolName === 'get_product' || toolName === 'compare_products') {
     const products: ProductCardData[] = [];
     if (data.products && Array.isArray((data.products as Record<string, unknown>).edges)) {
       for (const edge of (data.products as { edges: Array<{ node: ProductCardData }> }).edges) {
@@ -35,6 +42,16 @@ export function ToolResultCards({ toolName, content }: { toolName: string; conte
     }
 
     if (products.length === 0) return null;
+
+    const renderHint = typeof data._renderHint === 'string' ? data._renderHint : undefined;
+
+    if (renderHint === 'comparison' || (toolName === 'compare_products' && products.length >= 2 && products.length <= 4)) {
+      return <ComparisonTable products={products.slice(0, 4)} />;
+    }
+
+    if (products.length >= 3) {
+      return <ProductCarousel products={products.slice(0, 12)} />;
+    }
 
     return (
       <div className="grid gap-2 mt-2">

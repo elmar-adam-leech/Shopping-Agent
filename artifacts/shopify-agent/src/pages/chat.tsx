@@ -8,6 +8,7 @@ import { PreferencesPanel } from "@/components/chat/PreferencesPanel";
 import { ChatEmptyState } from "@/components/chat/ChatEmptyState";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { CustomerAccountConnect } from "@/components/chat/CustomerAccountConnect";
+import { ChatActionsProvider, type QuickAddProduct } from "@/contexts/chat-actions-context";
 import { useSession } from "@/hooks/use-session";
 import { useChatOrchestration, messageKey } from "@/hooks/use-chat-orchestration";
 import { useCartStore } from "@/store/use-cart-store";
@@ -68,6 +69,7 @@ export default function ChatPage() {
     loadMessages,
     messages,
     error,
+    sendMessage,
   } = useChatOrchestration({
     storeDomain,
     sessionId: sessionId || "",
@@ -103,6 +105,44 @@ export default function ChatPage() {
       toast({ title: "Failed to update preference", description: "Please try again.", variant: "destructive" });
     }
   }, [sessionId, storeDomain, updatePrefs, userPrefs, toast]);
+
+  const quickAddToCart = useCallback(async (product: QuickAddProduct) => {
+    if (!sessionId) throw new Error("No session");
+
+    const response = await fetch(
+      `/api/stores/${storeDomain}/cart/quick-add`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-session-id": sessionId,
+        },
+        body: JSON.stringify({
+          variantId: product.variantId,
+          quantity: 1,
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      let msg = "Failed to add to cart";
+      try {
+        const body = await response.json();
+        if (body?.error) msg = body.error;
+      } catch {
+        // ignore parse error
+      }
+      throw new Error(msg);
+    }
+
+    cartStore.addItem({
+      id: product.variantId,
+      title: product.title,
+      price: product.price,
+      imageUrl: product.imageUrl,
+      variantId: product.variantId,
+    });
+  }, [sessionId, storeDomain, cartStore]);
 
   const startNewConversation = useCallback(() => {
     setActiveConversationId(null);
@@ -173,42 +213,44 @@ export default function ChatPage() {
           onLoadMore={loadMoreConversations}
         />
 
-        <div className="flex-1 flex flex-col h-full bg-background/50 relative z-10">
-          <div className="h-16 border-b border-border/50 flex items-center justify-between px-6 bg-background/80 backdrop-blur-md sticky top-0 z-20">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                <Sparkles className="w-4 h-4" />
+        <ChatActionsProvider sendMessage={sendMessage} quickAddToCart={quickAddToCart} isLoading={isLoading}>
+          <div className="flex-1 flex flex-col h-full bg-background/50 relative z-10">
+            <div className="h-16 border-b border-border/50 flex items-center justify-between px-6 bg-background/80 backdrop-blur-md sticky top-0 z-20">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <h2 className="font-bold text-sm">Shopping Assistant</h2>
               </div>
-              <h2 className="font-bold text-sm">Shopping Assistant</h2>
+              <div className="flex items-center gap-2">
+                {sessionId && <CustomerAccountConnect storeDomain={storeDomain} sessionId={sessionId} />}
+                <Button variant="ghost" size="icon" onClick={() => setShowPrefs(!showPrefs)} className="rounded-lg" title="Preferences" aria-label="Toggle preferences" aria-expanded={showPrefs}>
+                  <Settings2 className="w-4 h-4" aria-hidden="true" />
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              {sessionId && <CustomerAccountConnect storeDomain={storeDomain} sessionId={sessionId} />}
-              <Button variant="ghost" size="icon" onClick={() => setShowPrefs(!showPrefs)} className="rounded-lg" title="Preferences" aria-label="Toggle preferences" aria-expanded={showPrefs}>
-                <Settings2 className="w-4 h-4" aria-hidden="true" />
-              </Button>
+
+            {showPrefs && <PreferencesPanel userPrefs={userPrefs} onPrefChange={handlePrefChange} />}
+
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-32">
+              {messages.length === 0 ? (
+                <ChatEmptyState storeDomain={storeDomain} onPresetClick={setInput} welcomeMessage={storePublic?.welcomeMessage} />
+              ) : (
+                <div className="max-w-4xl mx-auto space-y-6" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions">
+                  {displayMessages.map((msg, i) => (
+                    <MessageBubble key={messageKey(messages[i], i)} message={msg} />
+                  ))}
+                  {isLoading && <ChatLoadingIndicator />}
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
             </div>
+
+            <ChatComposer input={input} isLoading={isLoading} onInputChange={setInput} onSubmit={handleSubmit} />
           </div>
 
-          {showPrefs && <PreferencesPanel userPrefs={userPrefs} onPrefChange={handlePrefChange} />}
-
-          <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-32">
-            {messages.length === 0 ? (
-              <ChatEmptyState storeDomain={storeDomain} onPresetClick={setInput} welcomeMessage={storePublic?.welcomeMessage} />
-            ) : (
-              <div className="max-w-4xl mx-auto space-y-6" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions">
-                {displayMessages.map((msg, i) => (
-                  <MessageBubble key={messageKey(messages[i], i)} message={msg} />
-                ))}
-                {isLoading && <ChatLoadingIndicator />}
-                <div ref={messagesEndRef} />
-              </div>
-            )}
-          </div>
-
-          <ChatComposer input={input} isLoading={isLoading} onInputChange={setInput} onSubmit={handleSubmit} />
-        </div>
-
-        <CartPanel />
+          <CartPanel />
+        </ChatActionsProvider>
       </div>
     </AppLayout>
   );

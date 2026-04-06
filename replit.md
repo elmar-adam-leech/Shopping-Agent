@@ -32,6 +32,16 @@ A gap analysis against these standards is documented in `STANDARDS_AUDIT.md`.
 ### UI/UX Decisions
 The frontend is built with React 18, Vite, Tailwind CSS, and shadcn/ui, providing a modern and responsive user interface. The design prioritizes clarity and ease of use for both merchants configuring the agent and customers interacting with it. Key UI components include chat interfaces, settings panels for merchant configuration, and analytics dashboards. Embed modes are designed to seamlessly integrate into existing Shopify themes, maintaining the store's aesthetic.
 
+**Rich Multi-Modal Chat Rendering**: The chat interface includes several interactive components for an enhanced shopping experience:
+- **Product Carousel**: Horizontal scrollable carousel with arrow navigation and CSS snap for 3+ product results (replaces vertical stack). Supports swipe on mobile.
+- **Quick Add-to-Cart**: Every ProductCard has an "Add to Cart" button that directly invokes the MCP `add_to_cart` / `create_cart` tool via a dedicated backend endpoint (`POST /stores/:storeDomain/cart/quick-add`). Button shows loading/success/error states tied to actual server response.
+- **Comparison Table**: Side-by-side comparison of 2-4 products (price, vendor, availability) triggered by `compare_products` tool or `_renderHint: "comparison"` in tool responses.
+- **Inline Cart Summary**: After add-to-cart tool calls, a compact summary card shows item count, subtotal, and "View Cart" button.
+- **Product Image Gallery**: Expandable thumbnail strip + main image viewer for products with multiple images.
+- **Interactive Collection Cards**: Clicking a collection card sends a follow-up message to browse that collection's products.
+- **ChatActionsContext**: React context (`contexts/chat-actions-context.tsx`) provides `sendMessage`, `quickAddToCart`, and `isLoading` to deeply nested chat components without prop drilling.
+- **Direct Cart API**: Backend endpoint `POST /stores/:storeDomain/cart/quick-add` in `artifacts/api-server/src/routes/cart.ts` directly invokes MCP tools for deterministic cart operations.
+
 ### Technical Implementations
 - **Monorepo**: pnpm workspaces for managing multiple packages (API server, frontend, shared libraries).
 - **Backend**: Express 5 serving as the API server.
