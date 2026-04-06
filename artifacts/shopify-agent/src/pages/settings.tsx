@@ -5,6 +5,7 @@ import { KnowledgeEditor } from "@/components/settings/KnowledgeEditor";
 import { ThemeIntegrationSettings } from "@/components/settings/ThemeIntegrationSettings";
 import { BrandVoiceSettings } from "@/components/settings/BrandVoiceSettings";
 import { CustomInstructionsSettings } from "@/components/settings/CustomInstructionsSettings";
+import { DataRetentionSettings } from "@/components/settings/DataRetentionSettings";
 
 export default function SettingsPage() {
   const [, params] = useRoute("/:storeDomain/settings");
@@ -27,6 +28,8 @@ export default function SettingsPage() {
         <ThemeIntegrationSettings storeDomain={storeDomain} />
 
         <KnowledgeEditor storeDomain={storeDomain} />
+
+        <DataRetentionSettings storeDomain={storeDomain} />
       </div>
     </AppLayout>
   );

@@ -55,6 +55,7 @@ export const storesTable = pgTable("stores", {
   customInstructions: text("custom_instructions"),
   welcomeMessage: text("welcome_message"),
   recommendationStrategy: recommendationStrategyEnum("recommendation_strategy").notNull().default("personalized"),
+  dataRetentionDays: integer("data_retention_days").notNull().default(90),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

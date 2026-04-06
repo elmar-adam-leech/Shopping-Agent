@@ -9,6 +9,7 @@ import { ToolBadge } from "@/components/ui/tool-badge";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { VoiceInputButton } from "@/components/chat/VoiceInputButton";
 import { ImageUploadButton } from "@/components/chat/ImageUploadButton";
+import { ConsentBanner } from "@/components/consent/ConsentBanner";
 
 interface StorePublicInfo {
   storeDomain: string;
@@ -244,6 +245,8 @@ export default function ShopForMePage() {
           )}
         </div>
       </div>
+
+      {sessionId && <ConsentBanner storeDomain={storeDomain} sessionId={sessionId} />}
     </div>
   );
 }

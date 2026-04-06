@@ -8,3 +8,4 @@ export * from "./pending-oauth-states";
 export * from "./mcp-connections";
 export * from "./audit-logs";
 export * from "./maintenance";
+export * from "./consents";

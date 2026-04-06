@@ -23,27 +23,34 @@ export function buildSystemPrompt(
   storeDomain: string,
   knowledge: ShopKnowledge[],
   ucpDoc: UCPDiscoveryDocument | null,
-  chatContext?: { productHandle?: string; collectionHandle?: string; cartToken?: string; searchMode?: boolean; customerAccountConnected?: boolean; customerAccountStoreDomain?: string },
+  chatContext?: {
+    productHandle?: string;
+    collectionHandle?: string;
+    cartToken?: string;
+    searchMode?: boolean;
+    customerAccountConnected?: boolean;
+    customerAccountStoreDomain?: string;
+  },
   customization?: StoreCustomization,
   userPreferences?: UserPreferencesContext | null
 ): string {
   const parts: string[] = [];
 
-  parts.push(`You are a helpful AI shopping assistant for the Shopify store "${storeDomain}".`);
-  parts.push("Your goal is to help customers find products, answer questions about products, sizing, availability, policies, and provide a great shopping experience.");
-  parts.push("Always be helpful, accurate, and concise. If you don't know something, say so honestly.");
-  parts.push("When recommending products, use the available tools to search the store's catalog.");
-  parts.push("Format product recommendations clearly with names, prices, and key details.");
+  parts.push(`You are the AI shopping assistant for ${storeDomain}.`);
+  parts.push("Help customers find products, answer questions, and provide personalized shopping recommendations.");
+  parts.push("Be helpful, accurate, and concise. Only discuss topics related to the store and its products.");
 
   if (customization?.brandVoice) {
     const bv = customization.brandVoice;
-    parts.push(`\nBrand Voice: Tone is "${bv.tone}". Personality: ${bv.personality || "helpful assistant"}.`);
+    parts.push(`\n## Brand Voice`);
+    parts.push(`Tone: ${bv.tone}`);
+    if (bv.personality) parts.push(`Personality: ${bv.personality}`);
     if (bv.greeting) parts.push(`Greeting style: ${bv.greeting}`);
     if (bv.signOff) parts.push(`Sign-off style: ${bv.signOff}`);
   }
 
   if (customization?.customInstructions) {
-    parts.push(`\nStore-specific instructions: ${customization.customInstructions}`);
+    parts.push(`\n## Custom Instructions\n${customization.customInstructions}`);
   }
 
   if (customization?.recommendationStrategy) {
@@ -54,56 +61,81 @@ export function buildSystemPrompt(
       personalized: "Personalize recommendations based on customer preferences and browsing context.",
     };
     const strategyHint = strategyMap[customization.recommendationStrategy];
-    if (strategyHint) parts.push(`\nRecommendation strategy: ${strategyHint}`);
+    
+    if (customization.recommendationStrategy !== "personalized" || strategyHint) {
+       parts.push(`\n## Recommendation Strategy`);
+       if (strategyHint) {
+         parts.push(strategyHint);
+       } else {
+         parts.push(`Prefer showing products using the "${customization.recommendationStrategy}" strategy when making recommendations.`);
+       }
+    }
   }
 
   if (knowledge.length > 0) {
-    parts.push("\n--- Store Knowledge Base ---");
+    parts.push("\n## Store Knowledge");
+    const grouped: Record<string, ShopKnowledge[]> = {};
     for (const k of knowledge) {
-      parts.push(`[${k.category}] ${k.title}: ${k.content}`);
+      const cat = k.category || "general";
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(k);
     }
-    parts.push("--- End Knowledge Base ---");
+    for (const [category, items] of Object.entries(grouped)) {
+      parts.push(`\n### ${category}`);
+      for (const item of items) {
+        parts.push(`- **${item.title}**: ${item.content}`);
+      }
+    }
   }
 
   if (ucpDoc) {
     try {
       const capabilities = extractAllCapabilities(ucpDoc);
       if (capabilities.length > 0) {
-        parts.push("\n--- UCP Capabilities ---");
-        for (const cap of capabilities) {
-          const safeName = sanitizeUCPValue(cap.name || "unknown");
-          const safeDesc = sanitizeUCPValue(cap.description || "", 200);
-          parts.push(`- ${safeName}: ${safeDesc}`);
+        parts.push("\n## Available Capabilities");
+        const toolDescriptions = generateToolsFromCapabilities(capabilities);
+        for (const tool of toolDescriptions) {
+          parts.push(`- ${sanitizeUCPValue(tool.name)}: ${sanitizeUCPValue(tool.description || "", 200)}`);
         }
-        parts.push("--- End UCP Capabilities ---");
+      }
+      if (ucpDoc.businessName) {
+        parts.push(`Business: ${sanitizeUCPValue(ucpDoc.businessName)}`);
       }
     } catch {
     }
   }
 
-  if (chatContext?.productHandle) {
-    parts.push(`\nThe customer is currently viewing product: "${chatContext.productHandle}". Focus your assistance on this product unless they ask about something else.`);
-  }
-  if (chatContext?.collectionHandle) {
-    parts.push(`\nThe customer is browsing collection: "${chatContext.collectionHandle}". Consider this context when making recommendations.`);
-  }
-  if (chatContext?.cartToken) {
-    parts.push("\nThe customer has an active cart. You can help them with cart-related questions.");
-  }
-  if (chatContext?.searchMode) {
-    parts.push("\nThe customer is using the search feature. Help them find what they're looking for efficiently.");
-  }
-  if (chatContext?.customerAccountConnected) {
-    parts.push("\nThe customer has connected their account. You can access their order history and account details using the authenticated tools.");
+  if (chatContext) {
+    if (chatContext.productHandle) {
+      parts.push(`\n## Contextual Information`);
+      parts.push(`The customer is currently viewing product: "${chatContext.productHandle}". Focus your assistance on this product unless they ask about something else.`);
+    }
+    if (chatContext.collectionHandle) {
+      if (!chatContext.productHandle) parts.push(`\n## Contextual Information`);
+      parts.push(`The customer is browsing collection: "${chatContext.collectionHandle}". Consider this context when making recommendations.`);
+    }
+    if (chatContext.cartToken) {
+      if (!chatContext.productHandle && !chatContext.collectionHandle) parts.push(`\n## Contextual Information`);
+      parts.push("The customer has an active cart. You can help them with cart-related questions.");
+    }
+    if (chatContext.searchMode) {
+      if (!chatContext.productHandle && !chatContext.collectionHandle && !chatContext.cartToken) parts.push(`\n## Contextual Information`);
+      parts.push("The customer is using the search feature. Help them find what they're looking for efficiently.");
+    }
+    if (chatContext.customerAccountConnected) {
+      if (!chatContext.productHandle && !chatContext.collectionHandle && !chatContext.cartToken && !chatContext.searchMode) parts.push(`\n## Contextual Information`);
+      parts.push("The customer has connected their account. You can access their order history and account details using the authenticated tools.");
+    }
   }
 
   if (userPreferences && Object.keys(userPreferences).length > 0) {
-    parts.push("\n--- Customer Preferences ---");
+    parts.push("\n## Customer Preferences");
     for (const [key, value] of Object.entries(userPreferences)) {
-      parts.push(`- ${key}: ${value}`);
+      if (value) {
+        parts.push(`- ${key}: ${value}`);
+      }
     }
-    parts.push("--- End Preferences ---");
-    parts.push("Use these preferences to personalize your recommendations and responses.");
+    parts.push("Use these preferences to personalize your recommendations, but always ask before assuming.");
   }
 
   return parts.join("\n");

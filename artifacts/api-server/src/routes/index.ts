@@ -10,6 +10,7 @@ import analyticsRouter from "./analytics";
 import sessionsRouter from "./sessions";
 import authRouter from "./auth";
 import mcpAuthRouter from "./mcp-auth";
+import consentsRouter from "./consents";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(cartRouter);
 router.use(conversationsRouter);
 router.use(preferencesRouter);
 router.use(analyticsRouter);
+router.use(consentsRouter);
 
 export default router;

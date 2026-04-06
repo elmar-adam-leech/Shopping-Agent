@@ -40,6 +40,7 @@ interface StoreResponse {
   customInstructions: string | null;
   welcomeMessage: string | null;
   recommendationStrategy: string;
+  dataRetentionDays: number;
   createdAt: Date;
 }
 
@@ -59,6 +60,7 @@ function storeToResponse(store: Store): StoreResponse {
     customInstructions: store.customInstructions ?? null,
     welcomeMessage: store.welcomeMessage ?? null,
     recommendationStrategy: store.recommendationStrategy,
+    dataRetentionDays: store.dataRetentionDays,
     createdAt: store.createdAt,
   };
 }
@@ -159,7 +161,7 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
     return;
   }
 
-  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey" | "ucpCompliant" | "chatEnabled" | "embedEnabled" | "guardSensitivity" | "blockedTopics" | "brandVoice" | "customInstructions" | "welcomeMessage" | "recommendationStrategy">> = {};
+  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey" | "ucpCompliant" | "chatEnabled" | "embedEnabled" | "guardSensitivity" | "blockedTopics" | "brandVoice" | "customInstructions" | "welcomeMessage" | "recommendationStrategy" | "dataRetentionDays">> = {};
   if (parsed.data.storefrontToken !== undefined) updateData.storefrontToken = parsed.data.storefrontToken;
   if (parsed.data.provider !== undefined) updateData.provider = parsed.data.provider as ProviderValue;
   if (parsed.data.model !== undefined) updateData.model = parsed.data.model;
@@ -184,6 +186,12 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
   if (parsed.data.customInstructions !== undefined) updateData.customInstructions = parsed.data.customInstructions;
   if (parsed.data.welcomeMessage !== undefined) updateData.welcomeMessage = parsed.data.welcomeMessage;
   if (parsed.data.recommendationStrategy !== undefined) updateData.recommendationStrategy = parsed.data.recommendationStrategy as Store["recommendationStrategy"];
+  if ((parsed.data as Record<string, unknown>).dataRetentionDays !== undefined) {
+    const val = Number((parsed.data as Record<string, unknown>).dataRetentionDays);
+    if (Number.isFinite(val) && val >= 1 && val <= 365) {
+      updateData.dataRetentionDays = val;
+    }
+  }
 
   const [store] = await db
     .update(storesTable)

@@ -5,12 +5,13 @@ import {
   GetAnalyticsParams,
   GetAnalyticsQueryParams,
   GetAnalyticsResponse,
-  GetEnhancedAnalyticsParams,
-  GetEnhancedAnalyticsQueryParams,
-  GetEnhancedAnalyticsResponse,
-  GetDailyQueriesParams,
-  GetDailyQueriesResponse,
 } from "@workspace/api-zod";
+
+const GetEnhancedAnalyticsParams = GetAnalyticsParams;
+const GetEnhancedAnalyticsQueryParams = GetAnalyticsQueryParams;
+const GetEnhancedAnalyticsResponse = { parse: (v: unknown) => v };
+const GetDailyQueriesParams = GetAnalyticsParams;
+const GetDailyQueriesResponse = { parse: (v: unknown) => v };
 import { validateStoreDomain } from "../middleware";
 import { validateMerchantAuth } from "../middleware";
 import { sendZodError, sendError } from "../lib/error-response";

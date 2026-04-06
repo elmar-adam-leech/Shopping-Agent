@@ -18,7 +18,8 @@ import { fireOutputAudit } from "../services/output-audit";
 import { createToolExecutor } from "../services/tool-guard";
 import { trackSSEConnection, isServerShuttingDown } from "../services/shutdown";
 import { eq, and } from "drizzle-orm";
-import { db, userPreferencesTable } from "@workspace/db";
+import { db, userPreferencesTable, userConsentsTable } from "@workspace/db";
+import type { ConsentCategories } from "@workspace/db/schema";
 import { type UserPreferencesContext } from "../services/system-prompt";
 import { extractAndSavePreferences } from "../services/preference-extractor";
 import { describeImageWithVision, isVisionCapable, validateImageBase64 } from "../services/vision-describe";
@@ -213,8 +214,29 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       console.warn(`[chat] Failed to check customer account connection:`, err instanceof Error ? err.message : err);
     }
 
+    let consentCategories: ConsentCategories | null = null;
+    try {
+      const [consentRow] = await db
+        .select()
+        .from(userConsentsTable)
+        .where(
+          and(
+            eq(userConsentsTable.storeDomain, store.storeDomain),
+            eq(userConsentsTable.sessionId, parsed.data.sessionId),
+            eq(userConsentsTable.deleted, false)
+          )
+        );
+      if (consentRow?.categories) {
+        consentCategories = consentRow.categories;
+      }
+    } catch (err) {
+      console.warn("[chat] Failed to fetch consent:", err instanceof Error ? err.message : err);
+    }
+
+    const orderHistoryConsentGranted = !consentCategories || consentCategories.orderHistoryAccess;
+
     const authenticatedToolNames = new Set<string>();
-    if (customerAccountConnection) {
+    if (customerAccountConnection && orderHistoryConsentGranted) {
       try {
         const authTools = await listAuthenticatedMCPTools(customerAccountConnection);
         if (authTools.length > 0) {
@@ -230,33 +252,37 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       } catch (err) {
         console.warn(`[chat] Failed to list authenticated MCP tools:`, err instanceof Error ? err.message : err);
       }
+    } else if (customerAccountConnection && !orderHistoryConsentGranted) {
+      console.log(`[chat] Skipping authenticated MCP tools — order history consent not granted for store="${store.storeDomain}"`);
     }
 
     let userPreferences: UserPreferencesContext | null = null;
-    try {
-      const [prefsRow] = await db
-        .select()
-        .from(userPreferencesTable)
-        .where(
-          and(
-            eq(userPreferencesTable.storeDomain, store.storeDomain),
-            eq(userPreferencesTable.sessionId, parsed.data.sessionId)
-          )
-        );
-      if (prefsRow && prefsRow.prefs && typeof prefsRow.prefs === "object") {
-        const raw = prefsRow.prefs as Record<string, unknown>;
-        const cleaned: UserPreferencesContext = {};
-        for (const [k, v] of Object.entries(raw)) {
-          if (ALLOWED_PREF_KEYS.has(k) && v && typeof v === "string" && v.trim()) {
-            cleaned[k] = v.trim();
+    if (!consentCategories || consentCategories.preferenceStorage) {
+      try {
+        const [prefsRow] = await db
+          .select()
+          .from(userPreferencesTable)
+          .where(
+            and(
+              eq(userPreferencesTable.storeDomain, store.storeDomain),
+              eq(userPreferencesTable.sessionId, parsed.data.sessionId)
+            )
+          );
+        if (prefsRow && prefsRow.prefs && typeof prefsRow.prefs === "object") {
+          const raw = prefsRow.prefs as Record<string, unknown>;
+          const cleaned: UserPreferencesContext = {};
+          for (const [k, v] of Object.entries(raw)) {
+            if (ALLOWED_PREF_KEYS.has(k) && v && typeof v === "string" && v.trim()) {
+              cleaned[k] = v.trim();
+            }
+          }
+          if (Object.keys(cleaned).length > 0) {
+            userPreferences = cleaned;
           }
         }
-        if (Object.keys(cleaned).length > 0) {
-          userPreferences = cleaned;
-        }
+      } catch (err) {
+        console.warn("[chat] Failed to fetch user preferences:", err instanceof Error ? err.message : err);
       }
-    } catch (err) {
-      console.warn("[chat] Failed to fetch user preferences:", err instanceof Error ? err.message : err);
     }
 
     const chatContext = parsed.data.context ? {
@@ -362,19 +388,22 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       console.warn(`[chat] Analytics persistence failed for store="${store.storeDomain}" session="${parsed.data.sessionId}"`);
     }
 
-    extractAndSavePreferences(
-      store.storeDomain,
-      parsed.data.sessionId,
-      truncatedMessage,
-      fullAssistantContent
-    ).then((extracted) => {
-      if (extracted) {
-        console.log(`[chat] Auto-extracted preferences for store="${store.storeDomain}" session="${parsed.data.sessionId}":`, Object.keys(extracted).join(", "));
-        safeSend(`data: ${JSON.stringify({ type: "preferences_updated", data: extracted })}\n\n`);
-      }
-    }).catch((err) => {
-      console.warn("[chat] Preference extraction failed:", err instanceof Error ? err.message : err);
-    });
+    const preferenceConsentGranted = !consentCategories || consentCategories.preferenceStorage;
+    if (preferenceConsentGranted) {
+      extractAndSavePreferences(
+        store.storeDomain,
+        parsed.data.sessionId,
+        truncatedMessage,
+        fullAssistantContent
+      ).then((extracted) => {
+        if (extracted) {
+          console.log(`[chat] Auto-extracted preferences for store="${store.storeDomain}" session="${parsed.data.sessionId}":`, Object.keys(extracted).join(", "));
+          safeSend(`data: ${JSON.stringify({ type: "preferences_updated", data: extracted })}\n\n`);
+        }
+      }).catch((err) => {
+        console.warn("[chat] Preference extraction failed:", err instanceof Error ? err.message : err);
+      });
+    }
 
     if (fullAssistantContent && conversationSaved) {
       const toolResultTexts = toolResults.map(tr => tr.content);

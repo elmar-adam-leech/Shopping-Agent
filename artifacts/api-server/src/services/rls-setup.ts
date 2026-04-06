@@ -9,6 +9,7 @@ const RLS_TABLES = [
   "shop_knowledge",
   "user_preferences",
   "mcp_connections",
+  "user_consents",
 ];
 
 const SETUP_SQL = `

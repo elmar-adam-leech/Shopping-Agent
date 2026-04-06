@@ -9,6 +9,8 @@ import { MemoryPanel } from "@/components/chat/MemoryPanel";
 import { ChatEmptyState } from "@/components/chat/ChatEmptyState";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { CustomerAccountConnect } from "@/components/chat/CustomerAccountConnect";
+import { ConsentBanner } from "@/components/consent/ConsentBanner";
+import { PrivacySettingsPanel } from "@/components/consent/PrivacySettingsPanel";
 import { ChatActionsProvider, type QuickAddProduct } from "@/contexts/chat-actions-context";
 import { useSession } from "@/hooks/use-session";
 import { useChatOrchestration, messageKey } from "@/hooks/use-chat-orchestration";
@@ -16,7 +18,7 @@ import { useCartStore } from "@/store/use-cart-store";
 import { useListConversations, useGetPreferences, useUpdatePreferences, deleteConversation, getGetPreferencesQueryKey, useGetStorePublic, type Conversation } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChatLoadingIndicator } from "@/components/chat/ChatLoadingIndicator";
-import { Sparkles, Settings2 } from "lucide-react";
+import { Sparkles, Settings2, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
@@ -34,6 +36,7 @@ export default function ChatPage() {
 
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [showPrefs, setShowPrefs] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const [convOffset, setConvOffset] = useState(0);
   const [allConversations, setAllConversations] = useState<Conversation[]>([]);
 
@@ -235,12 +238,16 @@ export default function ChatPage() {
               </div>
               <div className="flex items-center gap-2">
                 {sessionId && <CustomerAccountConnect storeDomain={storeDomain} sessionId={sessionId} />}
-                <Button variant="ghost" size="icon" onClick={() => setShowPrefs(!showPrefs)} className="rounded-lg" title="Preferences" aria-label="Toggle preferences" aria-expanded={showPrefs}>
+                <Button variant="ghost" size="icon" onClick={() => { setShowPrivacy(!showPrivacy); if (!showPrivacy) setShowPrefs(false); }} className="rounded-lg" title="Privacy settings" aria-label="Toggle privacy settings" aria-expanded={showPrivacy}>
+                  <Shield className="w-4 h-4" aria-hidden="true" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => { setShowPrefs(!showPrefs); if (!showPrefs) setShowPrivacy(false); }} className="rounded-lg" title="Preferences" aria-label="Toggle preferences" aria-expanded={showPrefs}>
                   <Settings2 className="w-4 h-4" aria-hidden="true" />
                 </Button>
               </div>
             </div>
 
+            {showPrivacy && <PrivacySettingsPanel storeDomain={storeDomain} sessionId={sessionId} onClose={() => setShowPrivacy(false)} />}
             {showPrefs && <PreferencesPanel userPrefs={userPrefs} onPrefChange={handlePrefChange} />}
 
             <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-32">
@@ -270,6 +277,8 @@ export default function ChatPage() {
 
           <CartPanel />
         </ChatActionsProvider>
+
+        <ConsentBanner storeDomain={storeDomain} sessionId={sessionId} />
       </div>
     </AppLayout>
   );
