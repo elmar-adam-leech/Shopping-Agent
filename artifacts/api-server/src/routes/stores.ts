@@ -41,6 +41,8 @@ interface StoreResponse {
   welcomeMessage: string | null;
   recommendationStrategy: string;
   dataRetentionDays: number;
+  checkoutRecoveryEnabled: boolean;
+  checkoutRecoveryDelayMinutes: number;
   createdAt: Date;
 }
 
@@ -61,6 +63,8 @@ function storeToResponse(store: Store): StoreResponse {
     welcomeMessage: store.welcomeMessage ?? null,
     recommendationStrategy: store.recommendationStrategy,
     dataRetentionDays: store.dataRetentionDays,
+    checkoutRecoveryEnabled: store.checkoutRecoveryEnabled,
+    checkoutRecoveryDelayMinutes: store.checkoutRecoveryDelayMinutes,
     createdAt: store.createdAt,
   };
 }
@@ -161,7 +165,7 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
     return;
   }
 
-  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey" | "ucpCompliant" | "chatEnabled" | "embedEnabled" | "guardSensitivity" | "blockedTopics" | "brandVoice" | "customInstructions" | "welcomeMessage" | "recommendationStrategy" | "dataRetentionDays">> = {};
+  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey" | "ucpCompliant" | "chatEnabled" | "embedEnabled" | "guardSensitivity" | "blockedTopics" | "brandVoice" | "customInstructions" | "welcomeMessage" | "recommendationStrategy" | "dataRetentionDays" | "checkoutRecoveryEnabled" | "checkoutRecoveryDelayMinutes">> = {};
   if (parsed.data.storefrontToken !== undefined) updateData.storefrontToken = parsed.data.storefrontToken;
   if (parsed.data.provider !== undefined) updateData.provider = parsed.data.provider as ProviderValue;
   if (parsed.data.model !== undefined) updateData.model = parsed.data.model;
@@ -192,6 +196,8 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
       updateData.dataRetentionDays = val;
     }
   }
+  if (parsed.data.checkoutRecoveryEnabled !== undefined) updateData.checkoutRecoveryEnabled = parsed.data.checkoutRecoveryEnabled;
+  if (parsed.data.checkoutRecoveryDelayMinutes !== undefined) updateData.checkoutRecoveryDelayMinutes = parsed.data.checkoutRecoveryDelayMinutes;
 
   const [store] = await db
     .update(storesTable)

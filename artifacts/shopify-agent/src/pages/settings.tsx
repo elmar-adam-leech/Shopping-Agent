@@ -7,6 +7,7 @@ import { BrandVoiceSettings } from "@/components/settings/BrandVoiceSettings";
 import { CustomInstructionsSettings } from "@/components/settings/CustomInstructionsSettings";
 import { DataRetentionSettings } from "@/components/settings/DataRetentionSettings";
 import { ExperimentSettings } from "@/components/settings/ExperimentSettings";
+import { CheckoutRecoverySettings } from "@/components/settings/CheckoutRecoverySettings";
 
 export default function SettingsPage() {
   const [, params] = useRoute("/:storeDomain/settings");
@@ -29,6 +30,8 @@ export default function SettingsPage() {
         <LLMConfigForm storeDomain={storeDomain} />
 
         <ThemeIntegrationSettings storeDomain={storeDomain} />
+
+        <CheckoutRecoverySettings storeDomain={storeDomain} />
 
         <KnowledgeEditor storeDomain={storeDomain} />
 

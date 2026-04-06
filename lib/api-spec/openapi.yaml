@@ -587,6 +587,60 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserPreferences"
 
+  /stores/{storeDomain}/checkout-recovery:
+    get:
+      operationId: checkAbandonedCheckout
+      tags: [chat]
+      summary: Check if session has an abandoned checkout eligible for recovery
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Abandoned checkout recovery data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckoutRecoveryData"
+
+  /stores/{storeDomain}/checkout-recovery/action:
+    post:
+      operationId: checkoutRecoveryAction
+      tags: [chat]
+      summary: Record a checkout recovery action (resume, dismiss, convert)
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutRecoveryActionBody"
+      responses:
+        "200":
+          description: Action recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                required:
+                  - success
+
   /stores/{storeDomain}/analytics:
     get:
       operationId: getAnalytics
@@ -896,6 +950,10 @@ components:
         recommendationStrategy:
           type: string
           enum: [bestsellers_first, new_arrivals_first, price_low_to_high, personalized]
+        checkoutRecoveryEnabled:
+          type: boolean
+        checkoutRecoveryDelayMinutes:
+          type: integer
         createdAt:
           type: string
           format: date-time
@@ -909,6 +967,8 @@ components:
         - guardSensitivity
         - blockedTopics
         - recommendationStrategy
+        - checkoutRecoveryEnabled
+        - checkoutRecoveryDelayMinutes
         - createdAt
 
     StorePublicInfo:
@@ -998,6 +1058,12 @@ components:
         recommendationStrategy:
           type: string
           enum: [bestsellers_first, new_arrivals_first, price_low_to_high, personalized]
+        checkoutRecoveryEnabled:
+          type: boolean
+        checkoutRecoveryDelayMinutes:
+          type: integer
+          minimum: 1
+          maximum: 10080
 
     KnowledgeEntry:
       type: object
@@ -1501,3 +1567,56 @@ components:
         - status
         - variantA
         - variantB
+
+    CheckoutRecoveryData:
+      type: object
+      properties:
+        hasAbandonedCheckout:
+          type: boolean
+        sessionId:
+          type: string
+        cartItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecoveryCartItem"
+        cartTotal:
+          type: number
+        abandonedAt:
+          type: string
+          format: date-time
+        checkoutUrl:
+          type: ["string", "null"]
+      required:
+        - hasAbandonedCheckout
+
+    RecoveryCartItem:
+      type: object
+      properties:
+        title:
+          type: string
+        quantity:
+          type: integer
+        price:
+          type: number
+        variantId:
+          type: string
+        imageUrl:
+          type: ["string", "null"]
+      required:
+        - title
+        - quantity
+        - price
+
+    CheckoutRecoveryActionBody:
+      type: object
+      properties:
+        sessionId:
+          type: string
+        action:
+          type: string
+          enum: [resumed, dismissed, converted]
+        metadata:
+          type: object
+      required:
+        - sessionId
+        - action

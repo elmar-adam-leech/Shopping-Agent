@@ -56,6 +56,8 @@ export const storesTable = pgTable("stores", {
   welcomeMessage: text("welcome_message"),
   recommendationStrategy: recommendationStrategyEnum("recommendation_strategy").notNull().default("personalized"),
   dataRetentionDays: integer("data_retention_days").notNull().default(90),
+  checkoutRecoveryEnabled: boolean("checkout_recovery_enabled").notNull().default(false),
+  checkoutRecoveryDelayMinutes: integer("checkout_recovery_delay_minutes").notNull().default(60),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });

@@ -10,7 +10,7 @@ async function start() {
   try {
     console.log("Running database migrations...");
     execSync("pnpm --filter @workspace/db run push-force", {
-      stdio: "inherit",
+      stdio: ["pipe", "inherit", "inherit"],
       cwd: process.env["REPL_HOME"] || process.cwd(),
       timeout: 30_000,
     });

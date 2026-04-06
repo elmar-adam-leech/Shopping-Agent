@@ -12,6 +12,7 @@ import authRouter from "./auth";
 import mcpAuthRouter from "./mcp-auth";
 import consentsRouter from "./consents";
 import experimentsRouter from "./experiments";
+import checkoutRecoveryRouter from "./checkout-recovery";
 
 const router: IRouter = Router();
 
@@ -23,6 +24,7 @@ router.use(storesRouter);
 router.use(knowledgeRouter);
 router.use(chatRouter);
 router.use(cartRouter);
+router.use(checkoutRecoveryRouter);
 router.use(conversationsRouter);
 router.use(preferencesRouter);
 router.use(analyticsRouter);

@@ -11,11 +11,12 @@ import { ChatComposer } from "@/components/chat/ChatComposer";
 import { CustomerAccountConnect } from "@/components/chat/CustomerAccountConnect";
 import { ConsentBanner } from "@/components/consent/ConsentBanner";
 import { PrivacySettingsPanel } from "@/components/consent/PrivacySettingsPanel";
+import { CheckoutRecoveryCard } from "@/components/chat/CheckoutRecoveryCard";
 import { ChatActionsProvider, type QuickAddProduct } from "@/contexts/chat-actions-context";
 import { useSession } from "@/hooks/use-session";
 import { useChatOrchestration, messageKey } from "@/hooks/use-chat-orchestration";
 import { useCartStore } from "@/store/use-cart-store";
-import { useListConversations, useListDeletedConversations, restoreConversation, useGetPreferences, useUpdatePreferences, deleteConversation, getGetPreferencesQueryKey, useGetStorePublic, type Conversation } from "@workspace/api-client-react";
+import { useListConversations, useListDeletedConversations, restoreConversation, useGetPreferences, useUpdatePreferences, deleteConversation, getGetPreferencesQueryKey, useGetStorePublic, useCheckAbandonedCheckout, useCheckoutRecoveryAction, getCheckAbandonedCheckoutQueryKey, type Conversation } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChatLoadingIndicator } from "@/components/chat/ChatLoadingIndicator";
 import { Sparkles, Settings2, Shield } from "lucide-react";
@@ -39,6 +40,7 @@ export default function ChatPage() {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [convOffset, setConvOffset] = useState(0);
   const [allConversations, setAllConversations] = useState<Conversation[]>([]);
+  const [recoveryDismissed, setRecoveryDismissed] = useState(false);
 
   const CONV_PAGE_SIZE = 50;
   const convParams = { sessionId: sessionId || "", limit: String(CONV_PAGE_SIZE), offset: String(convOffset) };
@@ -179,6 +181,39 @@ export default function ChatPage() {
     loadMessages([]);
   }, [loadMessages]);
 
+  const recoveryParams = { sessionId: sessionId || "" };
+  const recoveryQueryKey = getCheckAbandonedCheckoutQueryKey(storeDomain, recoveryParams);
+  const { data: recoveryData } = useCheckAbandonedCheckout(storeDomain, recoveryParams, {
+    query: {
+      queryKey: recoveryQueryKey,
+      enabled: !!sessionId && !recoveryDismissed && messages.length === 0,
+      staleTime: 5 * 60 * 1000,
+      retry: false,
+    },
+  });
+  const { mutateAsync: recoveryAction } = useCheckoutRecoveryAction();
+
+  const handleRecoveryResume = useCallback(() => {
+    if (!sessionId) return;
+    recoveryAction({ storeDomain, data: { sessionId, action: "resumed" } }).catch(() => {});
+    const itemsSummary = recoveryData?.cartItems?.map(i => i.title).join(", ") || "my previous items";
+    setInput(`I'd like to resume my checkout with ${itemsSummary}. Can you help me complete my purchase?`);
+    setRecoveryDismissed(true);
+  }, [sessionId, storeDomain, recoveryAction, recoveryData, setInput]);
+
+  const handleRecoveryDismiss = useCallback(() => {
+    if (!sessionId) return;
+    recoveryAction({ storeDomain, data: { sessionId, action: "dismissed" } }).catch(() => {});
+    setRecoveryDismissed(true);
+  }, [sessionId, storeDomain, recoveryAction]);
+
+  const handleRecoveryStartFresh = useCallback(() => {
+    if (!sessionId) return;
+    recoveryAction({ storeDomain, data: { sessionId, action: "dismissed", metadata: { reason: "start_fresh" } } }).catch(() => {});
+    setRecoveryDismissed(true);
+    startNewConversation();
+  }, [sessionId, storeDomain, recoveryAction, startNewConversation]);
+
   const selectConversation = useCallback((conv: Conversation) => {
     setActiveConversationId(conv.id);
     loadMessages(conv.messages || []);
@@ -270,6 +305,16 @@ export default function ChatPage() {
             {showPrefs && <PreferencesPanel userPrefs={userPrefs} onPrefChange={handlePrefChange} />}
 
             <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-32">
+              {recoveryData?.hasAbandonedCheckout && !recoveryDismissed && messages.length === 0 && (
+                <CheckoutRecoveryCard
+                  cartItems={recoveryData.cartItems ?? []}
+                  cartTotal={recoveryData.cartTotal ?? 0}
+                  abandonedAt={recoveryData.abandonedAt ?? new Date().toISOString()}
+                  onResume={handleRecoveryResume}
+                  onDismiss={handleRecoveryDismiss}
+                  onStartFresh={handleRecoveryStartFresh}
+                />
+              )}
               {messages.length === 0 ? (
                 <ChatEmptyState storeDomain={storeDomain} onPresetClick={setInput} welcomeMessage={storePublic?.welcomeMessage} />
               ) : (
