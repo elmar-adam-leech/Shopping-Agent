@@ -5,11 +5,15 @@ import { sendError } from "../lib/error-response";
 import {
   discoverCustomerAccountMCP,
   resolveClientId,
+} from "../services/customer-account-discovery";
+import {
   initiateOAuth,
   handleOAuthCallback,
+} from "../services/customer-account-oauth";
+import {
   revokeConnection,
   getActiveConnection,
-} from "../services/customer-account-oauth";
+} from "../services/customer-account-connection";
 
 const router: IRouter = Router();
 

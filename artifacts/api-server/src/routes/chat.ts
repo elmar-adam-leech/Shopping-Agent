@@ -9,7 +9,7 @@ import { validateStoreDomain, loadFullStore, validateSession } from "../middlewa
 import { decrypt } from "../services/encryption";
 import { runPromptGuard, logGuardEvent, type GuardSensitivity } from "../services/prompt-guard";
 import { sendError, sendZodError } from "../lib/error-response";
-import { getActiveConnection } from "../services/customer-account-oauth";
+import { getActiveConnection } from "../services/customer-account-connection";
 import { listAuthenticatedMCPTools } from "../services/customer-account-mcp";
 import { loadOrCreateConversation, persistChatResult, type ChatMessageRecord } from "../services/conversation-service";
 import { getCachedKnowledge } from "../services/knowledge-cache";
