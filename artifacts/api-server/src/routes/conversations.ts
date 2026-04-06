@@ -9,8 +9,8 @@ import {
   GetConversationResponse,
   DeleteConversationParams,
 } from "@workspace/api-zod";
-import { validateStoreDomain } from "../services/tenant-validator";
-import { validateSession } from "../services/session-validator";
+import { validateStoreDomain } from "../middleware";
+import { validateSession } from "../middleware";
 import { sendError, sendZodError } from "../lib/error-response";
 
 const router: IRouter = Router();

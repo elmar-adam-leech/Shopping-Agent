@@ -12,12 +12,11 @@ import {
   ListStoresResponse,
   DeleteStoreParams,
 } from "@workspace/api-zod";
-import { validateMerchantAuth, validateMerchantAuthForStoreList } from "../services/merchant-auth";
-import { invalidateStoreCache, getCachedStorePublicInfo } from "../services/tenant-validator";
+import { validateMerchantAuth, validateMerchantAuthForStoreList, clearMerchantSessionCache } from "../middleware";
+import { invalidateStoreCache, getCachedStorePublicInfo } from "../middleware";
 import { encrypt } from "../services/encryption";
 import { invalidateToolsListCache } from "../services/mcp-client";
-import { invalidateSessionCacheForDomain } from "../services/session-validator";
-import { clearMerchantSessionCache } from "../services/merchant-auth";
+import { invalidateSessionCacheForDomain } from "../middleware";
 import { invalidateKnowledgeCache } from "./chat";
 import { sendError, sendZodError } from "../lib/error-response";
 

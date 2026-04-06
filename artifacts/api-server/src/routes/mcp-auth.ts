@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { validateStoreDomain, loadFullStore } from "../services/tenant-validator";
-import { validateSession } from "../services/session-validator";
+import { validateStoreDomain, loadFullStore } from "../middleware";
+import { validateSession } from "../middleware";
 import { sendError } from "../lib/error-response";
 import {
   discoverCustomerAccountMCP,

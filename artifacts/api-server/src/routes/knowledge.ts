@@ -13,8 +13,8 @@ import {
   ListKnowledgeResponse,
   DeleteKnowledgeParams,
 } from "@workspace/api-zod";
-import { validateStoreDomain } from "../services/tenant-validator";
-import { validateMerchantAuth } from "../services/merchant-auth";
+import { validateStoreDomain } from "../middleware";
+import { validateMerchantAuth } from "../middleware";
 import { invalidateKnowledgeCache } from "./chat";
 import { sendError, sendZodError } from "../lib/error-response";
 

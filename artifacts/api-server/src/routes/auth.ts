@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import crypto from "crypto";
 import { db, storesTable, pendingOAuthStatesTable } from "@workspace/db";
 import { eq, lt, gt, and, sql } from "drizzle-orm";
-import { createMerchantSession } from "../services/merchant-auth";
+import { createMerchantSession } from "../middleware";
 import { encrypt } from "../services/encryption";
 import { SHOPIFY_DOMAIN_PATTERN } from "../lib/validation";
 import { sendError } from "../lib/error-response";
