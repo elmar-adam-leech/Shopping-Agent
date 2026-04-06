@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/layout/error-boundary";
-import { Loader2 } from "lucide-react";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
 
 const HomePage = lazy(() => import("./pages/home"));
 const InstallPage = lazy(() => import("./pages/install"));
@@ -30,11 +30,7 @@ const queryClient = new QueryClient({
 });
 
 function PageLoader() {
-  return (
-    <div className="flex h-screen items-center justify-center">
-      <Loader2 className="w-8 h-8 animate-spin text-primary" />
-    </div>
-  );
+  return <LoadingOverlay className="h-screen" />;
 }
 
 function Router() {

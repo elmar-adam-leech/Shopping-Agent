@@ -5,7 +5,7 @@ import { Send, Sparkles, Loader2, ShoppingBag } from "lucide-react";
 import type { ToolCall } from "@workspace/api-client-react";
 import { useSession } from "@/hooks/use-session";
 import { useChatStream } from "@/hooks/use-chat-stream";
-import { ToolBadge } from "@/components/shop-for-me/ToolBadge";
+import { ToolBadge } from "@/components/ui/tool-badge";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 
 interface StorePublicInfo {

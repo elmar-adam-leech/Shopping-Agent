@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { ChatMessage, ToolCall, ToolResult } from '@workspace/api-client-react';
 import { readSSEStream } from '@/lib/sse-parser';
+import { httpStatusToError } from '@/lib/error-utils';
 
 export interface ChatMessageWithId extends ChatMessage {
   _id: string;
@@ -150,13 +151,7 @@ export function useChatStream({
         } catch {
         }
         if (!errorMessage) {
-          if (response.status === 429) {
-            errorMessage = 'Too many messages sent. Please wait a moment before trying again.';
-          } else if (response.status === 503) {
-            errorMessage = 'The service is temporarily unavailable. Please try again in a moment.';
-          } else {
-            errorMessage = 'Something went wrong. Please try again.';
-          }
+          errorMessage = httpStatusToError(response.status);
         }
         throw new Error(errorMessage);
       }

@@ -42,6 +42,13 @@ The frontend is built with React 18, Vite, Tailwind CSS, and shadcn/ui, providin
 - **ChatActionsContext**: React context (`contexts/chat-actions-context.tsx`) provides `sendMessage`, `quickAddToCart`, and `isLoading` to deeply nested chat components without prop drilling.
 - **Direct Cart API**: Backend endpoint `POST /stores/:storeDomain/cart/quick-add` in `artifacts/api-server/src/routes/cart.ts` directly invokes MCP tools for deterministic cart operations.
 
+### Shared UI Components & Utilities
+- **ToolBadge** (`components/ui/tool-badge.tsx`): Unified tool call badge with `variant` prop — `"detailed"` (with add-to-cart special state, used by MessageBubble) and `"compact"` (indigo pill style, used by shop-for-me page).
+- **LoadingOverlay** (`components/ui/loading-overlay.tsx`): Shared spinner + optional error/retry state. Used by App.tsx (Suspense fallback), chat.tsx, analytics.tsx, and EmbedChatPanel.
+- **EntityCard** (`components/ui/entity-card.tsx`): Common card container with image + content layout. Used by ArticleCard.
+- **AgentAvatar** (`components/ui/agent-avatar.tsx`): Reusable agent icon container with configurable size (sm/md/lg), variant (subtle/gradient), and optional children. Used in chat.tsx header, EmbedChatPanel.tsx empty state, and home.tsx hero.
+- **Error Utilities** (`lib/error-utils.ts`): Centralized `toFriendlyError` (user-facing error mapping) and `httpStatusToError` (HTTP status code mapping). Used by install.tsx and use-chat-stream.ts.
+
 ### Technical Implementations
 - **Monorepo**: pnpm workspaces for managing multiple packages (API server, frontend, shared libraries).
 - **Backend**: Express 5 serving as the API server.

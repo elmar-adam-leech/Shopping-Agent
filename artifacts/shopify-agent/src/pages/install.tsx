@@ -3,20 +3,7 @@ import { Store, ArrowRight, ShieldCheck, Loader2, AlertCircle } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { StoreDomainInput } from "@/components/ui/store-domain-input";
-
-const USER_FRIENDLY_ERRORS: Record<string, string> = {
-  "Missing shop parameter": "Please provide a valid store domain.",
-  "Invalid shop domain. Must be a valid .myshopify.com domain.": "That doesn't look like a valid Shopify store domain. Please check and try again.",
-  "Server is busy, please try again later": "The server is currently busy. Please wait a moment and try again.",
-};
-
-function toFriendlyError(raw: string): string {
-  if (USER_FRIENDLY_ERRORS[raw]) return USER_FRIENDLY_ERRORS[raw];
-  if (/not configured|SHOPIFY_API_KEY|SHOPIFY_API_SECRET|APP_URL/i.test(raw)) {
-    return "The app is not fully configured yet. Please contact the site administrator.";
-  }
-  return "Something went wrong. Please try again later.";
-}
+import { toFriendlyError } from "@/lib/error-utils";
 
 export default function InstallPage() {
   const [shop, setShop] = useState("");

@@ -3,7 +3,7 @@ import { Sparkles, AlertTriangle } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { cn } from "@/lib/utils";
-import { ToolCallBadge, type ToolCallDisplay } from "./ToolCallBadge";
+import { ToolBadge, type ToolCallDisplay } from "@/components/ui/tool-badge";
 import { ToolResultCards } from "./ToolResultCards";
 
 export interface ChatMessageDisplay {
@@ -63,7 +63,7 @@ function MessageBubbleInner({ message }: { message: ChatMessageDisplay }) {
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="flex flex-col gap-2 w-full mt-1">
             {message.toolCalls.map((tc, idx) => (
-              <ToolCallBadge key={idx} tc={tc} />
+              <ToolBadge key={idx} name={tc.name} variant="detailed" />
             ))}
           </div>
         )}

@@ -4,6 +4,7 @@ import { Store as StoreIcon, Plus, ArrowRight, Settings, MessageSquare, Activity
 import { useListStores } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { StoreDomainInput } from "@/components/ui/store-domain-input";
+import { AgentAvatar } from "@/components/ui/agent-avatar";
 
 export default function HomePage() {
   const { data: stores, isLoading, error, refetch } = useListStores();
@@ -53,14 +54,14 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background z-0" />
         
         <div className="max-w-5xl mx-auto relative z-10 text-center">
-          <div className="inline-flex items-center justify-center p-3 bg-primary/10 rounded-2xl mb-6 text-primary mb-6 animate-in slide-in-from-bottom-4 duration-500 fade-in will-change-transform">
+          <AgentAvatar size="md" className="inline-flex p-3 mb-6 animate-in slide-in-from-bottom-4 duration-500 fade-in will-change-transform">
             <img 
               src={`${import.meta.env.BASE_URL}images/logo.webp`} 
               alt="Logo" 
               fetchPriority="high"
               className="w-12 h-12 drop-shadow-md rounded-xl"
             />
-          </div>
+          </AgentAvatar>
           <h1 className="text-5xl md:text-6xl font-display font-extrabold tracking-tight text-foreground mb-6 animate-in slide-in-from-bottom-6 duration-700 fade-in will-change-transform">
             Your Store, <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">Supercharged</span>
           </h1>

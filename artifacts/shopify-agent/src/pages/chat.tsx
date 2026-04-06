@@ -14,9 +14,11 @@ import { useChatOrchestration, messageKey } from "@/hooks/use-chat-orchestration
 import { useCartStore } from "@/store/use-cart-store";
 import { useListConversations, useGetPreferences, useUpdatePreferences, deleteConversation, getGetPreferencesQueryKey, useGetStorePublic, type Conversation } from "@workspace/api-client-react";
 import { ChatLoadingIndicator } from "@/components/chat/ChatLoadingIndicator";
-import { Sparkles, Loader2, Settings2 } from "lucide-react";
+import { Sparkles, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
+import { AgentAvatar } from "@/components/ui/agent-avatar";
 import { useEffect, useRef } from "react";
 
 export default function ChatPage() {
@@ -181,21 +183,11 @@ export default function ChatPage() {
   if (!sessionId) {
     return (
       <AppLayout storeDomain={storeDomain}>
-        <div className="flex h-full items-center justify-center" role="status" aria-label="Loading">
-          {sessionError ? (
-            <div className="text-center space-y-3">
-              <p className="text-muted-foreground">Unable to connect to the chat service.</p>
-              <Button variant="outline" onClick={() => refreshSession()}>
-                Try Again
-              </Button>
-            </div>
-          ) : (
-            <>
-              <Loader2 className="w-8 h-8 animate-spin text-primary" aria-hidden="true" />
-              <span className="sr-only">Loading chat...</span>
-            </>
-          )}
-        </div>
+        <LoadingOverlay
+          loadingText="Loading chat..."
+          error={sessionError ? "Unable to connect to the chat service." : null}
+          onRetry={sessionError ? () => refreshSession() : undefined}
+        />
       </AppLayout>
     );
   }
@@ -217,9 +209,7 @@ export default function ChatPage() {
           <div className="flex-1 flex flex-col h-full bg-background/50 relative z-10">
             <div className="h-16 border-b border-border/50 flex items-center justify-between px-6 bg-background/80 backdrop-blur-md sticky top-0 z-20">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                  <Sparkles className="w-4 h-4" />
-                </div>
+                <AgentAvatar icon={Sparkles} size="sm" />
                 <h2 className="font-bold text-sm">Shopping Assistant</h2>
               </div>
               <div className="flex items-center gap-2">
