@@ -1,6 +1,6 @@
 import type { LLMMessage, LLMStreamEvent, MCPToolDef } from "./types";
-import { streamChat as streamChatEngine } from "./chat-stream";
-import { createChatAdapter } from "./chat-adapter";
+import { streamChat as streamChatEngine } from "../chat-stream";
+import { createChatAdapter } from "../chat-adapter";
 
 export async function* streamChat(
   apiKey: string,

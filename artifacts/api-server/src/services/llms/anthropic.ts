@@ -1,5 +1,5 @@
 import type { LLMStreamEvent, LLMMessage, MCPToolDef } from "./types";
-import { streamChat as streamChatEngine, type ProviderAdapter, type ProviderRequest, type SSEEvent } from "./chat-stream";
+import { streamChat as streamChatEngine, type ProviderAdapter, type ProviderRequest, type SSEEvent } from "../chat-stream";
 
 interface AnthropicContentBlock {
   type: "tool_use" | "text";

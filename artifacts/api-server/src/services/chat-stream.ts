@@ -1,4 +1,4 @@
-import type { LLMMessage, LLMStreamEvent, MCPToolDef } from "./types";
+import type { LLMMessage, LLMStreamEvent, MCPToolDef } from "./llms/types";
 
 export interface SSEEvent {
   event?: string;
