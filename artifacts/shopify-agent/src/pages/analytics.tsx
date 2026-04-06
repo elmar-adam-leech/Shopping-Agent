@@ -17,6 +17,8 @@ import {
   AlertTriangle,
   X,
   CalendarDays,
+  Download,
+  ChevronDown,
 } from "lucide-react";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import {
@@ -34,6 +36,7 @@ import {
 
 type PresetRange = 7 | 30 | 90;
 type DateRangeMode = { type: "preset"; days: PresetRange } | { type: "custom"; startDate: string; endDate: string };
+type ExportSection = "overview" | "daily_chats" | "top_queries" | "tool_usage" | "conversion_funnel" | "top_products";
 
 function formatDateForInput(d: Date): string {
   return d.toISOString().split("T")[0];
@@ -44,6 +47,47 @@ export default function AnalyticsPage() {
   const storeDomain = params?.storeDomain || "";
   const [dateRange, setDateRange] = useState<DateRangeMode>({ type: "preset", days: 7 });
   const [drillDownDate, setDrillDownDate] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<string | null>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
+  const handleExport = useCallback(async (sections?: ExportSection[]) => {
+    const label = sections ? sections.join(",") : "all";
+    setExporting(label);
+    setShowExportMenu(false);
+    try {
+      const params = new URLSearchParams();
+      if (dateRange.type === "preset") {
+        params.set("days", String(dateRange.days));
+      } else {
+        params.set("startDate", dateRange.startDate);
+        params.set("endDate", dateRange.endDate);
+      }
+      if (sections) {
+        params.set("sections", sections.join(","));
+      }
+      const response = await fetch(`/api/stores/${storeDomain}/analytics/export?${params.toString()}`, {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error("Export failed");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const disposition = response.headers.get("Content-Disposition");
+      const filenameMatch = disposition?.match(/filename="(.+?)"/);
+      a.download = filenameMatch?.[1] || `analytics-export.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export failed:", err);
+    } finally {
+      setExporting(null);
+    }
+  }, [storeDomain, dateRange]);
 
   const queryParams =
     dateRange.type === "preset"
@@ -110,7 +154,16 @@ export default function AnalyticsPage() {
               Insights from your AI Shopping Agent.
             </p>
           </div>
-          <DateRangePicker value={dateRange} onChange={setDateRange} />
+          <div className="flex items-center gap-3">
+            <DateRangePicker value={dateRange} onChange={setDateRange} />
+            <ExportButton
+              exporting={exporting}
+              showMenu={showExportMenu}
+              onToggleMenu={() => setShowExportMenu(!showExportMenu)}
+              onExport={handleExport}
+              onClose={() => setShowExportMenu(false)}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -397,6 +450,81 @@ function DateRangePicker({ value, onChange }: { value: DateRangeMode; onChange: 
             Apply
           </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+function ExportButton({
+  exporting,
+  showMenu,
+  onToggleMenu,
+  onExport,
+  onClose,
+}: {
+  exporting: string | null;
+  showMenu: boolean;
+  onToggleMenu: () => void;
+  onExport: (sections?: ExportSection[]) => void;
+  onClose: () => void;
+}) {
+  const sectionOptions: { label: string; value: ExportSection }[] = [
+    { label: "Overview Metrics", value: "overview" },
+    { label: "Daily Activity", value: "daily_chats" },
+    { label: "Top Queries", value: "top_queries" },
+    { label: "Tool Usage", value: "tool_usage" },
+    { label: "Conversion Funnel", value: "conversion_funnel" },
+    { label: "Top Products", value: "top_products" },
+  ];
+
+  return (
+    <div className="relative">
+      <div className="flex items-center">
+        <button
+          onClick={() => onExport()}
+          disabled={!!exporting}
+          className="flex items-center gap-2 px-4 py-2 rounded-l-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60"
+        >
+          {exporting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Download className="w-4 h-4" />
+          )}
+          {exporting ? "Exporting..." : "Export CSV"}
+        </button>
+        <button
+          onClick={onToggleMenu}
+          disabled={!!exporting}
+          className="flex items-center px-2 py-2 rounded-r-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors border-l border-primary-foreground/20 disabled:opacity-60"
+        >
+          <ChevronDown className="w-4 h-4" />
+        </button>
+      </div>
+      {showMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={onClose} />
+          <div className="absolute right-0 top-full mt-2 w-56 bg-card border border-border/50 rounded-xl shadow-lg z-50 overflow-hidden">
+            <div className="p-2">
+              <button
+                onClick={() => onExport()}
+                className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium hover:bg-secondary/50 transition-colors flex items-center gap-2"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download All
+              </button>
+              <div className="h-px bg-border/50 my-1" />
+              {sectionOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => onExport([opt.value])}
+                  className="w-full text-left px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
