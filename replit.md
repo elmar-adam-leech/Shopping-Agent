@@ -20,6 +20,9 @@ Key UI components include:
 - **Rich Multi-Modal Chat Rendering**: Features product carousels, quick add-to-cart buttons, comparison tables, inline cart summaries, product image galleries, and interactive collection cards.
 - **Shared UI Components & Utilities**: Includes `ToolBadge`, `LoadingOverlay`, `EntityCard`, `AgentAvatar`, and `Error Utilities` for consistent design and functionality.
 
+
+**Dark Mode**: Full dark mode support via a ThemeProvider context (`src/components/theme/theme-provider.tsx`). Users can switch between Light, Dark, and System modes via a segmented toggle in the sidebar and home page. Theme preference persists in localStorage (`shopify-agent-theme`). An inline script in `index.html` prevents flash of unstyled content on load. The `.dark` class on `<html>` activates CSS custom properties defined in `index.css`. Embed pages are unaffected (they inherit the storefront's own theme).
+
 ### Technical Implementations
 - **Monorepo**: Managed with pnpm workspaces for multiple packages (API server, frontend, shared libraries).
 - **Backend**: Express 5 serves as the API server.

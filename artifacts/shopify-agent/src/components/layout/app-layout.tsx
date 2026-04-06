@@ -4,6 +4,7 @@ import { useCartStore } from "@/store/use-cart-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { useState } from "react";
 
 interface AppLayoutProps {
@@ -63,7 +64,7 @@ export function AppLayout({ children, storeDomain }: AppLayoutProps) {
             })}
           </nav>
 
-          <div className="p-4 border-t border-border/50">
+          <div className="p-4 border-t border-border/50 space-y-3">
             <button 
               onClick={() => cartStore.setIsOpen(true)}
               className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-secondary/30 hover:bg-secondary/60 text-foreground transition-all duration-200"
@@ -78,22 +79,30 @@ export function AppLayout({ children, storeDomain }: AppLayoutProps) {
                 </Badge>
               )}
             </button>
+            <div className="flex justify-center">
+              <ThemeToggle />
+            </div>
           </div>
         </div>
       ) : (
-        <div className="p-6">
-          <Link href="/">
-            <div className="flex items-center gap-3 cursor-pointer">
-              <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20">
-                <MessageSquare className="w-5 h-5" />
+        <div className="flex flex-col h-full">
+          <div className="p-6">
+            <Link href="/">
+              <div className="flex items-center gap-3 cursor-pointer">
+                <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground shadow-lg shadow-primary/20">
+                  <MessageSquare className="w-5 h-5" />
+                </div>
+                <h1 className="font-display font-bold text-lg">Shopify Agent</h1>
+                <span className="ml-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 text-[10px] font-semibold">
+                  <Shield className="w-3 h-3" />
+                  UCP
+                </span>
               </div>
-              <h1 className="font-display font-bold text-lg">Shopify Agent</h1>
-              <span className="ml-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 text-[10px] font-semibold">
-                <Shield className="w-3 h-3" />
-                UCP
-              </span>
-            </div>
-          </Link>
+            </Link>
+          </div>
+          <div className="mt-auto p-4 border-t border-border/50 flex justify-center">
+            <ThemeToggle />
+          </div>
         </div>
       )}
     </>
@@ -120,7 +129,8 @@ export function AppLayout({ children, storeDomain }: AppLayoutProps) {
             </div>
           </Link>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
             {storeDomain && (
               <Button variant="ghost" size="icon" className="relative" onClick={() => cartStore.setIsOpen(true)} aria-label={`Open cart${cartStore.totalItems > 0 ? ` (${cartStore.totalItems} items)` : ''}`}>
                 <ShoppingBag className="w-5 h-5" aria-hidden="true" />

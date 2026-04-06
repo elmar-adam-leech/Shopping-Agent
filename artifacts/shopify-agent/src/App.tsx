@@ -1,10 +1,11 @@
 import { lazy, Suspense } from "react";
-import { Switch, Route, Router as WouterRouter } from "wouter";
+import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/layout/error-boundary";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
+import { ThemeProvider } from "@/components/theme/theme-provider";
 
 const HomePage = lazy(() => import("./pages/home"));
 const InstallPage = lazy(() => import("./pages/install"));
@@ -33,7 +34,7 @@ function PageLoader() {
   return <LoadingOverlay className="h-screen" />;
 }
 
-function Router() {
+function EmbedRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Switch>
@@ -41,16 +42,35 @@ function Router() {
         <Route path="/embed/:storeDomain/search" component={EmbedSearchPage} />
         <Route path="/embed/:storeDomain/assistant" component={EmbedAssistantPage} />
         <Route path="/embed/:storeDomain/product/:productHandle" component={EmbedProductPage} />
-        <Route path="/" component={HomePage} />
-        <Route path="/install" component={InstallPage} />
-        <Route path="/:storeDomain/settings" component={SettingsPage} />
-        <Route path="/:storeDomain/chat" component={ChatPage} />
-        <Route path="/:storeDomain/analytics" component={AnalyticsPage} />
-        <Route path="/shop/:storeDomain" component={ShopForMePage} />
-        <Route component={NotFound} />
       </Switch>
     </Suspense>
   );
+}
+
+function DashboardRoutes() {
+  return (
+    <ThemeProvider>
+      <Suspense fallback={<PageLoader />}>
+        <Switch>
+          <Route path="/" component={HomePage} />
+          <Route path="/install" component={InstallPage} />
+          <Route path="/:storeDomain/settings" component={SettingsPage} />
+          <Route path="/:storeDomain/chat" component={ChatPage} />
+          <Route path="/:storeDomain/analytics" component={AnalyticsPage} />
+          <Route path="/shop/:storeDomain" component={ShopForMePage} />
+          <Route component={NotFound} />
+        </Switch>
+      </Suspense>
+    </ThemeProvider>
+  );
+}
+
+function Router() {
+  const [location] = useLocation();
+  const isEmbed = location.startsWith("/embed/");
+
+  if (isEmbed) return <EmbedRoutes />;
+  return <DashboardRoutes />;
 }
 
 function App() {

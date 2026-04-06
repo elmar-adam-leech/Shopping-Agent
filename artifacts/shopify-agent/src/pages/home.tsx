@@ -5,6 +5,7 @@ import { useListStores } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { StoreDomainInput } from "@/components/ui/store-domain-input";
 import { AgentAvatar } from "@/components/ui/agent-avatar";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 
 export default function HomePage() {
   const { data: stores, isLoading, error, refetch } = useListStores();
@@ -44,6 +45,9 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
+      <div className="fixed top-4 right-4 z-50">
+        <ThemeToggle />
+      </div>
       <div className="relative pt-24 pb-16 px-6 lg:px-8 overflow-hidden">
         <img
           src={`${import.meta.env.BASE_URL}images/hero-bg.webp`}
