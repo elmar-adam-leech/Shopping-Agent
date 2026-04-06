@@ -548,6 +548,25 @@ components:
           type: array
           items:
             type: string
+        brandVoice:
+          type: ["object", "null"]
+          properties:
+            tone:
+              type: string
+              enum: [friendly, professional, playful, luxury]
+            personality:
+              type: string
+            greeting:
+              type: string
+            signOff:
+              type: string
+        customInstructions:
+          type: ["string", "null"]
+        welcomeMessage:
+          type: ["string", "null"]
+        recommendationStrategy:
+          type: string
+          enum: [bestsellers_first, new_arrivals_first, price_low_to_high, personalized]
         createdAt:
           type: string
           format: date-time
@@ -560,6 +579,7 @@ components:
         - chatEnabled
         - guardSensitivity
         - blockedTopics
+        - recommendationStrategy
         - createdAt
 
     StorePublicInfo:
@@ -569,6 +589,8 @@ components:
           type: string
         chatEnabled:
           type: boolean
+        welcomeMessage:
+          type: ["string", "null"]
       required:
         - storeDomain
         - chatEnabled
@@ -619,6 +641,30 @@ components:
           type: array
           items:
             type: string
+        brandVoice:
+          type: ["object", "null"]
+          properties:
+            tone:
+              type: string
+              enum: [friendly, professional, playful, luxury]
+            personality:
+              type: string
+              maxLength: 500
+            greeting:
+              type: string
+              maxLength: 200
+            signOff:
+              type: string
+              maxLength: 200
+        customInstructions:
+          type: ["string", "null"]
+          maxLength: 2000
+        welcomeMessage:
+          type: ["string", "null"]
+          maxLength: 500
+        recommendationStrategy:
+          type: string
+          enum: [bestsellers_first, new_arrivals_first, price_low_to_high, personalized]
 
     KnowledgeEntry:
       type: object

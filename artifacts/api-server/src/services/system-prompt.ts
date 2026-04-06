@@ -1,4 +1,5 @@
 import type { ShopKnowledge } from "@workspace/db";
+import type { BrandVoice } from "@workspace/db/schema";
 import type { UCPDiscoveryDocument } from "./ucp-client";
 import { extractAllCapabilities, generateToolsFromCapabilities } from "./ucp-client";
 
@@ -21,6 +22,13 @@ const CATEGORY_LABELS: Record<string, string> = {
   custom: "Additional Information",
 };
 
+const RECOMMENDATION_STRATEGY_LABELS: Record<string, string> = {
+  bestsellers_first: "Prioritize best-selling products when making recommendations",
+  new_arrivals_first: "Prioritize newest arrivals when making recommendations",
+  price_low_to_high: "Prioritize lower-priced options first when making recommendations",
+  personalized: "Personalize recommendations based on the customer's expressed preferences and browsing context",
+};
+
 export interface ChatContext {
   productHandle?: string;
   collectionHandle?: string;
@@ -30,7 +38,19 @@ export interface ChatContext {
   customerAccountStoreDomain?: string;
 }
 
-export function buildSystemPrompt(storeDomain: string, knowledge: ShopKnowledge[], ucpDoc?: UCPDiscoveryDocument | null, context?: ChatContext): string {
+export interface StoreCustomization {
+  brandVoice?: BrandVoice | null;
+  customInstructions?: string | null;
+  recommendationStrategy?: string;
+}
+
+export function buildSystemPrompt(
+  storeDomain: string,
+  knowledge: ShopKnowledge[],
+  ucpDoc?: UCPDiscoveryDocument | null,
+  context?: ChatContext,
+  customization?: StoreCustomization
+): string {
   let prompt = `You are a fully UCP-compliant Shopify Agent and helpful, knowledgeable shopping assistant for the store "${storeDomain}". Use the Universal Commerce Protocol primitives via MCP for all commerce actions (capability discovery, checkout negotiation, orders, post-purchase). Your job is to help customers find products, understand their options, and make informed purchasing decisions.
 
 ## Your Capabilities
@@ -47,6 +67,33 @@ export function buildSystemPrompt(storeDomain: string, knowledge: ShopKnowledge[
 - If you're unsure about something, say so honestly
 - Help customers build complete solutions, not just individual products
 - When adding items to cart, confirm the selection with the customer first`;
+
+  if (customization?.brandVoice) {
+    const bv = customization.brandVoice;
+    prompt += `\n\n## Brand Voice & Persona`;
+    prompt += `\nAdopt the following brand voice in all your responses:`;
+    prompt += `\n- **Tone**: ${bv.tone}`;
+    if (bv.personality) {
+      prompt += `\n- **Personality**: ${bv.personality}`;
+    }
+    if (bv.greeting) {
+      prompt += `\n- **Greeting style**: When greeting customers, use a style similar to: "${bv.greeting}"`;
+    }
+    if (bv.signOff) {
+      prompt += `\n- **Sign-off style**: When ending conversations, use a style similar to: "${bv.signOff}"`;
+    }
+  }
+
+  if (customization?.customInstructions) {
+    prompt += `\n\n## Custom Instructions from Store Owner\nThe store owner has provided the following special instructions that you must follow:\n${customization.customInstructions}`;
+  }
+
+  if (customization?.recommendationStrategy) {
+    const strategyLabel = RECOMMENDATION_STRATEGY_LABELS[customization.recommendationStrategy];
+    if (strategyLabel) {
+      prompt += `\n\n## Product Recommendation Strategy\n${strategyLabel}.`;
+    }
+  }
 
   if (ucpDoc) {
     const allCaps = extractAllCapabilities(ucpDoc);

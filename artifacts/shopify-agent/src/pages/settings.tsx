@@ -3,6 +3,8 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { LLMConfigForm } from "@/components/settings/LLMConfigForm";
 import { KnowledgeEditor } from "@/components/settings/KnowledgeEditor";
 import { ThemeIntegrationSettings } from "@/components/settings/ThemeIntegrationSettings";
+import { BrandVoiceSettings } from "@/components/settings/BrandVoiceSettings";
+import { CustomInstructionsSettings } from "@/components/settings/CustomInstructionsSettings";
 
 export default function SettingsPage() {
   const [, params] = useRoute("/:storeDomain/settings");
@@ -15,6 +17,10 @@ export default function SettingsPage() {
           <h1 className="text-3xl font-display font-bold mb-2">Agent Settings</h1>
           <p className="text-muted-foreground text-lg">Configure the brain behind your AI shopping assistant.</p>
         </div>
+
+        <BrandVoiceSettings storeDomain={storeDomain} />
+
+        <CustomInstructionsSettings storeDomain={storeDomain} />
 
         <LLMConfigForm storeDomain={storeDomain} />
 

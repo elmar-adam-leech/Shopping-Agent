@@ -3,9 +3,10 @@ import { Sparkles } from "lucide-react";
 interface ChatEmptyStateProps {
   storeDomain: string;
   onPresetClick: (preset: string) => void;
+  welcomeMessage?: string | null;
 }
 
-export function ChatEmptyState({ storeDomain, onPresetClick }: ChatEmptyStateProps) {
+export function ChatEmptyState({ storeDomain, onPresetClick, welcomeMessage }: ChatEmptyStateProps) {
   return (
     <div className="h-full flex flex-col items-center justify-center text-center animate-in fade-in zoom-in-95 duration-700">
       <div className="w-20 h-20 rounded-2xl bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-white mb-6 shadow-xl shadow-primary/20">
@@ -13,7 +14,7 @@ export function ChatEmptyState({ storeDomain, onPresetClick }: ChatEmptyStatePro
       </div>
       <h3 className="text-2xl font-display font-bold mb-2 text-foreground">How can I help you today?</h3>
       <p className="text-muted-foreground max-w-sm mb-8">
-        I'm an AI assistant for {storeDomain}. Ask me anything about products, sizing, or policies!
+        {welcomeMessage || `I'm an AI assistant for ${storeDomain}. Ask me anything about products, sizing, or policies!`}
       </p>
       <div className="flex flex-wrap justify-center gap-2 max-w-lg" role="group" aria-label="Suggested questions">
         {["Show me your best sellers", "What are your return policies?", "Find matching accessories"].map(preset => (

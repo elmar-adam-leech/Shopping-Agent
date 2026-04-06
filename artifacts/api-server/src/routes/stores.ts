@@ -35,6 +35,10 @@ interface StoreResponse {
   embedEnabled: boolean;
   guardSensitivity: string;
   blockedTopics: string[];
+  brandVoice: Store["brandVoice"] | null;
+  customInstructions: string | null;
+  welcomeMessage: string | null;
+  recommendationStrategy: string;
   createdAt: Date;
 }
 
@@ -50,6 +54,10 @@ function storeToResponse(store: Store): StoreResponse {
     embedEnabled: store.embedEnabled,
     guardSensitivity: store.guardSensitivity,
     blockedTopics: store.blockedTopics,
+    brandVoice: store.brandVoice ?? null,
+    customInstructions: store.customInstructions ?? null,
+    welcomeMessage: store.welcomeMessage ?? null,
+    recommendationStrategy: store.recommendationStrategy,
     createdAt: store.createdAt,
   };
 }
@@ -142,7 +150,7 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
     return;
   }
 
-  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey" | "ucpCompliant" | "chatEnabled" | "embedEnabled" | "guardSensitivity" | "blockedTopics">> = {};
+  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey" | "ucpCompliant" | "chatEnabled" | "embedEnabled" | "guardSensitivity" | "blockedTopics" | "brandVoice" | "customInstructions" | "welcomeMessage" | "recommendationStrategy">> = {};
   if (parsed.data.storefrontToken !== undefined) updateData.storefrontToken = parsed.data.storefrontToken;
   if (parsed.data.provider !== undefined) updateData.provider = parsed.data.provider as ProviderValue;
   if (parsed.data.model !== undefined) updateData.model = parsed.data.model;
@@ -163,6 +171,10 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
   if (parsed.data.embedEnabled !== undefined) updateData.embedEnabled = parsed.data.embedEnabled;
   if (parsed.data.guardSensitivity !== undefined) updateData.guardSensitivity = parsed.data.guardSensitivity as Store["guardSensitivity"];
   if (parsed.data.blockedTopics !== undefined) updateData.blockedTopics = parsed.data.blockedTopics;
+  if (parsed.data.brandVoice !== undefined) updateData.brandVoice = parsed.data.brandVoice as Store["brandVoice"];
+  if (parsed.data.customInstructions !== undefined) updateData.customInstructions = parsed.data.customInstructions;
+  if (parsed.data.welcomeMessage !== undefined) updateData.welcomeMessage = parsed.data.welcomeMessage;
+  if (parsed.data.recommendationStrategy !== undefined) updateData.recommendationStrategy = parsed.data.recommendationStrategy as Store["recommendationStrategy"];
 
   const [store] = await db
     .update(storesTable)
@@ -199,6 +211,7 @@ router.get("/stores/:storeDomain/public", async (req, res): Promise<void> => {
   res.json({
     storeDomain: store.storeDomain,
     chatEnabled: store.chatEnabled,
+    welcomeMessage: store.welcomeMessage ?? null,
   });
 });
 

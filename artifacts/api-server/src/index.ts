@@ -6,7 +6,7 @@ import { backfillMessageCounts } from "./services/db-backfill";
 async function start() {
   try {
     console.log("Running database migrations...");
-    execSync("pnpm --filter @workspace/db run push", {
+    execSync("pnpm --filter @workspace/db run push-force", {
       stdio: "inherit",
       cwd: process.env["REPL_HOME"] || process.cwd(),
     });

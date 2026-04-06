@@ -44,6 +44,23 @@
 
   applyThemeColor(config.primaryColor);
 
+  (function fetchStoreWelcomeMessage() {
+    var isDefaultWelcome = config.welcomeMessage === "Hi! I'm your AI shopping assistant. How can I help you today?";
+    if (!isDefaultWelcome) return;
+    try {
+      fetch(config.apiEndpoint + "/stores/" + encodeURIComponent(config.storeDomain) + "/public")
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+          if (data && data.welcomeMessage) {
+            config.welcomeMessage = data.welcomeMessage;
+            var wText = messagesContainer && messagesContainer.querySelector(".mcp-welcome-text");
+            if (wText) wText.textContent = data.welcomeMessage;
+          }
+        })
+        .catch(function() {});
+    } catch (e) {}
+  })();
+
   var state = {
     isOpen: false,
     sessionId: null,

@@ -23,6 +23,7 @@ interface CachedStoreValidation {
   ucpCompliant: boolean;
   chatEnabled: boolean;
   embedEnabled: boolean;
+  welcomeMessage: string | null;
   createdAt: Date;
 }
 
@@ -52,6 +53,7 @@ function toValidationEntry(store: Store): CachedStoreValidation {
     ucpCompliant: store.ucpCompliant,
     chatEnabled: store.chatEnabled,
     embedEnabled: store.embedEnabled,
+    welcomeMessage: store.welcomeMessage ?? null,
     createdAt: store.createdAt,
   };
 }

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { BulkKnowledgeImport } from "./BulkKnowledgeImport";
 
 interface KnowledgeEntry {
   id: number;
@@ -148,6 +149,8 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
       </div>
 
       <div className="p-6 md:p-8 space-y-10">
+        <BulkKnowledgeImport storeDomain={storeDomain} />
+
         <div className="p-5 border-2 border-dashed border-border rounded-2xl bg-background/50 space-y-4">
           <h3 className="font-semibold flex items-center gap-2">
             <Plus className="w-4 h-4 text-primary" /> Add New Instruction

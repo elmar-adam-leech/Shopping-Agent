@@ -11,7 +11,7 @@ import { CustomerAccountConnect } from "@/components/chat/CustomerAccountConnect
 import { useSession } from "@/hooks/use-session";
 import { useChatOrchestration, messageKey } from "@/hooks/use-chat-orchestration";
 import { useCartStore } from "@/store/use-cart-store";
-import { useListConversations, useGetPreferences, useUpdatePreferences, deleteConversation, getGetPreferencesQueryKey, type Conversation } from "@workspace/api-client-react";
+import { useListConversations, useGetPreferences, useUpdatePreferences, deleteConversation, getGetPreferencesQueryKey, useGetStorePublic, type Conversation } from "@workspace/api-client-react";
 import { ChatLoadingIndicator } from "@/components/chat/ChatLoadingIndicator";
 import { Sparkles, Loader2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ export default function ChatPage() {
   const { sessionId, sessionError, chatDisabled, refreshSession } = useSession(storeDomain);
   const cartStore = useCartStore();
   const { toast } = useToast();
+  const { data: storePublic } = useGetStorePublic(storeDomain);
 
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [showPrefs, setShowPrefs] = useState(false);
@@ -192,7 +193,7 @@ export default function ChatPage() {
 
           <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-32">
             {messages.length === 0 ? (
-              <ChatEmptyState storeDomain={storeDomain} onPresetClick={setInput} />
+              <ChatEmptyState storeDomain={storeDomain} onPresetClick={setInput} welcomeMessage={storePublic?.welcomeMessage} />
             ) : (
               <div className="max-w-4xl mx-auto space-y-6" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions">
                 {displayMessages.map((msg, i) => (

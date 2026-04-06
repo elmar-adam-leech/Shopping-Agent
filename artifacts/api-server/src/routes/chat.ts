@@ -186,7 +186,12 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       store.storeDomain,
       knowledge,
       ucpDoc,
-      chatContext
+      chatContext,
+      {
+        brandVoice: store.brandVoice,
+        customInstructions: store.customInstructions,
+        recommendationStrategy: store.recommendationStrategy,
+      }
     );
 
     let fullAssistantContent = "";

@@ -4,6 +4,19 @@ import { z } from "zod/v4";
 
 export const providerEnum = pgEnum("provider", ["openai", "anthropic", "xai", "gemini"]);
 export const guardSensitivityEnum = pgEnum("guard_sensitivity", ["off", "low", "medium", "high"]);
+export const recommendationStrategyEnum = pgEnum("recommendation_strategy", [
+  "bestsellers_first",
+  "new_arrivals_first",
+  "price_low_to_high",
+  "personalized",
+]);
+
+export interface BrandVoice {
+  tone: "friendly" | "professional" | "playful" | "luxury";
+  personality: string;
+  greeting: string;
+  signOff: string;
+}
 
 export interface UCPCapabilitiesJson {
   version: string;
@@ -38,6 +51,10 @@ export const storesTable = pgTable("stores", {
   ucpCapabilities: jsonb("ucp_capabilities").$type<UCPCapabilitiesJson | null>(),
   ucpLastDiscoveredAt: timestamp("ucp_last_discovered_at", { withTimezone: true }),
   ucpRefreshIntervalMs: integer("ucp_refresh_interval_ms").notNull().default(3600000),
+  brandVoice: jsonb("brand_voice").$type<BrandVoice>(),
+  customInstructions: text("custom_instructions"),
+  welcomeMessage: text("welcome_message"),
+  recommendationStrategy: recommendationStrategyEnum("recommendation_strategy").notNull().default("personalized"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
