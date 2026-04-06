@@ -503,6 +503,68 @@ paths:
               schema:
                 $ref: "#/components/schemas/AnalyticsData"
 
+  /stores/{storeDomain}/analytics/enhanced:
+    get:
+      operationId: getEnhancedAnalytics
+      tags: [analytics]
+      summary: Get enhanced analytics with conversion funnel, tool usage, and revenue data
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: days
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 7
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Enhanced analytics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnhancedAnalyticsData"
+
+  /stores/{storeDomain}/analytics/daily-queries:
+    get:
+      operationId: getDailyQueries
+      tags: [analytics]
+      summary: Get top queries for a specific date
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Daily query data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyQueriesData"
+
 components:
   schemas:
     HealthStatus:
@@ -937,3 +999,98 @@ components:
       required:
         - date
         - count
+
+    ToolUsageItem:
+      type: object
+      properties:
+        toolName:
+          type: string
+        count:
+          type: integer
+      required:
+        - toolName
+        - count
+
+    ConversionFunnel:
+      type: object
+      properties:
+        totalChats:
+          type: integer
+        cartCreated:
+          type: integer
+        checkoutStarted:
+          type: integer
+        checkoutCompleted:
+          type: integer
+      required:
+        - totalChats
+        - cartCreated
+        - checkoutStarted
+        - checkoutCompleted
+
+    TopProduct:
+      type: object
+      properties:
+        productHandle:
+          type: string
+        count:
+          type: integer
+      required:
+        - productHandle
+        - count
+
+    EnhancedAnalyticsData:
+      type: object
+      properties:
+        totalChats:
+          type: integer
+        totalSessions:
+          type: integer
+        topQueries:
+          type: array
+          items:
+            $ref: "#/components/schemas/QueryCount"
+        dailyChats:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailyCount"
+        toolUsage:
+          type: array
+          items:
+            $ref: "#/components/schemas/ToolUsageItem"
+        conversionFunnel:
+          $ref: "#/components/schemas/ConversionFunnel"
+        topProducts:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopProduct"
+        abandonedCarts:
+          type: integer
+        estimatedRevenue:
+          type: number
+      required:
+        - totalChats
+        - totalSessions
+        - topQueries
+        - dailyChats
+        - toolUsage
+        - conversionFunnel
+        - topProducts
+        - abandonedCarts
+        - estimatedRevenue
+
+    DailyQueriesData:
+      type: object
+      properties:
+        date:
+          type: string
+        queries:
+          type: array
+          items:
+            $ref: "#/components/schemas/QueryCount"
+        totalEvents:
+          type: integer
+      required:
+        - date
+        - queries
+        - totalEvents

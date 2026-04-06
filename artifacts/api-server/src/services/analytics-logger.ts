@@ -4,7 +4,7 @@ export async function logAnalyticsEvent(
   storeDomain: string,
   eventType: string,
   sessionId: string,
-  extra?: { query?: string },
+  extra?: { query?: string; metadata?: Record<string, unknown> },
 ): Promise<boolean> {
   try {
     await db.insert(analyticsLogsTable).values({
@@ -12,6 +12,7 @@ export async function logAnalyticsEvent(
       eventType,
       sessionId,
       ...(extra?.query !== undefined ? { query: extra.query } : {}),
+      ...(extra?.metadata !== undefined ? { metadata: extra.metadata } : {}),
     });
     return true;
   } catch (err) {
