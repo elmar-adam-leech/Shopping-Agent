@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
-type ProviderValue = "openai" | "anthropic" | "xai";
+type ProviderValue = "openai" | "anthropic" | "xai" | "gemini";
 type GuardSensitivityValue = "off" | "low" | "medium" | "high";
 
 export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
@@ -256,6 +256,7 @@ export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
                 <SelectItem value="openai">OpenAI</SelectItem>
                 <SelectItem value="anthropic">Anthropic</SelectItem>
                 <SelectItem value="xai">Grok (xAI)</SelectItem>
+                <SelectItem value="gemini">Google Gemini</SelectItem>
               </SelectContent>
             </Select>
           </div>

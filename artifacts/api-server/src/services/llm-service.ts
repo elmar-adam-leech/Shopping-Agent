@@ -1,12 +1,13 @@
 /**
  * LLM service facade that dispatches streaming chat requests to the
- * configured provider (OpenAI, Anthropic, or xAI). Each provider adapter
+ * configured provider (OpenAI, Anthropic, xAI, or Gemini). Each provider adapter
  * yields a uniform `LLMStreamEvent` stream so callers stay provider-agnostic.
  */
 
 import { streamChat as streamOpenAIChat } from "./llms/openai";
 import { streamChat as streamAnthropicChat } from "./llms/anthropic";
 import { streamChat as streamXAIChat } from "./llms/xai";
+import { streamChat as streamGeminiChat } from "./llms/gemini";
 import type { LLMStreamEvent, LLMMessage, MCPToolDef } from "./llms/types";
 
 /**
@@ -23,7 +24,7 @@ import type { LLMStreamEvent, LLMMessage, MCPToolDef } from "./llms/types";
  * @yields {LLMStreamEvent} Text deltas, tool-call events, and finish signals.
  */
 export async function* streamChatWithProvider(
-  provider: "openai" | "anthropic" | "xai",
+  provider: "openai" | "anthropic" | "xai" | "gemini",
   apiKey: string,
   model: string,
   systemPrompt: string,
@@ -41,6 +42,9 @@ export async function* streamChatWithProvider(
       break;
     case "xai":
       yield* streamXAIChat(apiKey, model, systemPrompt, messages, tools, onToolCall, signal);
+      break;
+    case "gemini":
+      yield* streamGeminiChat(apiKey, model, systemPrompt, messages, tools, onToolCall, signal);
       break;
     default:
       throw new Error(`Unknown LLM provider: ${provider}`);

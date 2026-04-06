@@ -36,7 +36,7 @@ The frontend is built with React 18, Vite, Tailwind CSS, and shadcn/ui, providin
 - **Monorepo**: pnpm workspaces for managing multiple packages (API server, frontend, shared libraries).
 - **Backend**: Express 5 serving as the API server.
 - **Database**: PostgreSQL with Drizzle ORM for data persistence.
-- **LLM Integration**: Multi-provider support (OpenAI, Anthropic, xAI) with a unified interface. LLM API keys are encrypted at rest using AES-256-GCM (requires `ENCRYPTION_KEY` env var — 64 hex chars / 32 bytes). Keys are encrypted on store create/update and decrypted before LLM calls. Plaintext legacy keys are supported for reads but new writes require encryption to be configured.
+- **LLM Integration**: Multi-provider support (OpenAI, Anthropic, xAI, Google Gemini) with a unified interface. LLM API keys are encrypted at rest using AES-256-GCM (requires `ENCRYPTION_KEY` env var — 64 hex chars / 32 bytes). Keys are encrypted on store create/update and decrypted before LLM calls. Plaintext legacy keys are supported for reads but new writes require encryption to be configured.
 - **API Communication**: Orval for OpenAPI-based API codegen, ensuring type-safe client-server interaction.
 - **Multi-Tenancy**: Every backend route and DB query is scoped by `store_domain` for secure multi-tenant operation.
 - **Session Management**: Customer and merchant sessions are persisted in the database with defined TTLs. OAuth pending states are also stored in the DB (`pending_oauth_states` table) for horizontal scaling support.

@@ -530,7 +530,7 @@ components:
           type: ["string", "null"]
         provider:
           type: string
-          enum: [openai, anthropic, xai]
+          enum: [openai, anthropic, xai, gemini]
         model:
           type: string
         hasApiKey:
@@ -582,7 +582,7 @@ components:
           type: string
         provider:
           type: string
-          enum: [openai, anthropic, xai]
+          enum: [openai, anthropic, xai, gemini]
         model:
           type: string
         apiKey:
@@ -601,7 +601,7 @@ components:
           type: string
         provider:
           type: string
-          enum: [openai, anthropic, xai]
+          enum: [openai, anthropic, xai, gemini]
         model:
           type: string
         apiKey:

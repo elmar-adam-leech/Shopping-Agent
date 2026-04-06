@@ -2,7 +2,7 @@ import { pgTable, text, timestamp, pgEnum, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
-export const providerEnum = pgEnum("provider", ["openai", "anthropic", "xai"]);
+export const providerEnum = pgEnum("provider", ["openai", "anthropic", "xai", "gemini"]);
 export const guardSensitivityEnum = pgEnum("guard_sensitivity", ["off", "low", "medium", "high"]);
 
 export const storesTable = pgTable("stores", {
