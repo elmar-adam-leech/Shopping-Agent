@@ -22,6 +22,8 @@ Key UI components include:
 
 **Dark Mode**: Full dark mode support via a ThemeProvider context (`src/components/theme/theme-provider.tsx`). Users can switch between Light, Dark, and System modes via a segmented toggle in the sidebar and home page. Theme preference persists in localStorage (`shopify-agent-theme`). An inline script in `index.html` prevents flash of unstyled content on load. The `.dark` class on `<html>` activates CSS custom properties defined in `index.css`. Embed pages are unaffected (they inherit the storefront's own theme).
 
+**Mobile UX**: All interactive elements meet 44px minimum touch targets. The merchant dashboard has a bottom navigation bar on mobile viewports (below `md` breakpoint) with Home, Chat, Settings, Analytics, and Cart items. Content spacing accounts for bottom nav height plus safe-area insets via `--bottom-nav-height` CSS variable. Responsive padding and text sizing are applied across all pages for 375px-wide screens.
+
 ### Technical Implementations
 - **Monorepo**: Managed with pnpm workspaces for multiple packages (API server, frontend, shared libraries).
 - **Backend**: Express 5 serves as the API server.
@@ -98,9 +100,9 @@ Key UI components include:
 - **Results**: See `load-tests/RESULTS.md` for architecture analysis and bottleneck documentation
 
 ## External Dependencies
-- **Shopify API**: For OAuth, accessing store data, and interacting with the Shopify platform.
-- **Shopify Storefront MCP**: JSON-RPC client for product search, cart management, and checkout operations.
-- **Shopify Storefront GraphQL**: For fetching additional store data like blogs and collections.
-- **OpenAI SDK**: Integration with OpenAI's large language models.
-- **Anthropic SDK**: Integration with Anthropic's large language models.
-- **xAI (via OpenAI SDK)**: Integration with xAI's models using the OpenAI SDK compatible interface.
+-   **Shopify API**: For OAuth, store data, and platform interaction.
+-   **Shopify Storefront MCP**: For product search, cart management, and checkout.
+-   **Shopify Storefront GraphQL**: For additional store data (blogs, collections).
+-   **OpenAI SDK**: For OpenAI's large language models.
+-   **Anthropic SDK**: For Anthropic's large language models.
+-   **xAI (via OpenAI SDK)**: For xAI's models using an OpenAI SDK compatible interface.

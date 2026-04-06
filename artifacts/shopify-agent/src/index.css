@@ -222,3 +222,24 @@
 .prose > :last-child {
   margin-bottom: 0;
 }
+
+/* Mobile safe area for bottom nav */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Bottom nav height variable for consistent spacing */
+:root {
+  --bottom-nav-height: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Mobile touch target enforcement */
+@media (max-width: 767px) {
+  a, button, [role="button"], input, select, textarea {
+    min-height: 44px;
+  }
+
+  table a, table button, table [role="button"] {
+    min-height: auto;
+  }
+}

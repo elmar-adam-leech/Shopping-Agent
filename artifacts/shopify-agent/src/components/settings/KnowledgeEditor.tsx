@@ -259,18 +259,18 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
                         <button
                           disabled={itemIdx === 0}
                           onClick={() => handleReorder(cat.id, item.id, 'up')}
-                          className="p-0.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
+                          className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-primary/10 text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
                           aria-label={`Move ${item.title} up`}
                         >
-                          <ArrowUp className="w-3.5 h-3.5" aria-hidden="true" />
+                          <ArrowUp className="w-4 h-4" aria-hidden="true" />
                         </button>
                         <button
                           disabled={itemIdx === items.length - 1}
                           onClick={() => handleReorder(cat.id, item.id, 'down')}
-                          className="p-0.5 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
+                          className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded hover:bg-primary/10 text-muted-foreground hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
                           aria-label={`Move ${item.title} down`}
                         >
-                          <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
+                          <ArrowDown className="w-4 h-4" aria-hidden="true" />
                         </button>
                       </div>
                       <div className="flex-1">

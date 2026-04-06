@@ -51,7 +51,7 @@ export const ChatComposer = memo(function ChatComposer({ input, isLoading, onInp
   const canSend = imagePreview ? !isLoading : !!(input.trim()) && !isLoading;
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-background via-background to-transparent pt-10">
+    <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 bg-gradient-to-t from-background via-background to-transparent pt-10 mb-[var(--bottom-nav-height)] md:mb-0">
       <div className="max-w-4xl mx-auto relative">
         {imagePreview && (
           <div className="mb-2 flex items-center gap-2 px-2">

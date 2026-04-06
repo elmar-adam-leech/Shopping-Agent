@@ -63,10 +63,10 @@ export const ConversationSidebar = memo(function ConversationSidebar({
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onDeleteConversation(conv.id); }}
-              className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive focus:text-destructive transition-all focus:outline-none focus:ring-2 focus:ring-ring rounded mr-2"
+              className="opacity-0 group-hover:opacity-100 focus:opacity-100 text-muted-foreground hover:text-destructive focus:text-destructive transition-all focus:outline-none focus:ring-2 focus:ring-ring rounded mr-1 p-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label={`Delete conversation: ${conv.title}`}
             >
-              <Trash2 className="w-3 h-3" aria-hidden="true" />
+              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
             </button>
           </li>
         ))}
@@ -79,7 +79,7 @@ export const ConversationSidebar = memo(function ConversationSidebar({
           <li className="list-none">
             <button
               onClick={onLoadMore}
-              className="w-full py-2 text-xs text-muted-foreground hover:text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring rounded"
+              className="w-full py-3 min-h-11 text-xs text-muted-foreground hover:text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring rounded"
             >
               Load more...
             </button>

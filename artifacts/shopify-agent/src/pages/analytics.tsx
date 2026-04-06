@@ -147,7 +147,7 @@ export default function AnalyticsPage() {
 
   return (
     <AppLayout storeDomain={storeDomain}>
-      <div className="max-w-7xl mx-auto p-6 lg:p-8 space-y-8">
+      <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-display font-bold mb-1">Analytics</h1>
@@ -398,8 +398,8 @@ function DateRangePicker({ value, onChange }: { value: DateRangeMode; onChange: 
   const isCustomActive = value.type === "custom";
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="flex items-center gap-1 bg-secondary/50 rounded-xl p-1">
+    <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-2 w-full sm:w-auto">
+      <div className="flex items-center gap-1 bg-secondary/50 rounded-xl p-1 overflow-x-auto w-full sm:w-auto">
         {presets.map((p) => (
           <button
             key={p.days}
@@ -407,7 +407,7 @@ function DateRangePicker({ value, onChange }: { value: DateRangeMode; onChange: 
               onChange({ type: "preset", days: p.days });
               setShowCustom(false);
             }}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`px-3 sm:px-4 py-2.5 min-h-11 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
               value.type === "preset" && value.days === p.days
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
@@ -418,7 +418,7 @@ function DateRangePicker({ value, onChange }: { value: DateRangeMode; onChange: 
         ))}
         <button
           onClick={() => setShowCustom(!showCustom)}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-1 ${
+          className={`px-3 sm:px-4 py-2.5 min-h-11 rounded-lg text-sm font-medium transition-all flex items-center gap-1 whitespace-nowrap ${
             isCustomActive
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
@@ -429,19 +429,19 @@ function DateRangePicker({ value, onChange }: { value: DateRangeMode; onChange: 
         </button>
       </div>
       {showCustom && (
-        <div className="flex items-center gap-2 bg-secondary/50 rounded-xl p-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-secondary/50 rounded-xl p-2 w-full sm:w-auto">
           <input
             type="date"
             value={startInput}
             onChange={(e) => setStartInput(e.target.value)}
-            className="px-3 py-1.5 rounded-lg bg-background border border-border/50 text-sm"
+            className="px-3 py-2.5 min-h-11 rounded-lg bg-background border border-border/50 text-sm w-full sm:w-auto"
           />
-          <span className="text-muted-foreground text-sm">to</span>
+          <span className="text-muted-foreground text-sm text-center">to</span>
           <input
             type="date"
             value={endInput}
             onChange={(e) => setEndInput(e.target.value)}
-            className="px-3 py-1.5 rounded-lg bg-background border border-border/50 text-sm"
+            className="px-3 py-2.5 min-h-11 rounded-lg bg-background border border-border/50 text-sm w-full sm:w-auto"
           />
           <button
             onClick={() => {
@@ -449,7 +449,7 @@ function DateRangePicker({ value, onChange }: { value: DateRangeMode; onChange: 
                 onChange({ type: "custom", startDate: startInput, endDate: endInput });
               }
             }}
-            className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+            className="px-4 py-2.5 min-h-11 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
           >
             Apply
           </button>
@@ -487,19 +487,20 @@ function ExportButton({
         <button
           onClick={() => onExport()}
           disabled={!!exporting}
-          className="flex items-center gap-2 px-4 py-2 rounded-l-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60"
+          className="flex items-center gap-2 px-4 py-2.5 min-h-11 rounded-l-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60"
         >
           {exporting ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
             <Download className="w-4 h-4" />
           )}
-          {exporting ? "Exporting..." : "Export CSV"}
+          <span className="hidden sm:inline">{exporting ? "Exporting..." : "Export CSV"}</span>
+          <span className="sm:hidden">{exporting ? "..." : "CSV"}</span>
         </button>
         <button
           onClick={onToggleMenu}
           disabled={!!exporting}
-          className="flex items-center px-2 py-2 rounded-r-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors border-l border-primary-foreground/20 disabled:opacity-60"
+          className="flex items-center px-3 py-2.5 min-h-11 rounded-r-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors border-l border-primary-foreground/20 disabled:opacity-60"
         >
           <ChevronDown className="w-4 h-4" />
         </button>
@@ -511,7 +512,7 @@ function ExportButton({
             <div className="p-2">
               <button
                 onClick={() => onExport()}
-                className="w-full text-left px-3 py-2 rounded-lg text-sm font-medium hover:bg-secondary/50 transition-colors flex items-center gap-2"
+                className="w-full text-left px-3 py-2.5 min-h-11 rounded-lg text-sm font-medium hover:bg-secondary/50 transition-colors flex items-center gap-2"
               >
                 <Download className="w-3.5 h-3.5" />
                 Download All
@@ -521,7 +522,7 @@ function ExportButton({
                 <button
                   key={opt.value}
                   onClick={() => onExport([opt.value])}
-                  className="w-full text-left px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                  className="w-full text-left px-3 py-2.5 min-h-11 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
                 >
                   {opt.label}
                 </button>
@@ -560,7 +561,7 @@ function DrillDownPanel({
         </div>
         <button
           onClick={onClose}
-          className="p-2 rounded-xl hover:bg-secondary/50 transition-colors"
+          className="p-2.5 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl hover:bg-secondary/50 transition-colors"
           aria-label="Close drill-down"
         >
           <X className="w-5 h-5 text-muted-foreground" />

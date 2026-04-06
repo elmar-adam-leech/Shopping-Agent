@@ -21,7 +21,7 @@ export function ChatEmptyState({ storeDomain, onPresetClick, welcomeMessage }: C
           <button 
             key={preset}
             onClick={() => onPresetClick(preset)}
-            className="px-4 py-2 rounded-full bg-secondary/50 border border-border/50 text-sm hover:bg-secondary hover:text-foreground text-muted-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
+            className="px-4 py-3 min-h-11 rounded-full bg-secondary/50 border border-border/50 text-sm hover:bg-secondary hover:text-foreground text-muted-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
           >
             {preset}
           </button>

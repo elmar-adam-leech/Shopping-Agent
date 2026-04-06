@@ -48,7 +48,7 @@ export default function HomePage() {
       <div className="fixed top-4 right-4 z-50">
         <ThemeToggle />
       </div>
-      <div className="relative pt-24 pb-16 px-6 lg:px-8 overflow-hidden">
+      <div className="relative pt-16 sm:pt-24 pb-12 sm:pb-16 px-4 sm:px-6 lg:px-8 overflow-hidden">
         <img
           src={`${import.meta.env.BASE_URL}images/hero-bg.webp`}
           alt="Hero Background"
@@ -66,7 +66,7 @@ export default function HomePage() {
               className="w-12 h-12 drop-shadow-md rounded-xl"
             />
           </AgentAvatar>
-          <h1 className="text-5xl md:text-6xl font-display font-extrabold tracking-tight text-foreground mb-6 animate-in slide-in-from-bottom-6 duration-700 fade-in will-change-transform">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-display font-extrabold tracking-tight text-foreground mb-6 animate-in slide-in-from-bottom-6 duration-700 fade-in will-change-transform">
             Your Store, <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">Supercharged</span>
           </h1>
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 animate-in slide-in-from-bottom-8 duration-1000 fade-in will-change-transform">
@@ -82,11 +82,11 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 lg:px-8 relative z-10">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {isUnauthorized ? (
-          <div className="glass-card rounded-3xl p-12 text-center flex flex-col items-center justify-center max-w-md mx-auto">
-            <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
-              <LogIn className="w-10 h-10 text-primary" />
+          <div className="glass-card rounded-3xl p-6 sm:p-12 text-center flex flex-col items-center justify-center max-w-md mx-auto">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
+              <LogIn className="w-8 h-8 sm:w-10 sm:h-10 text-primary" />
             </div>
             <h3 className="text-xl font-bold mb-2">Merchant Login</h3>
             <p className="text-muted-foreground mb-6">
@@ -142,8 +142,8 @@ export default function HomePage() {
                 ))}
               </div>
             ) : (
-              <div className="glass-card rounded-3xl p-12 text-center flex flex-col items-center justify-center">
-                <div className="w-20 h-20 bg-secondary/50 rounded-full flex items-center justify-center mb-6">
+              <div className="glass-card rounded-3xl p-6 sm:p-12 text-center flex flex-col items-center justify-center">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-secondary/50 rounded-full flex items-center justify-center mb-6">
                   <StoreIcon className="w-10 h-10 text-muted-foreground opacity-50" />
                 </div>
                 <h3 className="text-xl font-bold mb-2">No stores connected yet</h3>

@@ -13,7 +13,7 @@ export default function SettingsPage() {
 
   return (
     <AppLayout storeDomain={storeDomain}>
-      <div className="max-w-5xl mx-auto p-6 lg:p-8 space-y-12">
+      <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8 space-y-8 sm:space-y-12">
         <div>
           <h1 className="text-3xl font-display font-bold mb-2">Agent Settings</h1>
           <p className="text-muted-foreground text-lg">Configure the brain behind your AI shopping assistant.</p>

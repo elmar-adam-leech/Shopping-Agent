@@ -250,7 +250,7 @@ export default function ChatPage() {
 
         <ChatActionsProvider sendMessage={sendMessage} quickAddToCart={quickAddToCart} isLoading={isLoading}>
           <div className="flex-1 flex flex-col h-full bg-background/50 relative z-10">
-            <div className="h-16 border-b border-border/50 flex items-center justify-between px-6 bg-background/80 backdrop-blur-md sticky top-0 z-20">
+            <div className="min-h-[56px] border-b border-border/50 flex items-center justify-between px-4 sm:px-6 bg-background/80 backdrop-blur-md sticky top-0 z-20">
               <div className="flex items-center gap-3">
                 <AgentAvatar icon={Sparkles} size="sm" />
                 <h2 className="font-bold text-sm">Shopping Assistant</h2>
