@@ -139,7 +139,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       tools = result.tools;
       ucpDoc = result.ucpDoc;
     } catch (err) {
-      console.warn(`Failed to list MCP tools for store="${store.storeDomain}":`, err instanceof Error ? err.message : err);
+      console.warn(`[chat] Failed to list MCP tools for store="${store.storeDomain}":`, err instanceof Error ? err.message : err);
     }
 
     const validatedSessionId = (req as unknown as { validatedSessionId: string }).validatedSessionId;

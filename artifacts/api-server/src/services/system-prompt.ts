@@ -1,5 +1,14 @@
 import type { ShopKnowledge } from "@workspace/db";
 import type { UCPDiscoveryDocument } from "./ucp-client";
+import { extractAllCapabilities, generateToolsFromCapabilities } from "./ucp-client";
+
+const UCP_SAFE_PATTERN = /^[a-zA-Z0-9._\-: ]{1,100}$/;
+
+function sanitizeUCPValue(value: string, maxLen = 100): string {
+  const trimmed = value.slice(0, maxLen).replace(/[\r\n\t]/g, " ").trim();
+  if (UCP_SAFE_PATTERN.test(trimmed)) return trimmed;
+  return trimmed.replace(/[^a-zA-Z0-9._\-: ]/g, "");
+}
 import { SYSTEM_PROMPT_HARDENING } from "./prompt-guard";
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -40,26 +49,46 @@ export function buildSystemPrompt(storeDomain: string, knowledge: ShopKnowledge[
 - When adding items to cart, confirm the selection with the customer first`;
 
   if (ucpDoc) {
-    prompt += `\n\n## UCP (Universal Commerce Protocol) Capabilities
-This store supports UCP version ${ucpDoc.version}. You have access to the following UCP commerce primitives:
-- **create_checkout**: Create a new checkout session for purchasing items
-- **update_checkout**: Update an existing checkout session (modify items, shipping, etc.)
-- **complete_checkout**: Complete/finalize a checkout session to place the order
-- **get_order_status**: Get order status including fulfillment and tracking
+    const allCaps = extractAllCapabilities(ucpDoc);
+    const dynamicTools = generateToolsFromCapabilities(ucpDoc);
 
-Use these UCP tools for all checkout and order operations when available. They provide a standardized commerce flow across AI agents.`;
+    const sanitizedVersion = sanitizeUCPValue(ucpDoc.version ?? "unknown", 20);
+    prompt += `\n\n## UCP (Universal Commerce Protocol) Capabilities
+This store supports UCP version ${sanitizedVersion}. The following capabilities have been negotiated dynamically with this store:`;
+
+    if (allCaps.length > 0) {
+      const sanitizedCaps = allCaps.map(c => sanitizeUCPValue(c));
+      prompt += `\n\n**Available capabilities:** ${sanitizedCaps.join(", ")}`;
+    }
+
+    if (dynamicTools.length > 0) {
+      prompt += `\n\n**UCP tools available for this store:**`;
+      for (const tool of dynamicTools) {
+        prompt += `\n- **${tool.name}**: ${tool.description}`;
+      }
+    }
+
+    prompt += `\n\nUse these UCP tools for all applicable commerce operations. They provide a standardized commerce flow. Only offer capabilities that are listed above — do not suggest features this store hasn't advertised.`;
 
     if (ucpDoc.services && ucpDoc.services.length > 0) {
       prompt += `\n\nDiscovered UCP services:`;
       for (const service of ucpDoc.services) {
-        prompt += `\n- ${service.type}${service.capabilities ? ` (capabilities: ${service.capabilities.join(", ")})` : ""}`;
+        const svcType = sanitizeUCPValue(service.type);
+        const caps = service.capabilities
+          ? service.capabilities.map(c => sanitizeUCPValue(c)).join(", ")
+          : "";
+        prompt += `\n- ${svcType}${caps ? ` (capabilities: ${caps})` : ""}`;
       }
     }
 
     if (ucpDoc.payment_handlers && ucpDoc.payment_handlers.length > 0) {
       prompt += `\n\nSupported payment methods:`;
       for (const handler of ucpDoc.payment_handlers) {
-        prompt += `\n- ${handler.type}${handler.supported_methods ? `: ${handler.supported_methods.join(", ")}` : ""}`;
+        const hType = sanitizeUCPValue(handler.type);
+        const methods = handler.supported_methods
+          ? handler.supported_methods.map(m => sanitizeUCPValue(m)).join(", ")
+          : "";
+        prompt += `\n- ${hType}${methods ? `: ${methods}` : ""}`;
       }
     }
   }
