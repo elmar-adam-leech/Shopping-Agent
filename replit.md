@@ -82,6 +82,15 @@ The frontend is built with React 18, Vite, Tailwind CSS, and shadcn/ui, providin
 - **Universal Commerce Protocol (UCP)**: Dynamic capability negotiation per UCP 2026-01-11 spec. Discovery, DB persistence with configurable refresh, dynamic tool generation from advertised capabilities (checkout, orders, subscriptions, loyalty, discounts, preorders, wishlists, gifting), LLM context injection, graceful non-UCP fallback, and analytics logging.
 - **Theme Integration**: Script-tag and iframe-based embedding options for various AI assistant functionalities directly within Shopify themes.
 - **Customer Account MCP**: OAuth 2.0 + PKCE flow for connecting shoppers to their Shopify customer accounts via the Customer Accounts MCP endpoint. Discovers endpoints via `/.well-known/customer-account-api`, stores encrypted tokens in `mcp_connections` table, auto-refreshes expired tokens, and routes tool calls through the authenticated endpoint when available. Fallback to public Storefront MCP when not connected. Frontend shows a "Connect Account" button in the chat header with connection status badges and disconnect functionality. Client ID resolved per-store (`customer_account_client_id` column) or via global `SHOPIFY_CUSTOMER_ACCOUNT_API_CLIENT_ID` env var. Requires `REPLIT_APP_URL` for OAuth callback URL.
+- **Post-Purchase & Order Management**: Full order lifecycle support via UCP/MCP tools:
+  - `get_orders` — List customer's recent orders with status and item details
+  - `get_order_status` — Get detailed tracking information for a specific order
+  - `request_return` — Initiate a return request with reason and item selection
+  - Orders are fetched via authenticated Customer Account MCP when connected, falling back to UCP order tools
+  - Order data is normalized via `order-service.ts` from various MCP/UCP response formats
+  - Frontend renders `OrderCard` (order list), `OrderStatusCard` (visual progress bar: ordered→shipped→in transit→delivered), and `ReturnConfirmationCard` (return status)
+  - All order interactions logged in analytics with event types: `order_history_query`, `order_status_query`, `return_request`
+  - System prompt includes order & return handling instructions for the LLM
 
 ## Load & Stress Testing
 - **Location**: `load-tests/` directory (workspace package `@workspace/load-tests`)

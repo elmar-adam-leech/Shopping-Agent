@@ -10,6 +10,12 @@ const CHECKOUT_TOOLS = new Set(["create_checkout", "get_checkout_url"]);
 const CHECKOUT_COMPLETE_TOOLS = new Set(["complete_checkout", "checkout_complete", "process_checkout"]);
 const PRODUCT_TOOLS = new Set(["search_products", "get_product", "get_product_by_handle"]);
 
+const ORDER_TOOL_ANALYTICS: Record<string, string> = {
+  get_orders: "order_history_query",
+  get_order_status: "order_status_query",
+  request_return: "return_request",
+};
+
 export async function executeToolWithFallback(
   storeDomain: string,
   storefrontToken: string,
@@ -137,6 +143,13 @@ export function createToolExecutor(opts: {
   }
 
   return async function executeAndGuardTool(toolName: string, args: Record<string, unknown>): Promise<string> {
+    const orderEventType = ORDER_TOOL_ANALYTICS[toolName];
+    if (orderEventType) {
+      logAnalyticsEvent(storeDomain, orderEventType, sessionId, {
+        query: typeof args.order_id === "string" ? args.order_id : toolName,
+      }).catch(() => {});
+    }
+
     if (authenticatedToolNames.has(toolName) && !activeConnection) {
       return JSON.stringify({
         error: "customer_account_required",

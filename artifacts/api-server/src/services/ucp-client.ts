@@ -357,39 +357,38 @@ const DYNAMIC_TOOL_TEMPLATES: Record<string, (serviceType: string, capability?: 
     },
   }),
   "orders.history": () => ({
-    name: "get_order_history",
-    description: "Get the customer's order history",
+    name: "get_orders",
+    description: "List the customer's recent orders with status and item details",
     inputSchema: {
       type: "object",
       properties: {
-        customer_email: { type: "string", description: "Customer email to look up orders for" },
-        limit: { type: "number", description: "Maximum number of orders to return" },
+        limit: { type: "number", description: "Maximum number of orders to return (default 10)" },
       },
-      required: ["customer_email"],
     },
   }),
   "orders.returns": () => ({
-    name: "initiate_return",
-    description: "Initiate a return for a previously placed order",
+    name: "request_return",
+    description: "Initiate a return request for an order. Requires order ID and reason for return.",
     inputSchema: {
       type: "object",
       properties: {
         order_id: { type: "string", description: "The order ID to return" },
+        reason: { type: "string", description: "Reason for the return (e.g. defective, wrong_item, changed_mind, not_as_described)" },
         line_items: {
           type: "array",
-          description: "Items to return",
+          description: "Specific items to return. If not provided, all items are returned.",
           items: {
             type: "object",
             properties: {
-              line_item_id: { type: "string" },
-              quantity: { type: "number" },
-              reason: { type: "string" },
+              line_item_id: { type: "string", description: "The line item ID to return" },
+              quantity: { type: "number", description: "Quantity to return" },
             },
             required: ["line_item_id", "quantity"],
           },
         },
+        note: { type: "string", description: "Additional note from the customer" },
       },
-      required: ["order_id", "line_items"],
+      required: ["order_id", "reason"],
     },
   }),
   subscriptions: () => null,
@@ -517,7 +516,7 @@ const DYNAMIC_TOOL_TEMPLATES: Record<string, (serviceType: string, capability?: 
 };
 
 const DEFAULT_CHECKOUT_CAPS = ["create", "update", "complete"];
-const DEFAULT_ORDER_CAPS = ["status"];
+const DEFAULT_ORDER_CAPS = ["status", "history", "returns"];
 
 function resolveServiceCapabilities(service: { type: string; capabilities?: string[] }): string[] {
   if (service.capabilities && service.capabilities.length > 0) {
@@ -612,7 +611,7 @@ export function generateToolsFromCapabilities(ucpDoc: UCPDiscoveryDocument): MCP
 const ALL_UCP_TOOL_NAMES = new Set([
   UCP_GENERIC_DISPATCHER_NAME,
   "create_checkout", "update_checkout", "complete_checkout",
-  "get_order_status", "get_order_history", "initiate_return",
+  "get_order_status", "get_orders", "request_return",
   "create_subscription", "manage_subscription",
   "get_loyalty_balance", "redeem_loyalty_points",
   "apply_discount", "list_available_discounts",

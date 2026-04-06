@@ -117,6 +117,25 @@ This store supports UCP version ${sanitizedVersion}. The following capabilities 
 
     prompt += `\n\nUse these UCP tools for all applicable commerce operations. They provide a standardized commerce flow. Only offer capabilities that are listed above — do not suggest features this store hasn't advertised.`;
 
+    const orderToolNames = new Set(dynamicTools.map(t => t.name));
+    if (orderToolNames.has("get_orders") || orderToolNames.has("get_order_status") || orderToolNames.has("request_return")) {
+      prompt += `\n\n### Order & Return Handling
+When a customer asks about their orders ("Where's my order?", "What did I order?"):
+1. Use get_orders to fetch their recent orders
+2. Present order details clearly with status information
+
+When a customer asks about a specific order status:
+1. Use get_order_status with the order ID to get tracking details
+2. Explain the current fulfillment status clearly
+
+When a customer wants to return an item:
+1. Ask which order they want to return (use get_orders if needed to show options)
+2. Ask for the reason for the return
+3. Confirm the return details with the customer before proceeding
+4. Use request_return to initiate the return
+5. Present the return confirmation to the customer`;
+    }
+
     if (ucpDoc.services && ucpDoc.services.length > 0) {
       prompt += `\n\nDiscovered UCP services:`;
       for (const service of ucpDoc.services) {
