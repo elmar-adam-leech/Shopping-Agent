@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useGetStore, useUpdateStore, getGetStoreQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Save, Key, Database, Globe, Shield, MessageSquare, ShieldAlert, X, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,9 @@ type ProviderValue = "openai" | "anthropic" | "xai" | "gemini";
 type GuardSensitivityValue = "off" | "low" | "medium" | "high";
 
 export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
-  const { data: store } = useGetStore(storeDomain, { query: { queryKey: getGetStoreQueryKey(storeDomain), staleTime: 60_000 } });
+  const queryClient = useQueryClient();
+  const storeQueryKey = getGetStoreQueryKey(storeDomain);
+  const { data: store } = useGetStore(storeDomain, { query: { queryKey: storeQueryKey, staleTime: 60_000 } });
   const { mutateAsync: updateStore, isPending: updating } = useUpdateStore();
   const { toast } = useToast();
 
@@ -53,23 +56,25 @@ export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
   };
 
   const handleSaveStore = async () => {
+    const updateData = {
+      provider,
+      model,
+      storefrontToken: storefrontToken || undefined,
+      ucpCompliant,
+      chatEnabled,
+      guardSensitivity,
+      blockedTopics,
+      ...(apiKey ? { apiKey } : {})
+    };
+    const previousStore = queryClient.getQueryData(storeQueryKey);
+    queryClient.setQueryData(storeQueryKey, (old: Record<string, unknown> | undefined) => old ? { ...old, ...updateData } : old);
     try {
-      await updateStore({
-        storeDomain,
-        data: {
-          provider,
-          model,
-          storefrontToken: storefrontToken || undefined,
-          ucpCompliant,
-          chatEnabled,
-          guardSensitivity,
-          blockedTopics,
-          ...(apiKey ? { apiKey } : {})
-        }
-      });
+      await updateStore({ storeDomain, data: updateData });
+      queryClient.invalidateQueries({ queryKey: storeQueryKey });
       toast({ title: "Settings saved successfully", variant: "default" });
       setApiKey("");
     } catch (err: unknown) {
+      queryClient.setQueryData(storeQueryKey, previousStore);
       const message = err instanceof Error ? err.message : "Unknown error";
       toast({ title: "Failed to save", description: message, variant: "destructive" });
     }

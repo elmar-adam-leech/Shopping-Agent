@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useGetStore, useUpdateStore, getGetStoreQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Save, Palette, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,8 +27,10 @@ const STRATEGY_OPTIONS: { value: RecommendationStrategy; label: string; desc: st
 ];
 
 export function BrandVoiceSettings({ storeDomain }: { storeDomain: string }) {
+  const queryClient = useQueryClient();
+  const storeQueryKey = getGetStoreQueryKey(storeDomain);
   const { data: store } = useGetStore(storeDomain, {
-    query: { queryKey: getGetStoreQueryKey(storeDomain), staleTime: 60_000 },
+    query: { queryKey: storeQueryKey, staleTime: 60_000 },
   });
   const { mutateAsync: updateStore, isPending: updating } = useUpdateStore();
   const { toast } = useToast();
@@ -54,22 +57,19 @@ export function BrandVoiceSettings({ storeDomain }: { storeDomain: string }) {
   }, [store]);
 
   const handleSave = async () => {
+    const updateData = {
+      brandVoice: { tone, personality, greeting, signOff },
+      welcomeMessage: welcomeMessage || null,
+      recommendationStrategy,
+    };
+    const previousStore = queryClient.getQueryData(storeQueryKey);
+    queryClient.setQueryData(storeQueryKey, (old: Record<string, unknown> | undefined) => old ? { ...old, ...updateData } : old);
     try {
-      await updateStore({
-        storeDomain,
-        data: {
-          brandVoice: {
-            tone,
-            personality,
-            greeting,
-            signOff,
-          },
-          welcomeMessage: welcomeMessage || null,
-          recommendationStrategy,
-        },
-      });
+      await updateStore({ storeDomain, data: updateData });
+      queryClient.invalidateQueries({ queryKey: storeQueryKey });
       toast({ title: "Brand voice settings saved" });
     } catch (err: unknown) {
+      queryClient.setQueryData(storeQueryKey, previousStore);
       const message = err instanceof Error ? err.message : "Unknown error";
       toast({ title: "Failed to save", description: message, variant: "destructive" });
     }

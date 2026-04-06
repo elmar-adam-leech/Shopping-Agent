@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useGetStore, useUpdateStore, getGetStoreQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Code, MessageSquare, Search, Package, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -7,8 +8,10 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
 export function ThemeIntegrationSettings({ storeDomain }: { storeDomain: string }) {
+  const queryClient = useQueryClient();
+  const storeQueryKey = getGetStoreQueryKey(storeDomain);
   const { data: store } = useGetStore(storeDomain, {
-    query: { queryKey: getGetStoreQueryKey(storeDomain), staleTime: 60_000 },
+    query: { queryKey: storeQueryKey, staleTime: 60_000 },
   });
   const { mutateAsync: updateStore, isPending: updating } = useUpdateStore();
   const { toast } = useToast();
@@ -23,13 +26,15 @@ export function ThemeIntegrationSettings({ storeDomain }: { storeDomain: string 
   }, [store]);
 
   const handleSave = async () => {
+    const updateData = { embedEnabled };
+    const previousStore = queryClient.getQueryData(storeQueryKey);
+    queryClient.setQueryData(storeQueryKey, (old: Record<string, unknown> | undefined) => old ? { ...old, ...updateData } : old);
     try {
-      await updateStore({
-        storeDomain,
-        data: { embedEnabled },
-      });
+      await updateStore({ storeDomain, data: updateData });
+      queryClient.invalidateQueries({ queryKey: storeQueryKey });
       toast({ title: "Theme integration settings saved", variant: "default" });
     } catch (err: unknown) {
+      queryClient.setQueryData(storeQueryKey, previousStore);
       const message = err instanceof Error ? err.message : "Unknown error";
       toast({ title: "Failed to save", description: message, variant: "destructive" });
     }

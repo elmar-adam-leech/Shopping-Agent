@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useGetStore, useUpdateStore, getGetStoreQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Save, FileText, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -9,8 +10,10 @@ import { useToast } from "@/hooks/use-toast";
 const MAX_INSTRUCTIONS_LENGTH = 2000;
 
 export function CustomInstructionsSettings({ storeDomain }: { storeDomain: string }) {
+  const queryClient = useQueryClient();
+  const storeQueryKey = getGetStoreQueryKey(storeDomain);
   const { data: store } = useGetStore(storeDomain, {
-    query: { queryKey: getGetStoreQueryKey(storeDomain), staleTime: 60_000 },
+    query: { queryKey: storeQueryKey, staleTime: 60_000 },
   });
   const { mutateAsync: updateStore, isPending: updating } = useUpdateStore();
   const { toast } = useToast();
@@ -25,15 +28,15 @@ export function CustomInstructionsSettings({ storeDomain }: { storeDomain: strin
   }, [store]);
 
   const handleSave = async () => {
+    const updateData = { customInstructions: customInstructions || null };
+    const previousStore = queryClient.getQueryData(storeQueryKey);
+    queryClient.setQueryData(storeQueryKey, (old: Record<string, unknown> | undefined) => old ? { ...old, ...updateData } : old);
     try {
-      await updateStore({
-        storeDomain,
-        data: {
-          customInstructions: customInstructions || null,
-        },
-      });
+      await updateStore({ storeDomain, data: updateData });
+      queryClient.invalidateQueries({ queryKey: storeQueryKey });
       toast({ title: "Custom instructions saved" });
     } catch (err: unknown) {
+      queryClient.setQueryData(storeQueryKey, previousStore);
       const message = err instanceof Error ? err.message : "Unknown error";
       toast({ title: "Failed to save", description: message, variant: "destructive" });
     }

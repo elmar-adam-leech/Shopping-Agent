@@ -21,6 +21,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
+import { LastUpdated } from "@/components/ui/last-updated";
 import {
   XAxis,
   YAxis,
@@ -94,11 +95,11 @@ export default function AnalyticsPage() {
       ? { days: dateRange.days }
       : { days: 7, startDate: dateRange.startDate, endDate: dateRange.endDate };
 
-  const { data, isLoading } = useGetEnhancedAnalytics(storeDomain, queryParams, {
+  const { data, isLoading, dataUpdatedAt } = useGetEnhancedAnalytics(storeDomain, queryParams, {
     query: {
       queryKey: getGetEnhancedAnalyticsQueryKey(storeDomain, queryParams),
       staleTime: 30_000,
-      refetchInterval: 60_000,
+      refetchInterval: 30_000,
     },
   });
 
@@ -150,9 +151,12 @@ export default function AnalyticsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-3xl font-display font-bold mb-1">Analytics</h1>
-            <p className="text-muted-foreground text-lg">
-              Insights from your AI Shopping Agent.
-            </p>
+            <div className="flex items-center gap-3">
+              <p className="text-muted-foreground text-lg">
+                Insights from your AI Shopping Agent.
+              </p>
+              {dataUpdatedAt > 0 && <LastUpdated dataUpdatedAt={dataUpdatedAt} />}
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <DateRangePicker value={dateRange} onChange={setDateRange} />

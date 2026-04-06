@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useListKnowledge, useCreateKnowledge, useDeleteKnowledge, useUpdateKnowledge, getListKnowledgeQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Trash2, Plus, ArrowUp, ArrowDown, Edit2, Check, X, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { LastUpdated } from "@/components/ui/last-updated";
 import { BulkKnowledgeImport } from "./BulkKnowledgeImport";
 
 interface KnowledgeEntry {
@@ -31,8 +33,10 @@ export const CATEGORIES = [
 ];
 
 export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
-  const { data: knowledgeList, refetch } = useListKnowledge(storeDomain, undefined, {
-    query: { queryKey: getListKnowledgeQueryKey(storeDomain), staleTime: 60_000 },
+  const queryClient = useQueryClient();
+  const knowledgeQueryKey = getListKnowledgeQueryKey(storeDomain);
+  const { data: knowledgeList, refetch, dataUpdatedAt } = useListKnowledge(storeDomain, undefined, {
+    query: { queryKey: knowledgeQueryKey, staleTime: 30_000, refetchInterval: 30_000 },
   });
   const { mutateAsync: createKnowledge, isPending: creating } = useCreateKnowledge();
   const { mutateAsync: deleteKnowledge } = useDeleteKnowledge();
@@ -48,26 +52,42 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
 
   const handleAdd = async () => {
     if (!newTitle || !newContent) return;
+    const optimisticEntry: KnowledgeEntry = {
+      id: -Date.now(),
+      storeDomain,
+      category,
+      title: newTitle,
+      content: newContent,
+      sortOrder: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const previousData = queryClient.getQueryData<KnowledgeEntry[]>(knowledgeQueryKey);
+    queryClient.setQueryData<KnowledgeEntry[]>(knowledgeQueryKey, (old) => [...(old ?? []), optimisticEntry]);
+    setNewTitle("");
+    setNewContent("");
     try {
       await createKnowledge({
         storeDomain,
-        data: { title: newTitle, content: newContent, category: category as "general" | "sizing" | "compatibility" | "required_accessories" | "restrictions" | "policies" | "custom", sortOrder: 0 }
+        data: { title: optimisticEntry.title, content: optimisticEntry.content, category: category as "general" | "sizing" | "compatibility" | "required_accessories" | "restrictions" | "policies" | "custom", sortOrder: 0 }
       });
-      setNewTitle("");
-      setNewContent("");
       refetch();
       toast({ title: "Knowledge entry added" });
     } catch {
+      queryClient.setQueryData(knowledgeQueryKey, previousData);
       toast({ title: "Failed to add", variant: "destructive" });
     }
   };
 
   const handleDelete = async (id: number) => {
+    const previousData = queryClient.getQueryData<KnowledgeEntry[]>(knowledgeQueryKey);
+    queryClient.setQueryData<KnowledgeEntry[]>(knowledgeQueryKey, (old) => (old ?? []).filter((e) => e.id !== id));
     try {
       await deleteKnowledge({ storeDomain, knowledgeId: id });
       refetch();
       toast({ title: "Deleted" });
     } catch {
+      queryClient.setQueryData(knowledgeQueryKey, previousData);
       toast({ title: "Failed to delete", variant: "destructive" });
     }
   };
@@ -86,16 +106,21 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
 
   const saveEdit = async () => {
     if (!editingId || !editTitle || !editContent) return;
+    const previousData = queryClient.getQueryData<KnowledgeEntry[]>(knowledgeQueryKey);
+    queryClient.setQueryData<KnowledgeEntry[]>(knowledgeQueryKey, (old) =>
+      (old ?? []).map((e) => e.id === editingId ? { ...e, title: editTitle, content: editContent, updatedAt: new Date().toISOString() } : e)
+    );
+    cancelEdit();
     try {
       await updateKnowledge({
         storeDomain,
         knowledgeId: editingId,
         data: { title: editTitle, content: editContent }
       });
-      cancelEdit();
       refetch();
       toast({ title: "Updated" });
     } catch {
+      queryClient.setQueryData(knowledgeQueryKey, previousData);
       toast({ title: "Failed to update", variant: "destructive" });
     }
   };
@@ -144,6 +169,7 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
             <BookOpen className="w-5 h-5" />
           </div>
           <h2 className="text-xl font-bold font-display">Shop Knowledge Base</h2>
+          {dataUpdatedAt > 0 && <LastUpdated dataUpdatedAt={dataUpdatedAt} />}
         </div>
         <p className="text-muted-foreground">Teach your AI agent about your business, products, and policies so it can provide expert guidance.</p>
       </div>
