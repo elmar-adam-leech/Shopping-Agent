@@ -1,286 +1,24 @@
 import { randomUUID } from "node:crypto";
-import { Router, type IRouter, type Response } from "express";
-import { eq, and, sql } from "drizzle-orm";
-import { db, conversationsTable, shopKnowledgeTable, analyticsLogsTable } from "@workspace/db";
-import type { Conversation, ShopKnowledge } from "@workspace/db/schema";
+import { Router, type IRouter } from "express";
 import { SendChatParams, SendChatBody } from "@workspace/api-zod";
+import type { McpConnection } from "@workspace/db/schema";
 import { streamChatWithProvider } from "../services/llm-service";
-import { listTools, callTool, type MCPTool, type UCPDiscoveryDocument } from "../services/mcp-client";
-import { fetchBlogs, fetchCollections } from "../services/graphql-client";
-import { buildSystemPrompt } from "../services/system-prompt";
-import { validateStoreDomain, loadFullStore } from "../middleware";
-import { validateSession } from "../middleware";
-import { LRUCache } from "../services/lru-cache";
+import { listTools, type MCPTool } from "../services/mcp-client";
+import { validateStoreDomain, loadFullStore, validateSession } from "../middleware";
 import { decrypt } from "../services/encryption";
-import { runPromptGuard, scanToolResponse, auditOutput, logGuardEvent, type GuardSensitivity } from "../services/prompt-guard";
+import { runPromptGuard, logGuardEvent, type GuardSensitivity } from "../services/prompt-guard";
 import { sendError, sendZodError } from "../lib/error-response";
 import { getActiveConnection } from "../services/customer-account-oauth";
-import { callAuthenticatedMCPTool, listAuthenticatedMCPTools } from "../services/customer-account-mcp";
-import type { McpConnection } from "@workspace/db/schema";
+import { listAuthenticatedMCPTools } from "../services/customer-account-mcp";
+import { loadOrCreateConversation, persistChatResult, type ChatMessageRecord } from "../services/conversation-service";
+import { getCachedKnowledge } from "../services/knowledge-cache";
+import { buildLLMContext } from "../services/llm-context";
+import { fireOutputAudit } from "../services/output-audit";
+import { createToolExecutor } from "../services/tool-guard";
 
 const MAX_USER_MESSAGE_LENGTH = 10_000;
-const MESSAGE_WINDOW_SIZE = 20;
-const MAX_MESSAGES_PER_CONVERSATION = 200;
-
-const RETRACTION_NOTICE = "⚠️ This response was corrected — please try again.";
-
-function fireOutputAudit(
-  assistantResponse: string,
-  toolResultTexts: string[],
-  blockedTopics: string[],
-  knowledgeContext: string,
-  conversationId: number,
-  storeDomain: string,
-  sessionId: string,
-  assistantMessageId: string,
-  safeSendFn: (data: string) => boolean,
-  endStream: () => void
-): void {
-  auditOutput(assistantResponse, toolResultTexts, blockedTopics, knowledgeContext)
-    .then(async (auditResult) => {
-      if (!auditResult.flagged) return;
-
-      console.warn(`[prompt-guard] Output flagged for retraction store="${storeDomain}" reason="${auditResult.reason}" category="${auditResult.category}"`);
-
-      try {
-        const [conv] = await db
-          .select()
-          .from(conversationsTable)
-          .where(eq(conversationsTable.id, conversationId));
-
-        if (conv) {
-          const messages = (conv.messages as Array<{ role: string; content: string; id?: string }>) || [];
-          const updatedMessages = messages.map((m) => {
-            if (m.role === "assistant" && m.id === assistantMessageId && m.content === assistantResponse) {
-              return { ...m, content: RETRACTION_NOTICE, retracted: true };
-            }
-            return m;
-          });
-
-          await db
-            .update(conversationsTable)
-            .set({ messages: updatedMessages })
-            .where(eq(conversationsTable.id, conversationId));
-        }
-      } catch (err) {
-        console.error(`[prompt-guard] Failed to retract message:`, err instanceof Error ? err.message : err);
-      }
-
-      safeSendFn(`data: ${JSON.stringify({ type: "retraction", data: { messageId: assistantMessageId, notice: RETRACTION_NOTICE, reason: auditResult.reason } })}\n\n`);
-
-      logGuardEvent(storeDomain, sessionId, "output_retracted", assistantResponse.slice(0, 500), {
-        reason: auditResult.reason,
-        category: auditResult.category,
-        originalText: assistantResponse.slice(0, 1000),
-      });
-    })
-    .catch((err) => {
-      console.error(`[prompt-guard] Output audit error:`, err instanceof Error ? err.message : err);
-    })
-    .finally(() => {
-      endStream();
-    });
-}
 
 const router: IRouter = Router();
-
-interface ChatMessageRecord {
-  id: string;
-  role: "user" | "assistant" | "tool";
-  content: string;
-  toolCallId?: string;
-  toolCalls?: Array<{ id: string; name: string; arguments: string }>;
-  toolResults?: Array<{ toolCallId: string; content: string }>;
-  timestamp: string;
-}
-
-const knowledgeCache = new LRUCache<ShopKnowledge[]>(500, 120_000, "knowledge");
-
-export function invalidateKnowledgeCache(storeDomain: string): void {
-  knowledgeCache.delete(storeDomain);
-}
-
-async function getCachedKnowledge(storeDomain: string): Promise<ShopKnowledge[]> {
-  const cached = knowledgeCache.get(storeDomain);
-  if (cached) return cached;
-
-  const data = await db
-    .select()
-    .from(shopKnowledgeTable)
-    .where(eq(shopKnowledgeTable.storeDomain, storeDomain));
-
-  knowledgeCache.set(storeDomain, data);
-  return data;
-}
-
-/**
- * Executes an MCP tool call with a GraphQL fallback for collections and blogs.
- *
- * First attempts the tool call via the MCP JSON-RPC endpoint. If it fails,
- * checks whether the tool has a known GraphQL-based fallback (collections or blogs)
- * and uses the Storefront API directly. If no fallback exists, returns a JSON error.
- */
-async function executeToolWithFallback(
-  storeDomain: string,
-  storefrontToken: string,
-  toolName: string,
-  args: Record<string, unknown>,
-  ucpEnabled: boolean = true
-): Promise<string> {
-  try {
-    const result = await callTool(storeDomain, storefrontToken, toolName, args, ucpEnabled);
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(result);
-    } catch {
-    }
-    if (parsed && typeof parsed === "object" && (parsed as Record<string, unknown>).error) {
-      throw new Error(String((parsed as Record<string, unknown>).error));
-    }
-    return result;
-  } catch (err) {
-    if (toolName === "get_collections" || toolName === "list_collections") {
-      const limit = typeof args.limit === "number" ? args.limit : 10;
-      const data = await fetchCollections(storeDomain, storefrontToken, limit);
-      return JSON.stringify(data);
-    }
-    if (toolName === "get_blogs" || toolName === "list_blogs") {
-      const limit = typeof args.limit === "number" ? args.limit : 5;
-      const data = await fetchBlogs(storeDomain, storefrontToken, limit);
-      return JSON.stringify(data);
-    }
-    return JSON.stringify({ error: `Tool ${toolName} failed and no fallback available` });
-  }
-}
-
-async function loadOrCreateConversation(
-  storeDomain: string,
-  sessionId: string,
-  conversationId: number | null | undefined,
-  messagePreview: string
-): Promise<{ conversation: Conversation; existingMessages: ChatMessageRecord[] }> {
-  let conversation: Conversation | null = null;
-  let existingMessages: ChatMessageRecord[] = [];
-
-  if (conversationId != null) {
-    const [conv] = await db
-      .select()
-      .from(conversationsTable)
-      .where(
-        and(
-          eq(conversationsTable.id, conversationId),
-          eq(conversationsTable.storeDomain, storeDomain),
-          eq(conversationsTable.sessionId, sessionId)
-        )
-      );
-    if (conv) {
-      conversation = conv;
-      existingMessages = (conv.messages as ChatMessageRecord[]) || [];
-    }
-  }
-
-  if (!conversation) {
-    const title = messagePreview.slice(0, 50) + (messagePreview.length > 50 ? "..." : "");
-    const [newConv] = await db
-      .insert(conversationsTable)
-      .values({
-        storeDomain,
-        sessionId,
-        title,
-        messages: [],
-      })
-      .returning();
-    conversation = newConv;
-  }
-
-  return { conversation, existingMessages };
-}
-
-/**
- * Builds the LLM context by applying message windowing and constructing the system prompt.
- *
- * Windowing keeps only the most recent MESSAGE_WINDOW_SIZE messages to prevent
- * context window overflow for long conversations. The system prompt is always
- * included separately (not counted in the window).
- */
-function buildLLMContext(
-  existingMessages: ChatMessageRecord[],
-  storeDomain: string,
-  knowledge: ShopKnowledge[],
-  ucpDoc: UCPDiscoveryDocument | null,
-  chatContext?: { productHandle?: string; collectionHandle?: string; cartToken?: string; searchMode?: boolean }
-) {
-  const windowedMessages = existingMessages.length > MESSAGE_WINDOW_SIZE
-    ? existingMessages.slice(-MESSAGE_WINDOW_SIZE)
-    : existingMessages;
-
-  const systemPrompt = buildSystemPrompt(storeDomain, knowledge, ucpDoc, chatContext);
-
-  const llmMessages = windowedMessages.map((m) => ({
-    role: m.role,
-    content: m.content,
-    tool_call_id: m.toolCallId,
-  }));
-
-  return { systemPrompt, llmMessages };
-}
-
-async function appendMessages(
-  conversationId: number,
-  newMessages: ChatMessageRecord[]
-): Promise<void> {
-  const newMessagesJson = JSON.stringify(newMessages);
-  const newMsgCount = newMessages.length;
-
-  await db
-    .update(conversationsTable)
-    .set({
-      messages: sql`CASE
-        WHEN ${conversationsTable.messageCount} + ${newMsgCount} > ${MAX_MESSAGES_PER_CONVERSATION}
-        THEN (
-          SELECT COALESCE(jsonb_agg(elem ORDER BY ord), '[]'::jsonb)
-          FROM jsonb_array_elements(${conversationsTable.messages}::jsonb || ${newMessagesJson}::jsonb)
-          WITH ORDINALITY AS t(elem, ord)
-          WHERE t.ord > (${conversationsTable.messageCount} + ${newMsgCount} - ${MAX_MESSAGES_PER_CONVERSATION})
-        )
-        ELSE ${conversationsTable.messages}::jsonb || ${newMessagesJson}::jsonb
-      END`,
-      messageCount: sql`LEAST(${conversationsTable.messageCount} + ${newMsgCount}, ${MAX_MESSAGES_PER_CONVERSATION})`,
-    })
-    .where(eq(conversationsTable.id, conversationId));
-}
-
-async function persistChatResult(
-  conversationId: number,
-  storeDomain: string,
-  sessionId: string,
-  newMessages: ChatMessageRecord[],
-  userQuery: string
-): Promise<{ conversationSaved: boolean; analyticsSaved: boolean }> {
-  let conversationSaved = true;
-  let analyticsSaved = true;
-
-  try {
-    await appendMessages(conversationId, newMessages);
-  } catch (err) {
-    conversationSaved = false;
-    console.error(`[chat] FAILED to save conversation id="${conversationId}" store="${storeDomain}":`, err instanceof Error ? err.message : "Unknown error");
-  }
-
-  try {
-    await db.insert(analyticsLogsTable).values({
-      storeDomain,
-      eventType: "chat",
-      query: userQuery.slice(0, 500),
-      sessionId,
-    });
-  } catch (err) {
-    analyticsSaved = false;
-    console.error(`[chat] FAILED to insert analytics log store="${storeDomain}":`, err instanceof Error ? err.message : "Unknown error");
-  }
-
-  return { conversationSaved, analyticsSaved };
-}
 
 router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
   const params = SendChatParams.safeParse(req.params);
@@ -463,53 +201,16 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       return;
     }
 
-    const activeConnection = customerAccountConnection;
-
-    async function executeAndGuardTool(toolName: string, args: Record<string, unknown>): Promise<string> {
-      let result: string;
-      if (authenticatedToolNames.has(toolName) && !activeConnection) {
-        return JSON.stringify({
-          error: "customer_account_required",
-          message: "This tool requires a connected customer account. Please connect your customer account using the 'Connect Account' button in the chat header to access order history, account details, and other personalized features.",
-        });
-      }
-      if (activeConnection) {
-        try {
-          const authResult = await callAuthenticatedMCPTool(activeConnection, toolName, args);
-          let authParsed: unknown;
-          try { authParsed = JSON.parse(authResult); } catch { result = authResult; return await guardToolResult(result, toolName); }
-          if (authParsed && typeof authParsed === "object" && (authParsed as Record<string, unknown>).error) {
-            console.warn(`[chat] Authenticated MCP tool "${toolName}" returned error, falling back to public MCP`);
-          } else {
-            return await guardToolResult(authResult, toolName);
-          }
-        } catch (err) {
-          console.warn(`[chat] Authenticated MCP call failed, falling back to public:`, err instanceof Error ? err.message : err);
-        }
-      }
-      result = await executeToolWithFallback(store!.storeDomain, store!.storefrontToken!, toolName, args, ucpEnabled);
-      return await guardToolResult(result, toolName);
-    }
-
-    async function guardToolResult(result: string, toolName: string): Promise<string> {
-      const toolGuard = await scanToolResponse(result, guardSensitivity, blockedTopics);
-      if (!toolGuard.allowed) {
-        const toolEventType = toolGuard.category === "blocked_topic"
-          ? "blocked_topic"
-          : toolGuard.layer === "regex"
-            ? "tool_injection_regex"
-            : "tool_injection_llm";
-        console.warn(`[prompt-guard] Blocked tool response (${toolEventType}/${toolGuard.layer}) in "${toolName}": ${toolGuard.reason}`);
-        logGuardEvent(store!.storeDomain, parsed.data!.sessionId, toolEventType, toolName, {
-          layer: toolGuard.layer,
-          category: toolGuard.category,
-          reason: toolGuard.reason,
-          confidence: toolGuard.confidence,
-        });
-        return JSON.stringify({ error: "Tool response was filtered for security reasons." });
-      }
-      return result;
-    }
+    const executeAndGuardTool = createToolExecutor({
+      storeDomain: store.storeDomain,
+      storefrontToken: store.storefrontToken,
+      sessionId: parsed.data.sessionId,
+      ucpEnabled,
+      guardSensitivity,
+      blockedTopics,
+      authenticatedToolNames,
+      activeConnection: customerAccountConnection,
+    });
 
     const stream = streamChatWithProvider(
       store.provider,

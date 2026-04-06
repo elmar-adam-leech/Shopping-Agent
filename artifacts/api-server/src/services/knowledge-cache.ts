@@ -1,0 +1,23 @@
+import { eq } from "drizzle-orm";
+import { db, shopKnowledgeTable } from "@workspace/db";
+import type { ShopKnowledge } from "@workspace/db/schema";
+import { LRUCache } from "./lru-cache";
+
+const knowledgeCache = new LRUCache<ShopKnowledge[]>(500, 120_000, "knowledge");
+
+export function invalidateKnowledgeCache(storeDomain: string): void {
+  knowledgeCache.delete(storeDomain);
+}
+
+export async function getCachedKnowledge(storeDomain: string): Promise<ShopKnowledge[]> {
+  const cached = knowledgeCache.get(storeDomain);
+  if (cached) return cached;
+
+  const data = await db
+    .select()
+    .from(shopKnowledgeTable)
+    .where(eq(shopKnowledgeTable.storeDomain, storeDomain));
+
+  knowledgeCache.set(storeDomain, data);
+  return data;
+}

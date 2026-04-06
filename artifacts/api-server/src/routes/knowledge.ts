@@ -13,9 +13,8 @@ import {
   ListKnowledgeResponse,
   DeleteKnowledgeParams,
 } from "@workspace/api-zod";
-import { validateStoreDomain } from "../middleware";
-import { validateMerchantAuth } from "../middleware";
-import { invalidateKnowledgeCache } from "./chat";
+import { validateStoreDomain, validateMerchantAuth } from "../middleware";
+import { invalidateKnowledgeCache } from "../services/knowledge-cache";
 import { sendError, sendZodError } from "../lib/error-response";
 
 const router: IRouter = Router();

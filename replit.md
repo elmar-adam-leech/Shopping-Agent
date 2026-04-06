@@ -64,7 +64,7 @@ The frontend is built with React 18, Vite, Tailwind CSS, and shadcn/ui, providin
 - **Shopify OAuth**: Secure merchant authentication and app installation.
 - **Store Management**: CRUD operations for merchant stores.
 - **Knowledge Management**: CRUD for categorized shop knowledge entries.
-- **Chat**: Real-time SSE streaming for AI chat interactions, persisting conversations.
+- **Chat**: Real-time SSE streaming for AI chat interactions, persisting conversations. The chat route (`routes/chat.ts`) is a thin orchestrator that delegates to focused services: `conversation-service.ts` (load/create/persist conversations), `knowledge-cache.ts` (LRU-cached knowledge), `llm-context.ts` (message windowing + system prompt), `output-audit.ts` (async retraction), and `tool-guard.ts` (tool execution with fallback + response guarding).
 - **Analytics**: Logging and retention of analytics data for merchant insights.
 - **Preferences**: Storage of user preferences.
 - **LLM Provider System**: Decoupled LLM provider implementations with a factory for dynamic selection.

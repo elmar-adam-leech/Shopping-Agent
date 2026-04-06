@@ -17,7 +17,7 @@ import { invalidateStoreCache, getCachedStorePublicInfo } from "../middleware";
 import { encrypt } from "../services/encryption";
 import { invalidateToolsListCache } from "../services/mcp-client";
 import { invalidateSessionCacheForDomain } from "../middleware";
-import { invalidateKnowledgeCache } from "./chat";
+import { invalidateKnowledgeCache } from "../services/knowledge-cache";
 import { sendError, sendZodError } from "../lib/error-response";
 
 const router: IRouter = Router();
