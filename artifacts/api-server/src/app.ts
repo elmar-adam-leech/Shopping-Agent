@@ -11,6 +11,7 @@ import {
   sessionLimiter,
   loginLimiter,
   storeMutationLimiter,
+  crossTenantGuard,
 } from "./middleware";
 
 const app: Express = express();
@@ -45,6 +46,7 @@ app.use("/api", cacheControl);
 app.post("/api/sessions", sessionLimiter);
 app.post("/api/auth/login", loginLimiter);
 app.use("/api/stores/:storeDomain/chat", chatLimiter);
+app.use("/api/stores/:storeDomain", crossTenantGuard);
 app.post("/api/stores", storeMutationLimiter);
 app.patch("/api/stores/:storeDomain", storeMutationLimiter);
 app.delete("/api/stores/:storeDomain", storeMutationLimiter);

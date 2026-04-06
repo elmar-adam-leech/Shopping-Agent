@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
-import { db, analyticsLogsTable } from "@workspace/db";
+import { analyticsLogsTable, withTenantScope } from "@workspace/db";
 import {
   GetAnalyticsParams,
   GetAnalyticsQueryParams,
@@ -51,36 +51,38 @@ router.get("/stores/:storeDomain/analytics", validateStoreDomain, validateMercha
     gte(analyticsLogsTable.createdAt, since)
   );
 
-  const [countsResult, topQueriesResult, dailyChatsResult] = await Promise.all([
-    db
-      .select({
-        totalChats: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'chat')::int`,
-        totalSessions: sql<number>`count(distinct ${analyticsLogsTable.sessionId})::int`,
-      })
-      .from(analyticsLogsTable)
-      .where(baseCondition),
+  const [countsResult, topQueriesResult, dailyChatsResult] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return Promise.all([
+      scopedDb
+        .select({
+          totalChats: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'chat')::int`,
+          totalSessions: sql<number>`count(distinct ${analyticsLogsTable.sessionId})::int`,
+        })
+        .from(analyticsLogsTable)
+        .where(baseCondition),
 
-    db
-      .select({
-        query: sql<string>`lower(trim(${analyticsLogsTable.query}))`,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(analyticsLogsTable)
-      .where(and(baseCondition, sql`${analyticsLogsTable.query} is not null`))
-      .groupBy(sql`lower(trim(${analyticsLogsTable.query}))`)
-      .orderBy(sql`count(*) desc`)
-      .limit(10),
+      scopedDb
+        .select({
+          query: sql<string>`lower(trim(${analyticsLogsTable.query}))`,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(analyticsLogsTable)
+        .where(and(baseCondition, sql`${analyticsLogsTable.query} is not null`))
+        .groupBy(sql`lower(trim(${analyticsLogsTable.query}))`)
+        .orderBy(sql`count(*) desc`)
+        .limit(10),
 
-    db
-      .select({
-        date: sql<string>`${analyticsLogsTable.createdAt}::date::text`,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(analyticsLogsTable)
-      .where(baseCondition)
-      .groupBy(sql`${analyticsLogsTable.createdAt}::date`)
-      .orderBy(sql`${analyticsLogsTable.createdAt}::date asc`),
-  ]);
+      scopedDb
+        .select({
+          date: sql<string>`${analyticsLogsTable.createdAt}::date::text`,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(analyticsLogsTable)
+        .where(baseCondition)
+        .groupBy(sql`${analyticsLogsTable.createdAt}::date`)
+        .orderBy(sql`${analyticsLogsTable.createdAt}::date asc`),
+    ]);
+  });
 
   const totalChats = countsResult[0]?.totalChats ?? 0;
   const totalSessions = countsResult[0]?.totalSessions ?? 0;
@@ -144,92 +146,94 @@ router.get("/stores/:storeDomain/analytics/enhanced", validateStoreDomain, valid
     topProductsResult,
     abandonedCartsResult,
     revenueResult,
-  ] = await Promise.all([
-    db
-      .select({
-        totalChats: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'chat')::int`,
-        totalSessions: sql<number>`count(distinct ${analyticsLogsTable.sessionId})::int`,
-      })
-      .from(analyticsLogsTable)
-      .where(baseCondition),
+  ] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return Promise.all([
+      scopedDb
+        .select({
+          totalChats: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'chat')::int`,
+          totalSessions: sql<number>`count(distinct ${analyticsLogsTable.sessionId})::int`,
+        })
+        .from(analyticsLogsTable)
+        .where(baseCondition),
 
-    db
-      .select({
-        query: sql<string>`lower(trim(${analyticsLogsTable.query}))`,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(analyticsLogsTable)
-      .where(and(baseCondition, sql`${analyticsLogsTable.query} is not null`))
-      .groupBy(sql`lower(trim(${analyticsLogsTable.query}))`)
-      .orderBy(sql`count(*) desc`)
-      .limit(10),
+      scopedDb
+        .select({
+          query: sql<string>`lower(trim(${analyticsLogsTable.query}))`,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(analyticsLogsTable)
+        .where(and(baseCondition, sql`${analyticsLogsTable.query} is not null`))
+        .groupBy(sql`lower(trim(${analyticsLogsTable.query}))`)
+        .orderBy(sql`count(*) desc`)
+        .limit(10),
 
-    db
-      .select({
-        date: sql<string>`${analyticsLogsTable.createdAt}::date::text`,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(analyticsLogsTable)
-      .where(baseCondition)
-      .groupBy(sql`${analyticsLogsTable.createdAt}::date`)
-      .orderBy(sql`${analyticsLogsTable.createdAt}::date asc`),
+      scopedDb
+        .select({
+          date: sql<string>`${analyticsLogsTable.createdAt}::date::text`,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(analyticsLogsTable)
+        .where(baseCondition)
+        .groupBy(sql`${analyticsLogsTable.createdAt}::date`)
+        .orderBy(sql`${analyticsLogsTable.createdAt}::date asc`),
 
-    db
-      .select({
-        toolName: sql<string>`${analyticsLogsTable.metadata}->>'toolName'`,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(analyticsLogsTable)
-      .where(and(baseCondition, sql`${analyticsLogsTable.eventType} = 'tool_call'`))
-      .groupBy(sql`${analyticsLogsTable.metadata}->>'toolName'`)
-      .orderBy(sql`count(*) desc`)
-      .limit(15),
+      scopedDb
+        .select({
+          toolName: sql<string>`${analyticsLogsTable.metadata}->>'toolName'`,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(analyticsLogsTable)
+        .where(and(baseCondition, sql`${analyticsLogsTable.eventType} = 'tool_call'`))
+        .groupBy(sql`${analyticsLogsTable.metadata}->>'toolName'`)
+        .orderBy(sql`count(*) desc`)
+        .limit(15),
 
-    db
-      .select({
-        totalChats: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'chat')::int`,
-        cartCreated: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'cart_created')::int`,
-        checkoutStarted: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'checkout_started')::int`,
-        checkoutCompleted: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'checkout_completed')::int`,
-      })
-      .from(analyticsLogsTable)
-      .where(baseCondition),
+      scopedDb
+        .select({
+          totalChats: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'chat')::int`,
+          cartCreated: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'cart_created')::int`,
+          checkoutStarted: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'checkout_started')::int`,
+          checkoutCompleted: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'checkout_completed')::int`,
+        })
+        .from(analyticsLogsTable)
+        .where(baseCondition),
 
-    db
-      .select({
-        productHandle: sql<string>`${analyticsLogsTable.metadata}->>'productHandle'`,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(analyticsLogsTable)
-      .where(and(baseCondition, sql`${analyticsLogsTable.eventType} = 'product_recommended'`))
-      .groupBy(sql`${analyticsLogsTable.metadata}->>'productHandle'`)
-      .orderBy(sql`count(*) desc`)
-      .limit(10),
+      scopedDb
+        .select({
+          productHandle: sql<string>`${analyticsLogsTable.metadata}->>'productHandle'`,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(analyticsLogsTable)
+        .where(and(baseCondition, sql`${analyticsLogsTable.eventType} = 'product_recommended'`))
+        .groupBy(sql`${analyticsLogsTable.metadata}->>'productHandle'`)
+        .orderBy(sql`count(*) desc`)
+        .limit(10),
 
-    db
-      .select({
-        count: sql<number>`count(distinct ${analyticsLogsTable.sessionId})::int`,
-      })
-      .from(analyticsLogsTable)
-      .where(and(
-        baseCondition,
-        sql`${analyticsLogsTable.eventType} = 'cart_created'`,
-        sql`${analyticsLogsTable.sessionId} not in (
-          select ${analyticsLogsTable.sessionId} from ${analyticsLogsTable}
-          where ${analyticsLogsTable.storeDomain} = ${params.data.storeDomain}
-            and ${analyticsLogsTable.createdAt} >= ${since}
-            and ${analyticsLogsTable.createdAt} <= ${until}
-            and ${analyticsLogsTable.eventType} = 'checkout_completed'
-        )`
-      )),
+      scopedDb
+        .select({
+          count: sql<number>`count(distinct ${analyticsLogsTable.sessionId})::int`,
+        })
+        .from(analyticsLogsTable)
+        .where(and(
+          baseCondition,
+          sql`${analyticsLogsTable.eventType} = 'cart_created'`,
+          sql`${analyticsLogsTable.sessionId} not in (
+            select ${analyticsLogsTable.sessionId} from ${analyticsLogsTable}
+            where ${analyticsLogsTable.storeDomain} = ${params.data.storeDomain}
+              and ${analyticsLogsTable.createdAt} >= ${since}
+              and ${analyticsLogsTable.createdAt} <= ${until}
+              and ${analyticsLogsTable.eventType} = 'checkout_completed'
+          )`
+        )),
 
-    db
-      .select({
-        total: sql<number>`coalesce(sum((${analyticsLogsTable.metadata}->>'orderTotal')::numeric), 0)::float`,
-      })
-      .from(analyticsLogsTable)
-      .where(and(baseCondition, sql`${analyticsLogsTable.eventType} = 'checkout_completed'`)),
-  ]);
+      scopedDb
+        .select({
+          total: sql<number>`coalesce(sum((${analyticsLogsTable.metadata}->>'orderTotal')::numeric), 0)::float`,
+        })
+        .from(analyticsLogsTable)
+        .where(and(baseCondition, sql`${analyticsLogsTable.eventType} = 'checkout_completed'`)),
+    ]);
+  });
 
   const totalChats = countsResult[0]?.totalChats ?? 0;
   const totalSessions = countsResult[0]?.totalSessions ?? 0;
@@ -287,34 +291,36 @@ router.get("/stores/:storeDomain/analytics/daily-queries", validateStoreDomain, 
   const dayStart = new Date(dateStr + "T00:00:00.000Z");
   const dayEnd = new Date(dateStr + "T23:59:59.999Z");
 
-  const [queriesResult, countResult] = await Promise.all([
-    db
-      .select({
-        query: sql<string>`lower(trim(${analyticsLogsTable.query}))`,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(analyticsLogsTable)
-      .where(and(
-        eq(analyticsLogsTable.storeDomain, params.data.storeDomain),
-        gte(analyticsLogsTable.createdAt, dayStart),
-        lte(analyticsLogsTable.createdAt, dayEnd),
-        sql`${analyticsLogsTable.query} is not null`
-      ))
-      .groupBy(sql`lower(trim(${analyticsLogsTable.query}))`)
-      .orderBy(sql`count(*) desc`)
-      .limit(20),
+  const [queriesResult, countResult] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return Promise.all([
+      scopedDb
+        .select({
+          query: sql<string>`lower(trim(${analyticsLogsTable.query}))`,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(analyticsLogsTable)
+        .where(and(
+          eq(analyticsLogsTable.storeDomain, params.data.storeDomain),
+          gte(analyticsLogsTable.createdAt, dayStart),
+          lte(analyticsLogsTable.createdAt, dayEnd),
+          sql`${analyticsLogsTable.query} is not null`
+        ))
+        .groupBy(sql`lower(trim(${analyticsLogsTable.query}))`)
+        .orderBy(sql`count(*) desc`)
+        .limit(20),
 
-    db
-      .select({
-        total: sql<number>`count(*)::int`,
-      })
-      .from(analyticsLogsTable)
-      .where(and(
-        eq(analyticsLogsTable.storeDomain, params.data.storeDomain),
-        gte(analyticsLogsTable.createdAt, dayStart),
-        lte(analyticsLogsTable.createdAt, dayEnd)
-      )),
-  ]);
+      scopedDb
+        .select({
+          total: sql<number>`count(*)::int`,
+        })
+        .from(analyticsLogsTable)
+        .where(and(
+          eq(analyticsLogsTable.storeDomain, params.data.storeDomain),
+          gte(analyticsLogsTable.createdAt, dayStart),
+          lte(analyticsLogsTable.createdAt, dayEnd)
+        )),
+    ]);
+  });
 
   res.json(
     GetDailyQueriesResponse.parse({

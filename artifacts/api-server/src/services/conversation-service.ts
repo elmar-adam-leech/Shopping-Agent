@@ -1,5 +1,5 @@
 import { eq, and, sql } from "drizzle-orm";
-import { db, conversationsTable } from "@workspace/db";
+import { conversationsTable, withTenantScope } from "@workspace/db";
 import type { Conversation } from "@workspace/db/schema";
 import { logAnalyticsEvent } from "./analytics-logger";
 
@@ -21,53 +21,57 @@ export async function loadOrCreateConversation(
   conversationId: number | null | undefined,
   messagePreview: string
 ): Promise<{ conversation: Conversation; existingMessages: ChatMessageRecord[] }> {
-  let conversation: Conversation | null = null;
-  let existingMessages: ChatMessageRecord[] = [];
+  return withTenantScope(storeDomain, async (scopedDb) => {
+    let conversation: Conversation | null = null;
+    let existingMessages: ChatMessageRecord[] = [];
 
-  if (conversationId != null) {
-    const [conv] = await db
-      .select()
-      .from(conversationsTable)
-      .where(
-        and(
-          eq(conversationsTable.id, conversationId),
-          eq(conversationsTable.storeDomain, storeDomain),
-          eq(conversationsTable.sessionId, sessionId)
-        )
-      );
-    if (conv) {
-      conversation = conv;
-      existingMessages = (conv.messages as ChatMessageRecord[]) || [];
+    if (conversationId != null) {
+      const [conv] = await scopedDb
+        .select()
+        .from(conversationsTable)
+        .where(
+          and(
+            eq(conversationsTable.id, conversationId),
+            eq(conversationsTable.storeDomain, storeDomain),
+            eq(conversationsTable.sessionId, sessionId)
+          )
+        );
+      if (conv) {
+        conversation = conv;
+        existingMessages = (conv.messages as ChatMessageRecord[]) || [];
+      }
     }
-  }
 
-  if (!conversation) {
-    const title = messagePreview.slice(0, 50) + (messagePreview.length > 50 ? "..." : "");
-    const [newConv] = await db
-      .insert(conversationsTable)
-      .values({
-        storeDomain,
-        sessionId,
-        title,
-        messages: [],
-      })
-      .returning();
-    conversation = newConv;
-  }
+    if (!conversation) {
+      const title = messagePreview.slice(0, 50) + (messagePreview.length > 50 ? "..." : "");
+      const [newConv] = await scopedDb
+        .insert(conversationsTable)
+        .values({
+          storeDomain,
+          sessionId,
+          title,
+          messages: [],
+        })
+        .returning();
+      conversation = newConv;
+    }
 
-  return { conversation, existingMessages };
+    return { conversation, existingMessages };
+  });
 }
 
 export async function appendMessages(
   conversationId: number,
+  storeDomain: string,
   newMessages: ChatMessageRecord[]
 ): Promise<void> {
   const newMessagesJson = JSON.stringify(newMessages);
   const newMsgCount = newMessages.length;
 
-  await db
-    .update(conversationsTable)
-    .set({
+  await withTenantScope(storeDomain, async (scopedDb) => {
+    await scopedDb
+      .update(conversationsTable)
+      .set({
       messages: sql`CASE
         WHEN ${conversationsTable.messageCount} + ${newMsgCount} > ${MAX_MESSAGES_PER_CONVERSATION}
         THEN (
@@ -79,8 +83,9 @@ export async function appendMessages(
         ELSE ${conversationsTable.messages}::jsonb || ${newMessagesJson}::jsonb
       END`,
       messageCount: sql`LEAST(${conversationsTable.messageCount} + ${newMsgCount}, ${MAX_MESSAGES_PER_CONVERSATION})`,
-    })
-    .where(eq(conversationsTable.id, conversationId));
+      })
+      .where(eq(conversationsTable.id, conversationId));
+  });
 }
 
 export async function persistChatResult(
@@ -94,7 +99,7 @@ export async function persistChatResult(
   let analyticsSaved = true;
 
   try {
-    await appendMessages(conversationId, newMessages);
+    await appendMessages(conversationId, storeDomain, newMessages);
   } catch (err) {
     conversationSaved = false;
     console.error(`[chat] FAILED to save conversation id="${conversationId}" store="${storeDomain}":`, err instanceof Error ? err.message : "Unknown error");

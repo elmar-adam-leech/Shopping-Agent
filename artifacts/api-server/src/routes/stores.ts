@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request } from "express";
 import { eq } from "drizzle-orm";
-import { db, storesTable, sessionsTable } from "@workspace/db";
+import { db, storesTable, sessionsTable, withAdminBypass } from "@workspace/db";
 import type { Store } from "@workspace/db/schema";
 import {
   CreateStoreBody,
@@ -19,6 +19,7 @@ import { invalidateToolsListCache } from "../services/mcp-client";
 import { invalidateSessionCacheForDomain } from "../middleware";
 import { invalidateKnowledgeCache } from "../services/knowledge-cache";
 import { sendError, sendZodError } from "../lib/error-response";
+import { logAuditFromRequest } from "../services/audit-logger";
 
 const router: IRouter = Router();
 
@@ -114,6 +115,14 @@ router.post("/stores", validateMerchantAuthForStoreList, async (req, res): Promi
     })
     .returning();
 
+  logAuditFromRequest(req, {
+    storeDomain: store.storeDomain,
+    actor: "merchant",
+    action: "store_created",
+    resourceType: "store",
+    resourceId: store.storeDomain,
+  });
+
   res.status(201).json(GetStoreResponse.parse(storeToResponse(store)));
 });
 
@@ -191,6 +200,20 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
   if (parsed.data.storefrontToken !== undefined || parsed.data.ucpCompliant !== undefined) {
     invalidateToolsListCache(params.data.storeDomain);
   }
+
+  const changedFields = Object.keys(parsed.data).filter(k => parsed.data[k as keyof typeof parsed.data] !== undefined);
+  logAuditFromRequest(req, {
+    storeDomain: params.data.storeDomain,
+    actor: "merchant",
+    action: "store_updated",
+    resourceType: "store",
+    resourceId: params.data.storeDomain,
+    metadata: {
+      changedFields,
+      apiKeyChanged: parsed.data.apiKey !== undefined,
+    },
+  });
+
   res.json(UpdateStoreResponse.parse(storeToResponse(store)));
 });
 
@@ -222,13 +245,24 @@ router.delete("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pr
     return;
   }
 
-  await db.delete(sessionsTable).where(eq(sessionsTable.storeDomain, params.data.storeDomain));
+  await withAdminBypass(async (scopedDb) => {
+    await scopedDb.delete(sessionsTable).where(eq(sessionsTable.storeDomain, params.data.storeDomain));
+  });
   await db.delete(storesTable).where(eq(storesTable.storeDomain, params.data.storeDomain));
   invalidateStoreCache(params.data.storeDomain);
   invalidateSessionCacheForDomain(params.data.storeDomain);
   clearMerchantSessionCache();
   invalidateKnowledgeCache(params.data.storeDomain);
   invalidateToolsListCache(params.data.storeDomain);
+
+  logAuditFromRequest(req, {
+    storeDomain: params.data.storeDomain,
+    actor: "merchant",
+    action: "store_deleted",
+    resourceType: "store",
+    resourceId: params.data.storeDomain,
+  });
+
   res.sendStatus(204);
 });
 

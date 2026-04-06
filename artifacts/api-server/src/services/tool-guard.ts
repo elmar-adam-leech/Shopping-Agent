@@ -4,6 +4,7 @@ import { fetchBlogs, fetchCollections } from "./graphql-client";
 import { callAuthenticatedMCPTool } from "./customer-account-mcp";
 import { logAnalyticsEvent } from "./analytics-logger";
 import type { McpConnection } from "@workspace/db/schema";
+import { logAudit } from "./audit-logger";
 
 const CART_TOOLS = new Set(["create_cart", "add_to_cart", "update_cart"]);
 const CHECKOUT_TOOLS = new Set(["create_checkout", "get_checkout_url"]);
@@ -143,6 +144,8 @@ export function createToolExecutor(opts: {
   }
 
   return async function executeAndGuardTool(toolName: string, args: Record<string, unknown>): Promise<string> {
+    const startTime = Date.now();
+
     const orderEventType = ORDER_TOOL_ANALYTICS[toolName];
     if (orderEventType) {
       logAnalyticsEvent(storeDomain, orderEventType, sessionId, {
@@ -151,6 +154,15 @@ export function createToolExecutor(opts: {
     }
 
     if (authenticatedToolNames.has(toolName) && !activeConnection) {
+      logAudit({
+        storeDomain,
+        actor: "customer",
+        actorId: sessionId,
+        action: "tool_execution_blocked",
+        resourceType: "mcp_tool",
+        resourceId: toolName,
+        metadata: { reason: "customer_account_required" },
+      });
       return JSON.stringify({
         error: "customer_account_required",
         message: "This tool requires a connected customer account. Please connect your customer account using the 'Connect Account' button in the chat header to access order history, account details, and other personalized features.",
@@ -161,6 +173,15 @@ export function createToolExecutor(opts: {
         const authResult = await callAuthenticatedMCPTool(activeConnection, toolName, args);
         let authParsed: unknown;
         try { authParsed = JSON.parse(authResult); } catch {
+          logAudit({
+            storeDomain,
+            actor: "customer",
+            actorId: sessionId,
+            action: "tool_execution_success",
+            resourceType: "mcp_tool",
+            resourceId: toolName,
+            metadata: { authenticated: true, durationMs: Date.now() - startTime },
+          });
           const guarded = await guardToolResult(authResult, toolName, storeDomain, sessionId, guardSensitivity, blockedTopics);
           logToolAnalytics(toolName, args, guarded);
           return guarded;
@@ -168,15 +189,44 @@ export function createToolExecutor(opts: {
         if (authParsed && typeof authParsed === "object" && (authParsed as Record<string, unknown>).error) {
           console.warn(`[chat] Authenticated MCP tool "${toolName}" returned error, falling back to public MCP`);
         } else {
+          logAudit({
+            storeDomain,
+            actor: "customer",
+            actorId: sessionId,
+            action: "tool_execution_success",
+            resourceType: "mcp_tool",
+            resourceId: toolName,
+            metadata: { authenticated: true, durationMs: Date.now() - startTime },
+          });
           const guarded = await guardToolResult(authResult, toolName, storeDomain, sessionId, guardSensitivity, blockedTopics);
           logToolAnalytics(toolName, args, guarded);
           return guarded;
         }
       } catch (err) {
         console.warn(`[chat] Authenticated MCP call failed, falling back to public:`, err instanceof Error ? err.message : err);
+        logAudit({
+          storeDomain,
+          actor: "customer",
+          actorId: sessionId,
+          action: "tool_execution_failed",
+          resourceType: "mcp_tool",
+          resourceId: toolName,
+          metadata: { authenticated: true, error: err instanceof Error ? err.message : "Unknown", durationMs: Date.now() - startTime },
+        });
       }
     }
     const result = await executeToolWithFallback(storeDomain, storefrontToken, toolName, args, ucpEnabled);
+
+    logAudit({
+      storeDomain,
+      actor: "customer",
+      actorId: sessionId,
+      action: "tool_execution_success",
+      resourceType: "mcp_tool",
+      resourceId: toolName,
+      metadata: { authenticated: false, durationMs: Date.now() - startTime },
+    });
+
     const guarded = await guardToolResult(result, toolName, storeDomain, sessionId, guardSensitivity, blockedTopics);
     logToolAnalytics(toolName, args, guarded);
     return guarded;

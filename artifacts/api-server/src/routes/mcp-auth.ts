@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { validateStoreDomain, loadFullStore } from "../middleware";
 import { validateSession } from "../middleware";
 import { sendError } from "../lib/error-response";
+import { logAuditFromRequest } from "../services/audit-logger";
 import {
   discoverCustomerAccountMCP,
   resolveClientId,
@@ -97,6 +98,15 @@ router.post(
       }
 
       const result = await initiateOAuth(storeDomain, sessionId, clientId, discovery);
+
+      logAuditFromRequest(req, {
+        storeDomain,
+        actor: "customer",
+        actorId: sessionId,
+        action: "mcp_connect_initiated",
+        resourceType: "mcp_connection",
+      });
+
       res.json({ authorizationUrl: result.authorizationUrl });
     } catch (err) {
       console.error(`[mcp-connect] Error for store="${storeDomain}":`, err instanceof Error ? err.message : err);
@@ -123,6 +133,14 @@ router.get("/auth/mcp/callback", async (req: Request, res: Response): Promise<vo
 
   try {
     const { storeDomain } = await handleOAuthCallback(code, state);
+
+    logAuditFromRequest(req, {
+      storeDomain,
+      actor: "customer",
+      action: "mcp_connect_completed",
+      resourceType: "mcp_connection",
+    });
+
     res.send(renderCallbackPage(true, storeDomain));
   } catch (err) {
     console.error("[mcp-callback] Error:", err instanceof Error ? err.message : err);
@@ -141,6 +159,13 @@ router.delete(
     try {
       const revoked = await revokeConnection(storeDomain, sessionId);
       if (revoked) {
+        logAuditFromRequest(req, {
+          storeDomain,
+          actor: "customer",
+          actorId: sessionId,
+          action: "mcp_connection_revoked",
+          resourceType: "mcp_connection",
+        });
         res.json({ success: true });
       } else {
         sendError(res, 404, "No active connection found");

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, userPreferencesTable } from "@workspace/db";
+import { userPreferencesTable, withTenantScope } from "@workspace/db";
 import {
   GetPreferencesParams,
   GetPreferencesQueryParams,
@@ -39,30 +39,34 @@ router.get("/stores/:storeDomain/preferences", validateStoreDomain, validateSess
     return;
   }
 
-  let [prefs] = await db
-    .select()
-    .from(userPreferencesTable)
-    .where(
-      and(
-        eq(userPreferencesTable.storeDomain, params.data.storeDomain),
-        eq(userPreferencesTable.sessionId, query.data.sessionId)
-      )
-    );
+  const prefs = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    let [result] = await scopedDb
+      .select()
+      .from(userPreferencesTable)
+      .where(
+        and(
+          eq(userPreferencesTable.storeDomain, params.data.storeDomain),
+          eq(userPreferencesTable.sessionId, query.data.sessionId)
+        )
+      );
 
-  if (!prefs) {
-    [prefs] = await db
-      .insert(userPreferencesTable)
-      .values({
-        storeDomain: params.data.storeDomain,
-        sessionId: query.data.sessionId,
-        prefs: {},
-      })
-      .onConflictDoUpdate({
-        target: [userPreferencesTable.storeDomain, userPreferencesTable.sessionId],
-        set: { updatedAt: new Date() },
-      })
-      .returning();
-  }
+    if (!result) {
+      [result] = await scopedDb
+        .insert(userPreferencesTable)
+        .values({
+          storeDomain: params.data.storeDomain,
+          sessionId: query.data.sessionId,
+          prefs: {},
+        })
+        .onConflictDoUpdate({
+          target: [userPreferencesTable.storeDomain, userPreferencesTable.sessionId],
+          set: { updatedAt: new Date() },
+        })
+        .returning();
+    }
+
+    return result;
+  });
 
   res.json(GetPreferencesResponse.parse(prefsToResponse(prefs)));
 });
@@ -80,18 +84,20 @@ router.put("/stores/:storeDomain/preferences", validateStoreDomain, validateSess
     return;
   }
 
-  const [prefs] = await db
-    .insert(userPreferencesTable)
-    .values({
-      storeDomain: params.data.storeDomain,
-      sessionId: parsed.data.sessionId,
-      prefs: parsed.data.prefs,
-    })
-    .onConflictDoUpdate({
-      target: [userPreferencesTable.storeDomain, userPreferencesTable.sessionId],
-      set: { prefs: parsed.data.prefs, updatedAt: new Date() },
-    })
-    .returning();
+  const [prefs] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return scopedDb
+      .insert(userPreferencesTable)
+      .values({
+        storeDomain: params.data.storeDomain,
+        sessionId: parsed.data.sessionId,
+        prefs: parsed.data.prefs,
+      })
+      .onConflictDoUpdate({
+        target: [userPreferencesTable.storeDomain, userPreferencesTable.sessionId],
+        set: { prefs: parsed.data.prefs, updatedAt: new Date() },
+      })
+      .returning();
+  });
 
   res.json(UpdatePreferencesResponse.parse(prefsToResponse(prefs)));
 });

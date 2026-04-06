@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { eq } from "drizzle-orm";
-import { db, storesTable, sessionsTable } from "@workspace/db";
+import { db, storesTable, sessionsTable, withTenantScope } from "@workspace/db";
 import { CreateSessionBody } from "@workspace/api-zod";
 import { sendError, sendZodError } from "../lib/error-response";
 
@@ -44,11 +44,13 @@ router.post("/sessions", async (req, res): Promise<void> => {
   const expiresAt = new Date(now.getTime() + SESSION_TTL_HOURS * 60 * 60 * 1000);
 
   try {
-    await db.insert(sessionsTable).values({
-      id: sessionId,
-      storeDomain: parsed.data.storeDomain,
-      createdAt: now,
-      expiresAt,
+    await withTenantScope(parsed.data.storeDomain, async (scopedDb) => {
+      await scopedDb.insert(sessionsTable).values({
+        id: sessionId,
+        storeDomain: parsed.data.storeDomain,
+        createdAt: now,
+        expiresAt,
+      });
     });
   } catch (err) {
     console.error("[sessions] Database error during session creation:", err instanceof Error ? err.message : err);

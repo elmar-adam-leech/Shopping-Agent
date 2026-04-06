@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and } from "drizzle-orm";
-import { db, shopKnowledgeTable } from "@workspace/db";
+import { shopKnowledgeTable, withTenantScope } from "@workspace/db";
 import type { ShopKnowledge } from "@workspace/db/schema";
 import {
   CreateKnowledgeBody,
@@ -16,6 +16,7 @@ import {
 import { validateStoreDomain, validateMerchantAuth } from "../middleware";
 import { invalidateKnowledgeCache } from "../services/knowledge-cache";
 import { sendError, sendZodError } from "../lib/error-response";
+import { logAuditFromRequest } from "../services/audit-logger";
 
 const router: IRouter = Router();
 
@@ -35,11 +36,13 @@ router.get("/stores/:storeDomain/knowledge", validateStoreDomain, validateMercha
     conditions.push(eq(shopKnowledgeTable.category, query.data.category as KnowledgeCategory));
   }
 
-  const entries = await db
-    .select()
-    .from(shopKnowledgeTable)
-    .where(and(...conditions))
-    .orderBy(shopKnowledgeTable.sortOrder);
+  const entries = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return scopedDb
+      .select()
+      .from(shopKnowledgeTable)
+      .where(and(...conditions))
+      .orderBy(shopKnowledgeTable.sortOrder);
+  });
 
   res.json(ListKnowledgeResponse.parse(entries));
 });
@@ -57,18 +60,30 @@ router.post("/stores/:storeDomain/knowledge", validateStoreDomain, validateMerch
     return;
   }
 
-  const [entry] = await db
-    .insert(shopKnowledgeTable)
-    .values({
-      storeDomain: params.data.storeDomain,
-      category: parsed.data.category as KnowledgeCategory,
-      title: parsed.data.title,
-      content: parsed.data.content,
-      sortOrder: parsed.data.sortOrder ?? 0,
-    })
-    .returning();
+  const [entry] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return scopedDb
+      .insert(shopKnowledgeTable)
+      .values({
+        storeDomain: params.data.storeDomain,
+        category: parsed.data.category as KnowledgeCategory,
+        title: parsed.data.title,
+        content: parsed.data.content,
+        sortOrder: parsed.data.sortOrder ?? 0,
+      })
+      .returning();
+  });
 
   invalidateKnowledgeCache(params.data.storeDomain);
+
+  logAuditFromRequest(req, {
+    storeDomain: params.data.storeDomain,
+    actor: "merchant",
+    action: "knowledge_created",
+    resourceType: "knowledge",
+    resourceId: String(entry.id),
+    metadata: { category: parsed.data.category, title: parsed.data.title },
+  });
+
   res.status(201).json(entry);
 });
 
@@ -91,16 +106,18 @@ router.patch("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain,
   if (parsed.data.content !== undefined) updateData.content = parsed.data.content;
   if (parsed.data.sortOrder !== undefined) updateData.sortOrder = parsed.data.sortOrder;
 
-  const [entry] = await db
-    .update(shopKnowledgeTable)
-    .set(updateData)
-    .where(
-      and(
-        eq(shopKnowledgeTable.id, params.data.knowledgeId),
-        eq(shopKnowledgeTable.storeDomain, params.data.storeDomain)
+  const [entry] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return scopedDb
+      .update(shopKnowledgeTable)
+      .set(updateData)
+      .where(
+        and(
+          eq(shopKnowledgeTable.id, params.data.knowledgeId),
+          eq(shopKnowledgeTable.storeDomain, params.data.storeDomain)
+        )
       )
-    )
-    .returning();
+      .returning();
+  });
 
   if (!entry) {
     sendError(res, 404, "Knowledge entry not found");
@@ -108,6 +125,16 @@ router.patch("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain,
   }
 
   invalidateKnowledgeCache(params.data.storeDomain);
+
+  logAuditFromRequest(req, {
+    storeDomain: params.data.storeDomain,
+    actor: "merchant",
+    action: "knowledge_updated",
+    resourceType: "knowledge",
+    resourceId: String(params.data.knowledgeId),
+    metadata: { changedFields: Object.keys(parsed.data).filter(k => parsed.data[k as keyof typeof parsed.data] !== undefined) },
+  });
+
   res.json(UpdateKnowledgeResponse.parse(entry));
 });
 
@@ -118,16 +145,27 @@ router.delete("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain
     return;
   }
 
-  await db
-    .delete(shopKnowledgeTable)
-    .where(
-      and(
-        eq(shopKnowledgeTable.id, params.data.knowledgeId),
-        eq(shopKnowledgeTable.storeDomain, params.data.storeDomain)
-      )
-    );
+  await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    await scopedDb
+      .delete(shopKnowledgeTable)
+      .where(
+        and(
+          eq(shopKnowledgeTable.id, params.data.knowledgeId),
+          eq(shopKnowledgeTable.storeDomain, params.data.storeDomain)
+        )
+      );
+  });
 
   invalidateKnowledgeCache(params.data.storeDomain);
+
+  logAuditFromRequest(req, {
+    storeDomain: params.data.storeDomain,
+    actor: "merchant",
+    action: "knowledge_deleted",
+    resourceType: "knowledge",
+    resourceId: String(params.data.knowledgeId),
+  });
+
   res.sendStatus(204);
 });
 

@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db, conversationsTable } from "@workspace/db";
+import { conversationsTable, withTenantScope } from "@workspace/db";
 import { auditOutput, logGuardEvent } from "./prompt-guard";
 
 const RETRACTION_NOTICE = "⚠️ This response was corrected — please try again.";
@@ -23,25 +23,27 @@ export function fireOutputAudit(
       console.warn(`[prompt-guard] Output flagged for retraction store="${storeDomain}" reason="${auditResult.reason}" category="${auditResult.category}"`);
 
       try {
-        const [conv] = await db
-          .select()
-          .from(conversationsTable)
-          .where(eq(conversationsTable.id, conversationId));
-
-        if (conv) {
-          const messages = (conv.messages as Array<{ role: string; content: string; id?: string }>) || [];
-          const updatedMessages = messages.map((m) => {
-            if (m.role === "assistant" && m.id === assistantMessageId && m.content === assistantResponse) {
-              return { ...m, content: RETRACTION_NOTICE, retracted: true };
-            }
-            return m;
-          });
-
-          await db
-            .update(conversationsTable)
-            .set({ messages: updatedMessages })
+        await withTenantScope(storeDomain, async (scopedDb) => {
+          const [conv] = await scopedDb
+            .select()
+            .from(conversationsTable)
             .where(eq(conversationsTable.id, conversationId));
-        }
+
+          if (conv) {
+            const messages = (conv.messages as Array<{ role: string; content: string; id?: string }>) || [];
+            const updatedMessages = messages.map((m) => {
+              if (m.role === "assistant" && m.id === assistantMessageId && m.content === assistantResponse) {
+                return { ...m, content: RETRACTION_NOTICE, retracted: true };
+              }
+              return m;
+            });
+
+            await scopedDb
+              .update(conversationsTable)
+              .set({ messages: updatedMessages })
+              .where(eq(conversationsTable.id, conversationId));
+          }
+        });
       } catch (err) {
         console.error(`[prompt-guard] Failed to retract message:`, err instanceof Error ? err.message : err);
       }

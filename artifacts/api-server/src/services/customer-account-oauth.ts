@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { lt, eq, and, gt } from "drizzle-orm";
-import { db, mcpConnectionsTable, pendingOAuthStatesTable } from "@workspace/db";
+import { db, mcpConnectionsTable, pendingOAuthStatesTable, withTenantScope } from "@workspace/db";
 import { encrypt } from "./encryption";
 import { discoverCustomerAccountMCP, resolveClientId, invalidateDiscoveryCache, type CustomerAccountDiscovery } from "./customer-account-discovery";
 import { logAnalyticsEvent } from "./analytics-logger";
@@ -129,23 +129,13 @@ export async function handleOAuthCallback(
     ? new Date(Date.now() + tokenData.expires_in * 1000)
     : new Date(Date.now() + 3600 * 1000);
 
-  await db
-    .insert(mcpConnectionsTable)
-    .values({
-      storeDomain,
-      sessionId,
-      mcpType: "customer_account",
-      clientId,
-      accessToken: encryptedAccessToken,
-      refreshToken: encryptedRefreshToken,
-      mcpApiUrl: discovery.mcp_api,
-      authorizationEndpoint: discovery.authorization_endpoint,
-      tokenEndpoint: discovery.token_endpoint,
-      expiresAt,
-    })
-    .onConflictDoUpdate({
-      target: [mcpConnectionsTable.storeDomain, mcpConnectionsTable.sessionId, mcpConnectionsTable.mcpType],
-      set: {
+  await withTenantScope(storeDomain, async (scopedDb) => {
+    await scopedDb
+      .insert(mcpConnectionsTable)
+      .values({
+        storeDomain,
+        sessionId,
+        mcpType: "customer_account",
         clientId,
         accessToken: encryptedAccessToken,
         refreshToken: encryptedRefreshToken,
@@ -153,9 +143,21 @@ export async function handleOAuthCallback(
         authorizationEndpoint: discovery.authorization_endpoint,
         tokenEndpoint: discovery.token_endpoint,
         expiresAt,
-        updatedAt: new Date(),
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: [mcpConnectionsTable.storeDomain, mcpConnectionsTable.sessionId, mcpConnectionsTable.mcpType],
+        set: {
+          clientId,
+          accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken,
+          mcpApiUrl: discovery.mcp_api,
+          authorizationEndpoint: discovery.authorization_endpoint,
+          tokenEndpoint: discovery.token_endpoint,
+          expiresAt,
+          updatedAt: new Date(),
+        },
+      });
+  });
 
   invalidateDiscoveryCache(storeDomain);
 

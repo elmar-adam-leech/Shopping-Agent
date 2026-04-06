@@ -5,3 +5,4 @@ export { chatLimiter, sessionLimiter, loginLimiter, storeMutationLimiter } from 
 export { cacheControl } from "./cache-control";
 export { requestLogger } from "./request-logger";
 export { compress } from "./compression";
+export { crossTenantGuard } from "./cross-tenant-guard";

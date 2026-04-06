@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db, shopKnowledgeTable } from "@workspace/db";
+import { shopKnowledgeTable, withTenantScope } from "@workspace/db";
 import type { ShopKnowledge } from "@workspace/db/schema";
 import { LRUCache } from "./lru-cache";
 
@@ -13,10 +13,12 @@ export async function getCachedKnowledge(storeDomain: string): Promise<ShopKnowl
   const cached = knowledgeCache.get(storeDomain);
   if (cached) return cached;
 
-  const data = await db
-    .select()
-    .from(shopKnowledgeTable)
-    .where(eq(shopKnowledgeTable.storeDomain, storeDomain));
+  const data = await withTenantScope(storeDomain, async (scopedDb) => {
+    return scopedDb
+      .select()
+      .from(shopKnowledgeTable)
+      .where(eq(shopKnowledgeTable.storeDomain, storeDomain));
+  });
 
   knowledgeCache.set(storeDomain, data);
   return data;

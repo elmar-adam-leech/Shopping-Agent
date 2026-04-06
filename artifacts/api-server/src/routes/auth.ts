@@ -6,6 +6,7 @@ import { createMerchantSession } from "../middleware";
 import { encrypt } from "../services/encryption";
 import { SHOPIFY_DOMAIN_PATTERN } from "../lib/validation";
 import { sendError } from "../lib/error-response";
+import { logAuditFromRequest } from "../services/audit-logger";
 
 const router: IRouter = Router();
 
@@ -140,6 +141,7 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
   try {
     interface TokenResponse {
       access_token: string;
+      scope?: string;
     }
 
     const tokenResponse = await fetch(`https://${shop}/admin/oauth/access_token`, {
@@ -159,11 +161,53 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
       } catch {}
       const redactedBody = errorBody.replace(/("access_token"|"api_key"|"secret")[^,}]*/gi, '$1":"[REDACTED]"');
       console.error(`[auth] Shopify token exchange failed (${tokenResponse.status}):`, redactedBody.slice(0, 500));
+      logAuditFromRequest(req, {
+        storeDomain: shop,
+        actor: "system",
+        action: "oauth_token_exchange_failed",
+        resourceType: "store",
+        resourceId: shop,
+        metadata: { status: tokenResponse.status },
+      });
       sendError(res, 500, "Failed to exchange OAuth code");
       return;
     }
 
     const tokenData = (await tokenResponse.json()) as TokenResponse;
+
+    const requiredScopes = SCOPES.split(",");
+    const grantedScopes = tokenData.scope
+      ? tokenData.scope.split(",").map(s => s.trim())
+      : [];
+
+    if (grantedScopes.length === 0) {
+      console.warn(`[auth] No scopes returned for shop="${shop}". Required: ${requiredScopes.join(", ")}`);
+      logAuditFromRequest(req, {
+        storeDomain: shop,
+        actor: "system",
+        action: "oauth_no_scopes_returned",
+        resourceType: "store",
+        resourceId: shop,
+        metadata: { requiredScopes },
+      });
+      sendError(res, 403, "No access token scopes returned. Please re-authorize with required permissions.");
+      return;
+    }
+
+    const missingScopes = requiredScopes.filter(s => !grantedScopes.includes(s));
+    if (missingScopes.length > 0) {
+      console.warn(`[auth] Insufficient scopes for shop="${shop}". Missing: ${missingScopes.join(", ")}. Granted: ${tokenData.scope}`);
+      logAuditFromRequest(req, {
+        storeDomain: shop,
+        actor: "system",
+        action: "oauth_insufficient_scopes",
+        resourceType: "store",
+        resourceId: shop,
+        metadata: { requiredScopes, grantedScopes, missingScopes },
+      });
+      sendError(res, 403, "Insufficient access token scopes. Please re-authorize with required permissions.");
+      return;
+    }
 
     const existing = await db
       .select()
@@ -171,8 +215,9 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
       .where(eq(storesTable.storeDomain, shop));
 
     const encryptedAccessToken = encrypt(tokenData.access_token);
+    const isUpdate = existing.length > 0;
 
-    if (existing.length > 0) {
+    if (isUpdate) {
       await db
         .update(storesTable)
         .set({ accessToken: encryptedAccessToken })
@@ -186,8 +231,25 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
       });
     }
 
+    logAuditFromRequest(req, {
+      storeDomain: shop,
+      actor: "merchant",
+      action: isUpdate ? "oauth_token_refreshed" : "store_created_via_oauth",
+      resourceType: "store",
+      resourceId: shop,
+      metadata: { grantedScopes: tokenData.scope },
+    });
+
     const merchantToken = await createMerchantSession(shop);
     setMerchantCookie(res, merchantToken);
+
+    logAuditFromRequest(req, {
+      storeDomain: shop,
+      actor: "merchant",
+      action: "merchant_login",
+      resourceType: "session",
+    });
+
     res.redirect(`/${encodeURIComponent(shop)}/settings`);
   } catch (err: unknown) {
     console.error("[auth] OAuth callback error:", err instanceof Error ? err.message : "Unknown error");
@@ -238,6 +300,13 @@ router.post("/auth/login", async (req, res): Promise<void> => {
 
   const merchantToken = await createMerchantSession(storeDomain);
   setMerchantCookie(res, merchantToken);
+
+  logAuditFromRequest(req, {
+    storeDomain,
+    actor: "merchant",
+    action: "merchant_dev_login",
+    resourceType: "session",
+  });
 
   res.json({ success: true, storeDomain });
 });

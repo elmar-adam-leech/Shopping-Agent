@@ -2,6 +2,8 @@ import { execSync } from "child_process";
 import app from "./app";
 import { startDbMaintenance } from "./services/db-maintenance";
 import { backfillMessageCounts } from "./services/db-backfill";
+import { pool } from "@workspace/db";
+import { applyRlsPolicies } from "./services/rls-setup";
 
 async function start() {
   try {
@@ -13,6 +15,13 @@ async function start() {
     console.log("Database migrations complete.");
   } catch (err) {
     console.error("Database migration failed:", err);
+    process.exit(1);
+  }
+
+  try {
+    await applyRlsPolicies(pool);
+  } catch (err) {
+    console.error("RLS policy migration failed:", err);
     process.exit(1);
   }
 

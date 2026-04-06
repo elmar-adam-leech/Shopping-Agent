@@ -14,9 +14,10 @@
 import crypto from "crypto";
 import { type Request, type Response, type NextFunction } from "express";
 import { eq, and, gt } from "drizzle-orm";
-import { db, sessionsTable } from "@workspace/db";
+import { sessionsTable, withTenantScope, withAdminBypass } from "@workspace/db";
 import { sendError } from "../lib/error-response";
 import { LRUCache } from "./lru-cache";
+import { logCrossTenantAttempt } from "./audit-logger";
 
 const MERCHANT_TOKEN_PREFIX = "mtkn_";
 const MERCHANT_SESSION_TTL_HOURS = 72;
@@ -50,11 +51,13 @@ export async function createMerchantSession(storeDomain: string): Promise<string
   const now = new Date();
   const expiresAt = new Date(now.getTime() + MERCHANT_SESSION_TTL_HOURS * 60 * 60 * 1000);
 
-  await db.insert(sessionsTable).values({
-    id: token,
-    storeDomain,
-    createdAt: now,
-    expiresAt,
+  await withTenantScope(storeDomain, async (scopedDb) => {
+    await scopedDb.insert(sessionsTable).values({
+      id: token,
+      storeDomain,
+      createdAt: now,
+      expiresAt,
+    });
   });
 
   return token;
@@ -73,15 +76,17 @@ async function lookupValidSession(token: string): Promise<CachedMerchantSession 
     merchantSessionCache.delete(token);
   }
 
-  const [session] = await db
-    .select()
-    .from(sessionsTable)
-    .where(
-      and(
-        eq(sessionsTable.id, token),
-        gt(sessionsTable.expiresAt, new Date())
-      )
-    );
+  const [session] = await withAdminBypass(async (scopedDb) => {
+    return scopedDb
+      .select()
+      .from(sessionsTable)
+      .where(
+        and(
+          eq(sessionsTable.id, token),
+          gt(sessionsTable.expiresAt, new Date())
+        )
+      );
+  });
 
   if (!session) return null;
 
@@ -119,7 +124,13 @@ async function validateMerchantAuthCore(
 
   if (options.requireStoreDomainParam) {
     const storeDomain = req.params.storeDomain;
-    if (storeDomain && session.storeDomain !== storeDomain) {
+    if (storeDomain && typeof storeDomain === "string" && session.storeDomain !== storeDomain) {
+      logCrossTenantAttempt(req, {
+        storeDomain: session.storeDomain,
+        attemptedResource: "store",
+        attemptedResourceId: storeDomain,
+        ownerStoreDomain: session.storeDomain,
+      });
       sendError(res, 403, "Access denied: token does not match store");
       return;
     }

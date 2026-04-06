@@ -11,7 +11,7 @@
 
 import { type Request, type Response, type NextFunction } from "express";
 import { eq, and, gt } from "drizzle-orm";
-import { db, sessionsTable } from "@workspace/db";
+import { sessionsTable, withTenantScope } from "@workspace/db";
 import { LRUCache } from "./lru-cache";
 import { sendError } from "../lib/error-response";
 
@@ -72,17 +72,19 @@ export async function validateSession(
 
   let session;
   try {
-    const [result] = await db
-      .select()
-      .from(sessionsTable)
-      .where(
-        and(
-          eq(sessionsTable.id, sessionId),
-          eq(sessionsTable.storeDomain, storeDomain),
-          gt(sessionsTable.expiresAt, new Date())
-        )
-      );
-    session = result;
+    session = await withTenantScope(storeDomain, async (scopedDb) => {
+      const [result] = await scopedDb
+        .select()
+        .from(sessionsTable)
+        .where(
+          and(
+            eq(sessionsTable.id, sessionId),
+            eq(sessionsTable.storeDomain, storeDomain),
+            gt(sessionsTable.expiresAt, new Date())
+          )
+        );
+      return result;
+    });
   } catch (err) {
     console.error(`[session-validator] Database error validating session for store="${storeDomain}":`, err instanceof Error ? err.message : err);
     sendError(res, 503, "Service temporarily unavailable. Please try again in a moment.");

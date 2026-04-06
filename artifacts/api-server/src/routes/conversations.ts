@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, desc } from "drizzle-orm";
-import { db, conversationsTable } from "@workspace/db";
+import { conversationsTable, withTenantScope } from "@workspace/db";
 import {
   ListConversationsParams,
   ListConversationsQueryParams,
@@ -43,18 +43,20 @@ router.get("/stores/:storeDomain/conversations", validateStoreDomain, validateSe
   const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 50, 1), 200);
   const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
 
-  const conversations = await db
-    .select()
-    .from(conversationsTable)
-    .where(
-      and(
-        eq(conversationsTable.storeDomain, params.data.storeDomain),
-        eq(conversationsTable.sessionId, query.data.sessionId)
+  const conversations = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return scopedDb
+      .select()
+      .from(conversationsTable)
+      .where(
+        and(
+          eq(conversationsTable.storeDomain, params.data.storeDomain),
+          eq(conversationsTable.sessionId, query.data.sessionId)
+        )
       )
-    )
-    .orderBy(desc(conversationsTable.updatedAt))
-    .limit(limit)
-    .offset(offset);
+      .orderBy(desc(conversationsTable.updatedAt))
+      .limit(limit)
+      .offset(offset);
+  });
 
   res.json(ListConversationsResponse.parse(conversations.map(convToResponse)));
 });
@@ -72,16 +74,19 @@ router.get("/stores/:storeDomain/conversations/:conversationId", validateStoreDo
     return;
   }
 
-  const [conv] = await db
-    .select()
-    .from(conversationsTable)
-    .where(
-      and(
-        eq(conversationsTable.id, params.data.conversationId),
-        eq(conversationsTable.storeDomain, params.data.storeDomain),
-        eq(conversationsTable.sessionId, sessionId)
-      )
-    );
+  const conv = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    const [result] = await scopedDb
+      .select()
+      .from(conversationsTable)
+      .where(
+        and(
+          eq(conversationsTable.id, params.data.conversationId),
+          eq(conversationsTable.storeDomain, params.data.storeDomain),
+          eq(conversationsTable.sessionId, sessionId)
+        )
+      );
+    return result;
+  });
 
   if (!conv) {
     sendError(res, 404, "Conversation not found");
@@ -104,16 +109,19 @@ router.delete("/stores/:storeDomain/conversations/:conversationId", validateStor
     return;
   }
 
-  const [deleted] = await db
-    .delete(conversationsTable)
-    .where(
-      and(
-        eq(conversationsTable.id, params.data.conversationId),
-        eq(conversationsTable.storeDomain, params.data.storeDomain),
-        eq(conversationsTable.sessionId, sessionId)
+  const deleted = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    const [result] = await scopedDb
+      .delete(conversationsTable)
+      .where(
+        and(
+          eq(conversationsTable.id, params.data.conversationId),
+          eq(conversationsTable.storeDomain, params.data.storeDomain),
+          eq(conversationsTable.sessionId, sessionId)
+        )
       )
-    )
-    .returning({ id: conversationsTable.id });
+      .returning({ id: conversationsTable.id });
+    return result;
+  });
 
   if (!deleted) {
     sendError(res, 404, "Conversation not found");

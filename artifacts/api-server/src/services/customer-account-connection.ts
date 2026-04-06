@@ -1,5 +1,5 @@
 import { eq, and } from "drizzle-orm";
-import { db, mcpConnectionsTable } from "@workspace/db";
+import { mcpConnectionsTable, withTenantScope } from "@workspace/db";
 import type { McpConnection } from "@workspace/db/schema";
 import { encrypt, decrypt } from "./encryption";
 import { invalidateDiscoveryCache } from "./customer-account-discovery";
@@ -45,16 +45,18 @@ export async function refreshTokenIfNeeded(connection: McpConnection): Promise<M
     ? new Date(Date.now() + tokenData.expires_in * 1000)
     : new Date(Date.now() + 3600 * 1000);
 
-  const [updated] = await db
-    .update(mcpConnectionsTable)
-    .set({
-      accessToken: encryptedAccessToken,
-      refreshToken: encryptedRefreshToken,
-      expiresAt,
-      updatedAt: new Date(),
-    })
-    .where(eq(mcpConnectionsTable.id, connection.id))
-    .returning();
+  const [updated] = await withTenantScope(connection.storeDomain, async (scopedDb) => {
+    return scopedDb
+      .update(mcpConnectionsTable)
+      .set({
+        accessToken: encryptedAccessToken,
+        refreshToken: encryptedRefreshToken,
+        expiresAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(mcpConnectionsTable.id, connection.id))
+      .returning();
+  });
 
   await logAnalyticsEvent(connection.storeDomain, "mcp_customer_account_refresh", connection.sessionId);
 
@@ -65,16 +67,18 @@ export async function getActiveConnection(
   storeDomain: string,
   sessionId: string,
 ): Promise<McpConnection | null> {
-  const [connection] = await db
-    .select()
-    .from(mcpConnectionsTable)
-    .where(
-      and(
-        eq(mcpConnectionsTable.storeDomain, storeDomain),
-        eq(mcpConnectionsTable.sessionId, sessionId),
-        eq(mcpConnectionsTable.mcpType, "customer_account"),
-      )
-    );
+  const [connection] = await withTenantScope(storeDomain, async (scopedDb) => {
+    return scopedDb
+      .select()
+      .from(mcpConnectionsTable)
+      .where(
+        and(
+          eq(mcpConnectionsTable.storeDomain, storeDomain),
+          eq(mcpConnectionsTable.sessionId, sessionId),
+          eq(mcpConnectionsTable.mcpType, "customer_account"),
+        )
+      );
+  });
 
   if (!connection) return null;
 
@@ -90,16 +94,18 @@ export async function revokeConnection(
   storeDomain: string,
   sessionId: string,
 ): Promise<boolean> {
-  const deleted = await db
-    .delete(mcpConnectionsTable)
-    .where(
-      and(
-        eq(mcpConnectionsTable.storeDomain, storeDomain),
-        eq(mcpConnectionsTable.sessionId, sessionId),
-        eq(mcpConnectionsTable.mcpType, "customer_account"),
+  const deleted = await withTenantScope(storeDomain, async (scopedDb) => {
+    return scopedDb
+      .delete(mcpConnectionsTable)
+      .where(
+        and(
+          eq(mcpConnectionsTable.storeDomain, storeDomain),
+          eq(mcpConnectionsTable.sessionId, sessionId),
+          eq(mcpConnectionsTable.mcpType, "customer_account"),
+        )
       )
-    )
-    .returning();
+      .returning();
+  });
 
   invalidateDiscoveryCache(storeDomain);
 

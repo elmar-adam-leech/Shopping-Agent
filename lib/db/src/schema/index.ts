@@ -6,3 +6,4 @@ export * from "./analytics";
 export * from "./sessions";
 export * from "./pending-oauth-states";
 export * from "./mcp-connections";
+export * from "./audit-logs";
