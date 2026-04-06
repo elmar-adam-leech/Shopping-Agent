@@ -25,8 +25,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 const isProduction = process.env.NODE_ENV === "production";
 
 app.use(cookieParser());
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+app.use(express.json({ limit: "8mb" }));
+app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 
 app.use(requestLogger);
 

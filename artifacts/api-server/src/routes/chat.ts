@@ -20,6 +20,7 @@ import { eq, and } from "drizzle-orm";
 import { db, userPreferencesTable } from "@workspace/db";
 import { type UserPreferencesContext } from "../services/system-prompt";
 import { extractAndSavePreferences } from "../services/preference-extractor";
+import { describeImageWithVision, isVisionCapable, validateImageBase64 } from "../services/vision-describe";
 
 const MAX_USER_MESSAGE_LENGTH = 10_000;
 
@@ -102,9 +103,53 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       parsed.data.message
     );
 
-    const truncatedMessage = parsed.data.message.length > MAX_USER_MESSAGE_LENGTH
+    let truncatedMessage = parsed.data.message.length > MAX_USER_MESSAGE_LENGTH
       ? parsed.data.message.slice(0, MAX_USER_MESSAGE_LENGTH)
       : parsed.data.message;
+
+    if (parsed.data.imageBase64) {
+      const imageValidation = validateImageBase64(parsed.data.imageBase64);
+      if (!imageValidation.valid) {
+        safeSend(`data: ${JSON.stringify({ type: "conversation_id", data: conversation.id })}\n\n`);
+        safeSend(`data: ${JSON.stringify({ type: "error", data: imageValidation.error })}\n\n`);
+        res.end();
+        return;
+      }
+
+      if (!isVisionCapable(store.provider)) {
+        safeSend(`data: ${JSON.stringify({ type: "conversation_id", data: conversation.id })}\n\n`);
+        safeSend(`data: ${JSON.stringify({ type: "error", data: "Visual search is not available with your current AI provider. Please configure an OpenAI or Gemini model to use image search." })}\n\n`);
+        res.end();
+        return;
+      }
+
+      let decryptedKey: string;
+      try {
+        decryptedKey = decrypt(store.apiKey);
+      } catch {
+        safeSend(`data: ${JSON.stringify({ type: "error", data: "API key configuration error." })}\n\n`);
+        res.end();
+        return;
+      }
+
+      try {
+        const imageDescription = await describeImageWithVision(
+          store.provider,
+          decryptedKey,
+          store.model,
+          parsed.data.imageBase64,
+          truncatedMessage
+        );
+        truncatedMessage = `[Visual Search] The user uploaded an image. Image description: ${imageDescription}\n\nUser's message: ${truncatedMessage}`;
+        console.log(`[chat] Vision description generated for store="${store.storeDomain}"`);
+      } catch (err) {
+        console.error(`[chat] Vision description failed for store="${store.storeDomain}":`, err instanceof Error ? err.message : err);
+        safeSend(`data: ${JSON.stringify({ type: "conversation_id", data: conversation.id })}\n\n`);
+        safeSend(`data: ${JSON.stringify({ type: "error", data: "Failed to analyze the uploaded image. Please try again or describe what you're looking for instead." })}\n\n`);
+        res.end();
+        return;
+      }
+    }
 
     const guardSensitivity = (store.guardSensitivity ?? "medium") as GuardSensitivity;
     const blockedTopics = store.blockedTopics ?? [];

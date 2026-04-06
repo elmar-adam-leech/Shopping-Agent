@@ -231,10 +231,14 @@ router.get("/stores/:storeDomain/public", async (req, res): Promise<void> => {
     return;
   }
 
+  const VISION_CAPABLE_PROVIDERS = new Set(["openai", "gemini"]);
+  const visionSupported = VISION_CAPABLE_PROVIDERS.has(store.provider);
+
   res.json({
     storeDomain: store.storeDomain,
     chatEnabled: store.chatEnabled,
     welcomeMessage: store.welcomeMessage ?? null,
+    visionSupported,
   });
 });
 

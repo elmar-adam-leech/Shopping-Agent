@@ -76,6 +76,7 @@ export default function ChatPage() {
     setInput,
     messagesEndRef,
     handleSubmit,
+    handleImageSubmit,
     loadMessages,
     messages,
     error,
@@ -257,7 +258,14 @@ export default function ChatPage() {
               )}
             </div>
 
-            <ChatComposer input={input} isLoading={isLoading} onInputChange={setInput} onSubmit={handleSubmit} />
+            <ChatComposer
+              input={input}
+              isLoading={isLoading}
+              onInputChange={setInput}
+              onSubmit={handleSubmit}
+              onImageSubmit={handleImageSubmit}
+              visionSupported={storePublic?.visionSupported}
+            />
           </div>
 
           <CartPanel />

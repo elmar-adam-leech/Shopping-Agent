@@ -18,7 +18,7 @@ import { sendError } from "../lib/error-response";
 
 interface CachedStoreValidation {
   storeDomain: string;
-  provider: "openai" | "anthropic" | "xai";
+  provider: "openai" | "anthropic" | "xai" | "gemini";
   model: string;
   ucpCompliant: boolean;
   chatEnabled: boolean;

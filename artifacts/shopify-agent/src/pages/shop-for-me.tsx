@@ -7,6 +7,8 @@ import { useSession } from "@/hooks/use-session";
 import { useChatStream } from "@/hooks/use-chat-stream";
 import { ToolBadge } from "@/components/ui/tool-badge";
 import { MarkdownContent } from "@/components/ui/markdown-content";
+import { VoiceInputButton } from "@/components/chat/VoiceInputButton";
+import { ImageUploadButton } from "@/components/chat/ImageUploadButton";
 
 interface StorePublicInfo {
   storeDomain: string;
@@ -37,6 +39,8 @@ export default function ShopForMePage() {
   });
 
   const [input, setInput] = useState("");
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [visionSupported, setVisionSupported] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -47,7 +51,10 @@ export default function ShopForMePage() {
         if (!res.ok) throw new Error("Not found");
         return res.json();
       })
-      .then((data) => setStoreInfo(data))
+      .then((data) => {
+        setStoreInfo(data);
+        setVisionSupported(data.visionSupported ?? false);
+      })
       .catch(() => setStoreNotFound(true));
   }, [storeDomain]);
 
@@ -63,12 +70,20 @@ export default function ShopForMePage() {
   }, [messages, isLoading]);
 
   const handleSend = useCallback(() => {
+    if (imagePreview) {
+      const msg = input.trim() || "Find products similar to this image";
+      setInput("");
+      setImagePreview(null);
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      sendMessage(msg, 0, imagePreview);
+      return;
+    }
     if (!input.trim() || isLoading || !sessionId) return;
     const msg = input;
     setInput("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     sendMessage(msg);
-  }, [input, isLoading, sessionId, sendMessage]);
+  }, [input, isLoading, sessionId, sendMessage, imagePreview]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -176,7 +191,33 @@ export default function ShopForMePage() {
 
       <div className="border-t border-gray-100 bg-white sticky bottom-0">
         <div className="max-w-3xl mx-auto px-4 py-3">
+          {imagePreview && (
+            <div className="mb-2 flex items-center gap-2">
+              <div className="relative w-14 h-14 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
+                <img src={imagePreview} alt="Image to search" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setImagePreview(null)}
+                  className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 text-xs"
+                  aria-label="Remove image"
+                >
+                  ✕
+                </button>
+              </div>
+              <span className="text-xs text-gray-500">Image attached — send to search for similar products</span>
+            </div>
+          )}
           <div className="flex items-end gap-2 bg-gray-50 rounded-2xl border border-gray-200 p-2 focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
+            <div className="flex items-center gap-1 shrink-0">
+              <VoiceInputButton onTranscript={(text) => setInput(text)} disabled={isLoading} />
+              <ImageUploadButton
+                onImageSelected={(base64) => setImagePreview(base64)}
+                onImageCleared={() => setImagePreview(null)}
+                imagePreview={null}
+                disabled={isLoading}
+                visionSupported={visionSupported}
+              />
+            </div>
             <textarea
               ref={textareaRef}
               value={input}
@@ -186,13 +227,13 @@ export default function ShopForMePage() {
                 e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
               }}
               onKeyDown={handleKeyDown}
-              placeholder="Ask me anything about our products..."
+              placeholder={imagePreview ? "Add a description (optional)..." : "Ask me anything about our products..."}
               rows={1}
               className="flex-1 resize-none bg-transparent border-none outline-none text-sm text-gray-900 placeholder:text-gray-400 min-h-[36px] py-2 px-2"
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim() || isLoading || !sessionId}
+              disabled={imagePreview ? isLoading || !sessionId : !input.trim() || isLoading || !sessionId}
               className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
             >
               {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

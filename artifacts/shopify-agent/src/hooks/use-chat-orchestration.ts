@@ -64,6 +64,15 @@ export function useChatOrchestration(options: UseChatOrchestrationOptions) {
     [input, isLoading, sendMessage],
   );
 
+  const handleImageSubmit = useCallback(
+    (imageBase64: string, message: string) => {
+      if (isLoading) return;
+      sendMessage(message, 0, imageBase64);
+      setInput("");
+    },
+    [isLoading, sendMessage],
+  );
+
   return {
     ...chatStream,
     displayMessages,
@@ -71,6 +80,7 @@ export function useChatOrchestration(options: UseChatOrchestrationOptions) {
     setInput,
     messagesEndRef,
     handleSubmit,
+    handleImageSubmit,
     error,
   };
 }

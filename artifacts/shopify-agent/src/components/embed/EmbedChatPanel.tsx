@@ -7,6 +7,7 @@ import { ChatLoadingIndicator } from "@/components/chat/ChatLoadingIndicator";
 import { Sparkles } from "lucide-react";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { AgentAvatar } from "@/components/ui/agent-avatar";
+import { useGetStorePublic } from "@workspace/api-client-react";
 
 interface EmbedChatPanelProps {
   storeDomain: string;
@@ -24,6 +25,7 @@ export function EmbedChatPanel({
   initialMessage,
 }: EmbedChatPanelProps) {
   const { sessionId, sessionError, chatDisabled, refreshSession } = useSession(storeDomain);
+  const { data: storePublic } = useGetStorePublic(storeDomain);
   const [conversationId, setConversationId] = useState<number | null>(null);
 
   const context = productHandle || collectionHandle || cartToken
@@ -37,6 +39,7 @@ export function EmbedChatPanel({
     setInput,
     messagesEndRef,
     handleSubmit,
+    handleImageSubmit,
     messages,
     error,
   } = useChatOrchestration({
@@ -96,7 +99,7 @@ export function EmbedChatPanel({
         )}
       </div>
 
-      <ChatComposer input={input} isLoading={isLoading} onInputChange={setInput} onSubmit={handleSubmit} />
+      <ChatComposer input={input} isLoading={isLoading} onInputChange={setInput} onSubmit={handleSubmit} onImageSubmit={handleImageSubmit} visionSupported={storePublic?.visionSupported} />
     </div>
   );
 }

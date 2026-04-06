@@ -653,9 +653,13 @@ components:
           type: boolean
         welcomeMessage:
           type: ["string", "null"]
+        visionSupported:
+          type: boolean
+          description: Whether the store's LLM provider supports vision/image input
       required:
         - storeDomain
         - chatEnabled
+        - visionSupported
 
     CreateStoreBody:
       type: object
@@ -799,6 +803,9 @@ components:
           type: ["integer", "null"]
         message:
           type: string
+        imageBase64:
+          type: string
+          description: Base64-encoded image data URL for visual product search
         context:
           $ref: "#/components/schemas/ChatContext"
       required:

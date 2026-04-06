@@ -93,7 +93,7 @@ export function useChatStream({
     };
   }, []);
 
-  const sendMessage = useCallback(async (content: string, retryCount = 0) => {
+  const sendMessage = useCallback(async (content: string, retryCount = 0, imageBase64?: string) => {
     const currentSessionId = sessionIdRef.current;
     const currentStoreDomain = storeDomainRef.current;
     const currentContext = contextRef.current;
@@ -133,6 +133,7 @@ export function useChatStream({
           sessionId: currentSessionId,
           conversationId: currentConversationId,
           message: content,
+          ...(imageBase64 ? { imageBase64 } : {}),
           ...(currentContext ? { context: currentContext } : {}),
         }),
         signal: controller.signal
