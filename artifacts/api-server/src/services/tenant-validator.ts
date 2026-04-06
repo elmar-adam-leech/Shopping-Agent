@@ -11,7 +11,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { db, storesTable } from "@workspace/db";
 import type { Store } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { LRUCache } from "./lru-cache";
 import { SHOPIFY_DOMAIN_PATTERN } from "../lib/validation";
 import { sendError } from "../lib/error-response";
@@ -65,7 +65,7 @@ export async function getCachedStorePublicInfo(storeDomain: string): Promise<Cac
   const [store] = await db
     .select()
     .from(storesTable)
-    .where(eq(storesTable.storeDomain, storeDomain));
+    .where(and(eq(storesTable.storeDomain, storeDomain), isNull(storesTable.deletedAt)));
 
   if (store) {
     const entry = toValidationEntry(store);
@@ -83,7 +83,7 @@ export async function loadFullStore(storeDomain: string): Promise<Store | null> 
   const [store] = await db
     .select()
     .from(storesTable)
-    .where(eq(storesTable.storeDomain, storeDomain));
+    .where(and(eq(storesTable.storeDomain, storeDomain), isNull(storesTable.deletedAt)));
 
   if (store) {
     storeValidationCache.set(storeDomain, toValidationEntry(store));

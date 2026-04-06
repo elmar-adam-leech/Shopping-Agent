@@ -332,6 +332,57 @@ paths:
         "204":
           description: Deleted
 
+  /stores/{storeDomain}/knowledge/deleted:
+    get:
+      operationId: listDeletedKnowledge
+      tags: [knowledge]
+      summary: List recently deleted knowledge entries
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of deleted knowledge entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KnowledgeEntry"
+
+  /stores/{storeDomain}/knowledge/{knowledgeId}/restore:
+    patch:
+      operationId: restoreKnowledge
+      tags: [knowledge]
+      summary: Restore a soft-deleted knowledge entry
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: knowledgeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Knowledge entry restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeEntry"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /stores/{storeDomain}/chat:
     post:
       operationId: sendChat
@@ -430,6 +481,62 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /stores/{storeDomain}/conversations/deleted:
+    get:
+      operationId: listDeletedConversations
+      tags: [conversations]
+      summary: List recently deleted conversations
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: sessionId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of deleted conversations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Conversation"
+
+  /stores/{storeDomain}/conversations/{conversationId}/restore:
+    patch:
+      operationId: restoreConversation
+      tags: [conversations]
+      summary: Restore a soft-deleted conversation
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /stores/{storeDomain}/preferences:
     get:

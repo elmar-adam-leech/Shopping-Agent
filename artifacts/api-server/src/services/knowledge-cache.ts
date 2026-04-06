@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { shopKnowledgeTable, withTenantScope } from "@workspace/db";
 import type { ShopKnowledge } from "@workspace/db/schema";
 import { LRUCache } from "./lru-cache";
@@ -17,7 +17,7 @@ export async function getCachedKnowledge(storeDomain: string): Promise<ShopKnowl
     return scopedDb
       .select()
       .from(shopKnowledgeTable)
-      .where(eq(shopKnowledgeTable.storeDomain, storeDomain));
+      .where(and(eq(shopKnowledgeTable.storeDomain, storeDomain), isNull(shopKnowledgeTable.deletedAt)));
   });
 
   knowledgeCache.set(storeDomain, data);

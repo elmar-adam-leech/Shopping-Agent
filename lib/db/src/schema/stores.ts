@@ -57,6 +57,7 @@ export const storesTable = pgTable("stores", {
   recommendationStrategy: recommendationStrategyEnum("recommendation_strategy").notNull().default("personalized"),
   dataRetentionDays: integer("data_retention_days").notNull().default(90),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
 export const insertStoreSchema = createInsertSchema(storesTable);

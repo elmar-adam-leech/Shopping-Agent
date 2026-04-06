@@ -1,5 +1,5 @@
-import { memo } from "react";
-import { Plus, Trash2, MessageSquare } from "lucide-react";
+import { memo, useState } from "react";
+import { Plus, Trash2, MessageSquare, RotateCcw, Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@workspace/api-client-react";
@@ -19,6 +19,8 @@ interface ConversationSidebarProps {
   onDeleteConversation: (convId: number) => void;
   hasMore?: boolean;
   onLoadMore?: () => void;
+  deletedConversations?: ConversationItem[];
+  onRestoreConversation?: (convId: number) => void;
 }
 
 export const ConversationSidebar = memo(function ConversationSidebar({
@@ -29,7 +31,10 @@ export const ConversationSidebar = memo(function ConversationSidebar({
   onDeleteConversation,
   hasMore,
   onLoadMore,
+  deletedConversations,
+  onRestoreConversation,
 }: ConversationSidebarProps) {
+  const [showDeleted, setShowDeleted] = useState(false);
   return (
     <nav aria-label="Conversation history" className="w-64 border-r border-border/50 bg-card/50 flex flex-col h-full hidden md:flex">
       <div className="p-4 border-b border-border/50">
@@ -78,6 +83,39 @@ export const ConversationSidebar = memo(function ConversationSidebar({
             >
               Load more...
             </button>
+          </li>
+        )}
+        {deletedConversations && deletedConversations.length > 0 && (
+          <li className="list-none pt-2 border-t border-border/50 mt-2">
+            <button
+              onClick={() => setShowDeleted(!showDeleted)}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-lg"
+            >
+              <Archive className="w-3 h-3" />
+              Recently Deleted ({deletedConversations.length})
+            </button>
+            {showDeleted && (
+              <ul className="space-y-1 mt-1">
+                {deletedConversations.map((conv) => (
+                  <li
+                    key={conv.id}
+                    className="flex items-center gap-2 rounded-xl text-sm text-muted-foreground/60 px-3 py-2"
+                  >
+                    <MessageSquare className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate flex-1 line-through">{conv.title}</span>
+                    {onRestoreConversation && (
+                      <button
+                        onClick={() => onRestoreConversation(conv.id)}
+                        className="text-primary hover:text-primary/80 transition-colors focus:outline-none focus:ring-2 focus:ring-ring rounded"
+                        aria-label={`Restore conversation: ${conv.title}`}
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </li>
         )}
       </ul>

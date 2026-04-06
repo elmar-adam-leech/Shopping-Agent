@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import crypto from "crypto";
 import { db, storesTable, pendingOAuthStatesTable } from "@workspace/db";
-import { eq, lt, gt, and, sql } from "drizzle-orm";
+import { eq, lt, gt, and, sql, isNull } from "drizzle-orm";
 import { createMerchantSession } from "../middleware";
 import { encrypt } from "../services/encryption";
 import { SHOPIFY_DOMAIN_PATTERN } from "../lib/validation";
@@ -212,7 +212,7 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
     const existing = await db
       .select()
       .from(storesTable)
-      .where(eq(storesTable.storeDomain, shop));
+      .where(and(eq(storesTable.storeDomain, shop), isNull(storesTable.deletedAt)));
 
     const encryptedAccessToken = encrypt(tokenData.access_token);
     const isUpdate = existing.length > 0;
@@ -291,7 +291,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   const [store] = await db
     .select()
     .from(storesTable)
-    .where(eq(storesTable.storeDomain, storeDomain));
+    .where(and(eq(storesTable.storeDomain, storeDomain), isNull(storesTable.deletedAt)));
 
   if (!store) {
     sendError(res, 404, "Store not found");

@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { sessionsTable, conversationsTable, withAdminBypass } from "@workspace/db";
 import { logCrossTenantAttempt } from "../services/audit-logger";
 import { sendError } from "../lib/error-response";
@@ -61,7 +61,7 @@ export async function crossTenantGuard(
         const [result] = await scopedDb
           .select({ sd: conversationsTable.storeDomain })
           .from(conversationsTable)
-          .where(eq(conversationsTable.id, conversationId));
+          .where(and(eq(conversationsTable.id, conversationId), isNull(conversationsTable.deletedAt)));
         return result;
       });
 

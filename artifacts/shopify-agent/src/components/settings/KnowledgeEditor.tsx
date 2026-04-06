@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useListKnowledge, useCreateKnowledge, useDeleteKnowledge, useUpdateKnowledge, getListKnowledgeQueryKey } from "@workspace/api-client-react";
+import { useListKnowledge, useCreateKnowledge, useDeleteKnowledge, useUpdateKnowledge, useListDeletedKnowledge, useRestoreKnowledge, getListKnowledgeQueryKey, getListDeletedKnowledgeQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Trash2, Plus, ArrowUp, ArrowDown, Edit2, Check, X, BookOpen } from "lucide-react";
+import { Trash2, Plus, ArrowUp, ArrowDown, Edit2, Check, X, BookOpen, RotateCcw, Archive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,7 +41,12 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
   const { mutateAsync: createKnowledge, isPending: creating } = useCreateKnowledge();
   const { mutateAsync: deleteKnowledge } = useDeleteKnowledge();
   const { mutateAsync: updateKnowledge } = useUpdateKnowledge();
+  const { data: deletedList, refetch: refetchDeleted } = useListDeletedKnowledge(storeDomain, {
+    query: { queryKey: getListDeletedKnowledgeQueryKey(storeDomain), staleTime: 60_000 },
+  });
+  const { mutateAsync: restoreKnowledge } = useRestoreKnowledge();
   const { toast } = useToast();
+  const [showDeleted, setShowDeleted] = useState(false);
 
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
@@ -85,10 +90,22 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
     try {
       await deleteKnowledge({ storeDomain, knowledgeId: id });
       refetch();
-      toast({ title: "Deleted" });
+      refetchDeleted();
+      toast({ title: "Moved to Recently Deleted" });
     } catch {
       queryClient.setQueryData(knowledgeQueryKey, previousData);
       toast({ title: "Failed to delete", variant: "destructive" });
+    }
+  };
+
+  const handleRestore = async (id: number) => {
+    try {
+      await restoreKnowledge({ storeDomain, knowledgeId: id });
+      refetch();
+      refetchDeleted();
+      toast({ title: "Restored" });
+    } catch {
+      toast({ title: "Failed to restore", variant: "destructive" });
     }
   };
 
@@ -314,6 +331,42 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
             );
           })}
         </div>
+
+        {deletedList && (deletedList as KnowledgeEntry[]).length > 0 && (
+          <div className="space-y-4">
+            <button
+              onClick={() => setShowDeleted(!showDeleted)}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Archive className="w-4 h-4" />
+              Recently Deleted ({(deletedList as KnowledgeEntry[]).length})
+              <span className="text-xs">{showDeleted ? "Hide" : "Show"}</span>
+            </button>
+            {showDeleted && (
+              <div className="grid gap-3">
+                {(deletedList as KnowledgeEntry[]).map((item) => (
+                  <div key={item.id} className="flex gap-4 p-4 rounded-xl bg-destructive/5 border border-destructive/20">
+                    <div className="flex-1 opacity-60">
+                      <h5 className="font-semibold text-sm mb-1">{item.title}</h5>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{item.content}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {CATEGORIES.find(c => c.id === item.category)?.label ?? item.category}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRestore(item.id)}
+                      className="text-primary hover:text-primary hover:bg-primary/10"
+                    >
+                      <RotateCcw className="w-4 h-4 mr-1" /> Restore
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
     </section>

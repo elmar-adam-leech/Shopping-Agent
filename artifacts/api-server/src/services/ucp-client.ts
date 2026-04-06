@@ -2,7 +2,7 @@ import type { MCPTool } from "./mcp-client";
 import { LRUCache } from "./lru-cache";
 import { db } from "@workspace/db";
 import { storesTable, type UCPCapabilitiesJson } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 
 export interface UCPDiscoveryDocument {
   version: string;
@@ -178,7 +178,7 @@ async function loadFromDB(storeDomain: string): Promise<{ caps: UCPCapabilitiesJ
         ucpRefreshIntervalMs: storesTable.ucpRefreshIntervalMs,
       })
       .from(storesTable)
-      .where(eq(storesTable.storeDomain, storeDomain));
+      .where(and(eq(storesTable.storeDomain, storeDomain), isNull(storesTable.deletedAt)));
 
     if (!row) return { caps: null, lastDiscovered: null, refreshInterval: DEFAULT_REFRESH_INTERVAL_MS };
 

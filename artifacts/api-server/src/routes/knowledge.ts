@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull, isNotNull } from "drizzle-orm";
 import { shopKnowledgeTable, withTenantScope } from "@workspace/db";
 import type { ShopKnowledge } from "@workspace/db/schema";
 import {
@@ -12,6 +12,8 @@ import {
   ListKnowledgeQueryParams,
   ListKnowledgeResponse,
   DeleteKnowledgeParams,
+  ListDeletedKnowledgeParams,
+  RestoreKnowledgeParams,
 } from "@workspace/api-zod";
 import { validateStoreDomain, validateMerchantAuth } from "../middleware";
 import { invalidateKnowledgeCache } from "../services/knowledge-cache";
@@ -31,7 +33,7 @@ router.get("/stores/:storeDomain/knowledge", validateStoreDomain, validateMercha
 
   const query = ListKnowledgeQueryParams.safeParse(req.query);
 
-  const conditions = [eq(shopKnowledgeTable.storeDomain, params.data.storeDomain)];
+  const conditions = [eq(shopKnowledgeTable.storeDomain, params.data.storeDomain), isNull(shopKnowledgeTable.deletedAt)];
   if (query.success && query.data.category) {
     conditions.push(eq(shopKnowledgeTable.category, query.data.category as KnowledgeCategory));
   }
@@ -147,11 +149,13 @@ router.delete("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain
 
   await withTenantScope(params.data.storeDomain, async (scopedDb) => {
     await scopedDb
-      .delete(shopKnowledgeTable)
+      .update(shopKnowledgeTable)
+      .set({ deletedAt: new Date() })
       .where(
         and(
           eq(shopKnowledgeTable.id, params.data.knowledgeId),
-          eq(shopKnowledgeTable.storeDomain, params.data.storeDomain)
+          eq(shopKnowledgeTable.storeDomain, params.data.storeDomain),
+          isNull(shopKnowledgeTable.deletedAt)
         )
       );
   });
@@ -167,6 +171,69 @@ router.delete("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain
   });
 
   res.sendStatus(204);
+});
+
+router.get("/stores/:storeDomain/knowledge/deleted", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
+  const params = ListDeletedKnowledgeParams.safeParse(req.params);
+  if (!params.success) {
+    sendZodError(res, params.error, "GET /stores/:storeDomain/knowledge/deleted", req.params);
+    return;
+  }
+
+  const entries = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return scopedDb
+      .select()
+      .from(shopKnowledgeTable)
+      .where(
+        and(
+          eq(shopKnowledgeTable.storeDomain, params.data.storeDomain),
+          isNotNull(shopKnowledgeTable.deletedAt)
+        )
+      )
+      .orderBy(shopKnowledgeTable.deletedAt);
+  });
+
+  res.json(entries);
+});
+
+router.patch("/stores/:storeDomain/knowledge/:knowledgeId/restore", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
+  const params = RestoreKnowledgeParams.safeParse(req.params);
+  if (!params.success) {
+    sendZodError(res, params.error, "PATCH /stores/:storeDomain/knowledge/:knowledgeId/restore", req.params);
+    return;
+  }
+
+  const restored = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    const [result] = await scopedDb
+      .update(shopKnowledgeTable)
+      .set({ deletedAt: null })
+      .where(
+        and(
+          eq(shopKnowledgeTable.id, params.data.knowledgeId),
+          eq(shopKnowledgeTable.storeDomain, params.data.storeDomain),
+          isNotNull(shopKnowledgeTable.deletedAt)
+        )
+      )
+      .returning();
+    return result;
+  });
+
+  if (!restored) {
+    sendError(res, 404, "Deleted knowledge entry not found");
+    return;
+  }
+
+  invalidateKnowledgeCache(params.data.storeDomain);
+
+  logAuditFromRequest(req, {
+    storeDomain: params.data.storeDomain,
+    actor: "merchant",
+    action: "knowledge_restored",
+    resourceType: "knowledge",
+    resourceId: String(params.data.knowledgeId),
+  });
+
+  res.json(restored);
 });
 
 export default router;

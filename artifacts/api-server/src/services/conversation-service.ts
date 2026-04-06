@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull } from "drizzle-orm";
 import { conversationsTable, withTenantScope } from "@workspace/db";
 import type { Conversation } from "@workspace/db/schema";
 import { logAnalyticsEvent } from "./analytics-logger";
@@ -33,7 +33,8 @@ export async function loadOrCreateConversation(
           and(
             eq(conversationsTable.id, conversationId),
             eq(conversationsTable.storeDomain, storeDomain),
-            eq(conversationsTable.sessionId, sessionId)
+            eq(conversationsTable.sessionId, sessionId),
+            isNull(conversationsTable.deletedAt)
           )
         );
       if (conv) {

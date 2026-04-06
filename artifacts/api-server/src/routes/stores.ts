@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request } from "express";
-import { eq } from "drizzle-orm";
-import { db, storesTable, sessionsTable, withAdminBypass } from "@workspace/db";
+import { eq, and, isNull } from "drizzle-orm";
+import { db, storesTable, sessionsTable, conversationsTable, shopKnowledgeTable, withAdminBypass } from "@workspace/db";
 import type { Store } from "@workspace/db/schema";
 import {
   CreateStoreBody,
@@ -68,7 +68,7 @@ function storeToResponse(store: Store): StoreResponse {
 router.get("/stores", validateMerchantAuthForStoreList, async (req, res): Promise<void> => {
   const merchantDomain = (req as Request & { merchantStoreDomain: string }).merchantStoreDomain;
   const stores = await db.select().from(storesTable)
-    .where(eq(storesTable.storeDomain, merchantDomain))
+    .where(and(eq(storesTable.storeDomain, merchantDomain), isNull(storesTable.deletedAt)))
     .orderBy(storesTable.createdAt);
   res.json(ListStoresResponse.parse(stores.map(storeToResponse)));
 });
@@ -89,7 +89,7 @@ router.post("/stores", validateMerchantAuthForStoreList, async (req, res): Promi
   const existing = await db
     .select()
     .from(storesTable)
-    .where(eq(storesTable.storeDomain, parsed.data.storeDomain));
+    .where(and(eq(storesTable.storeDomain, parsed.data.storeDomain), isNull(storesTable.deletedAt)));
 
   if (existing.length > 0) {
     sendError(res, 409, "Store already exists");
@@ -138,7 +138,7 @@ router.get("/stores/:storeDomain", validateMerchantAuth, async (req, res): Promi
   const [store] = await db
     .select()
     .from(storesTable)
-    .where(eq(storesTable.storeDomain, params.data.storeDomain));
+    .where(and(eq(storesTable.storeDomain, params.data.storeDomain), isNull(storesTable.deletedAt)));
 
   if (!store) {
     sendError(res, 404, "Store not found");
@@ -257,10 +257,13 @@ router.delete("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pr
     return;
   }
 
+  const now = new Date();
   await withAdminBypass(async (scopedDb) => {
     await scopedDb.delete(sessionsTable).where(eq(sessionsTable.storeDomain, params.data.storeDomain));
   });
-  await db.delete(storesTable).where(eq(storesTable.storeDomain, params.data.storeDomain));
+  await db.update(storesTable).set({ deletedAt: now }).where(eq(storesTable.storeDomain, params.data.storeDomain));
+  await db.update(conversationsTable).set({ deletedAt: now }).where(and(eq(conversationsTable.storeDomain, params.data.storeDomain), isNull(conversationsTable.deletedAt)));
+  await db.update(shopKnowledgeTable).set({ deletedAt: now }).where(and(eq(shopKnowledgeTable.storeDomain, params.data.storeDomain), isNull(shopKnowledgeTable.deletedAt)));
   invalidateStoreCache(params.data.storeDomain);
   invalidateSessionCacheForDomain(params.data.storeDomain);
   clearMerchantSessionCache();

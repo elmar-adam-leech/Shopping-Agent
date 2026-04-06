@@ -15,7 +15,7 @@ import { ChatActionsProvider, type QuickAddProduct } from "@/contexts/chat-actio
 import { useSession } from "@/hooks/use-session";
 import { useChatOrchestration, messageKey } from "@/hooks/use-chat-orchestration";
 import { useCartStore } from "@/store/use-cart-store";
-import { useListConversations, useGetPreferences, useUpdatePreferences, deleteConversation, getGetPreferencesQueryKey, useGetStorePublic, type Conversation } from "@workspace/api-client-react";
+import { useListConversations, useListDeletedConversations, restoreConversation, useGetPreferences, useUpdatePreferences, deleteConversation, getGetPreferencesQueryKey, useGetStorePublic, type Conversation } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChatLoadingIndicator } from "@/components/chat/ChatLoadingIndicator";
 import { Sparkles, Settings2, Shield } from "lucide-react";
@@ -44,6 +44,9 @@ export default function ChatPage() {
   const convParams = { sessionId: sessionId || "", limit: String(CONV_PAGE_SIZE), offset: String(convOffset) };
   const conversationsResult = useListConversations(storeDomain, convParams);
   const refetchConversations = conversationsResult.refetch;
+  const deletedConvParams = { sessionId: sessionId || "" };
+  const deletedConvsResult = useListDeletedConversations(storeDomain, deletedConvParams);
+  const refetchDeletedConversations = deletedConvsResult.refetch;
 
   useEffect(() => {
     if (conversationsResult.data) {
@@ -189,10 +192,24 @@ export default function ChatPage() {
       if (activeConversationId === convId) startNewConversation();
       setConvOffset(0);
       refetchConversations();
+      refetchDeletedConversations();
     } catch {
       toast({ title: "Failed to delete conversation", description: "Please try again.", variant: "destructive" });
     }
-  }, [storeDomain, sessionId, activeConversationId, startNewConversation, refetchConversations, toast]);
+  }, [storeDomain, sessionId, activeConversationId, startNewConversation, refetchConversations, refetchDeletedConversations, toast]);
+
+  const handleRestoreConversation = useCallback(async (convId: number) => {
+    try {
+      await restoreConversation(storeDomain, convId, {
+        headers: { 'x-session-id': sessionId || '' },
+      });
+      setConvOffset(0);
+      refetchConversations();
+      refetchDeletedConversations();
+    } catch {
+      toast({ title: "Failed to restore conversation", description: "Please try again.", variant: "destructive" });
+    }
+  }, [storeDomain, sessionId, refetchConversations, refetchDeletedConversations, toast]);
 
   if (chatDisabled) {
     return (
@@ -227,6 +244,8 @@ export default function ChatPage() {
           onDeleteConversation={handleDeleteConversation}
           hasMore={hasMoreConversations}
           onLoadMore={loadMoreConversations}
+          deletedConversations={deletedConvsResult.data as any}
+          onRestoreConversation={handleRestoreConversation}
         />
 
         <ChatActionsProvider sendMessage={sendMessage} quickAddToCart={quickAddToCart} isLoading={isLoading}>

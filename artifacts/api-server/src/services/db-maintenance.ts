@@ -1,5 +1,5 @@
-import { sessionsTable, analyticsLogsTable, conversationsTable, pendingOAuthStatesTable, maintenanceStateTable, userConsentsTable, userPreferencesTable, storesTable, withAdminBypass } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { sessionsTable, analyticsLogsTable, conversationsTable, shopKnowledgeTable, pendingOAuthStatesTable, maintenanceStateTable, userConsentsTable, userPreferencesTable, storesTable, withAdminBypass } from "@workspace/db";
+import { eq, sql, lt, and, isNotNull } from "drizzle-orm";
 
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const BATCH_DELETE_LIMIT = 1000;
@@ -8,6 +8,8 @@ const rawRetention = parseInt(process.env.ANALYTICS_RETENTION_DAYS || "90", 10);
 const ANALYTICS_RETENTION_DAYS = Number.isFinite(rawRetention) && rawRetention >= 1 ? rawRetention : 90;
 const rawConvRetention = parseInt(process.env.CONVERSATION_RETENTION_DAYS || "90", 10);
 const CONVERSATION_RETENTION_DAYS = Number.isFinite(rawConvRetention) && rawConvRetention >= 1 ? rawConvRetention : 90;
+const rawSoftDeleteRetention = parseInt(process.env.SOFT_DELETE_RETENTION_DAYS || "30", 10);
+const SOFT_DELETE_RETENTION_DAYS = Number.isFinite(rawSoftDeleteRetention) && rawSoftDeleteRetention >= 1 ? rawSoftDeleteRetention : 30;
 
 async function cleanExpiredSessions(): Promise<number> {
   let totalDeleted = 0;
@@ -64,7 +66,7 @@ async function pruneOldConversations(): Promise<number> {
       while (true) {
         const result = await withAdminBypass(async (scopedDb) => {
           return scopedDb.execute(
-            sql`DELETE FROM ${conversationsTable} WHERE ${conversationsTable.storeDomain} = ${store.storeDomain} AND ${conversationsTable.updatedAt} < ${cutoff} AND ctid IN (SELECT ctid FROM ${conversationsTable} WHERE ${conversationsTable.storeDomain} = ${store.storeDomain} AND ${conversationsTable.updatedAt} < ${cutoff} LIMIT ${BATCH_DELETE_LIMIT})`
+            sql`DELETE FROM ${conversationsTable} WHERE ${conversationsTable.storeDomain} = ${store.storeDomain} AND ${conversationsTable.updatedAt} < ${cutoff} AND ${conversationsTable.deletedAt} IS NULL AND ctid IN (SELECT ctid FROM ${conversationsTable} WHERE ${conversationsTable.storeDomain} = ${store.storeDomain} AND ${conversationsTable.updatedAt} < ${cutoff} AND ${conversationsTable.deletedAt} IS NULL LIMIT ${BATCH_DELETE_LIMIT})`
           );
         });
         const count = Number(result.rowCount ?? 0);
@@ -109,6 +111,48 @@ async function purgeExpiredConsentData(): Promise<number> {
     console.warn("[db-maintenance] Consent data purging failed:", err instanceof Error ? err.message : err);
   }
   return totalDeleted;
+}
+
+async function purgeSoftDeletedRecords(): Promise<{ stores: number; conversations: number; knowledge: number }> {
+  const cutoff = new Date(Date.now() - SOFT_DELETE_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  let stores = 0;
+  let conversations = 0;
+  let knowledge = 0;
+
+  while (true) {
+    const result = await withAdminBypass(async (scopedDb) => {
+      return scopedDb.execute(
+        sql`DELETE FROM ${shopKnowledgeTable} WHERE ${shopKnowledgeTable.deletedAt} IS NOT NULL AND ${shopKnowledgeTable.deletedAt} < ${cutoff} AND ctid IN (SELECT ctid FROM ${shopKnowledgeTable} WHERE ${shopKnowledgeTable.deletedAt} IS NOT NULL AND ${shopKnowledgeTable.deletedAt} < ${cutoff} LIMIT ${BATCH_DELETE_LIMIT})`
+      );
+    });
+    const count = Number(result.rowCount ?? 0);
+    knowledge += count;
+    if (count < BATCH_DELETE_LIMIT) break;
+  }
+
+  while (true) {
+    const result = await withAdminBypass(async (scopedDb) => {
+      return scopedDb.execute(
+        sql`DELETE FROM ${conversationsTable} WHERE ${conversationsTable.deletedAt} IS NOT NULL AND ${conversationsTable.deletedAt} < ${cutoff} AND ctid IN (SELECT ctid FROM ${conversationsTable} WHERE ${conversationsTable.deletedAt} IS NOT NULL AND ${conversationsTable.deletedAt} < ${cutoff} LIMIT ${BATCH_DELETE_LIMIT})`
+      );
+    });
+    const count = Number(result.rowCount ?? 0);
+    conversations += count;
+    if (count < BATCH_DELETE_LIMIT) break;
+  }
+
+  while (true) {
+    const result = await withAdminBypass(async (scopedDb) => {
+      return scopedDb.execute(
+        sql`DELETE FROM ${storesTable} WHERE ${storesTable.deletedAt} IS NOT NULL AND ${storesTable.deletedAt} < ${cutoff} AND ctid IN (SELECT ctid FROM ${storesTable} WHERE ${storesTable.deletedAt} IS NOT NULL AND ${storesTable.deletedAt} < ${cutoff} LIMIT ${BATCH_DELETE_LIMIT})`
+      );
+    });
+    const count = Number(result.rowCount ?? 0);
+    stores += count;
+    if (count < BATCH_DELETE_LIMIT) break;
+  }
+
+  return { stores, conversations, knowledge };
 }
 
 async function cleanExpiredOAuthStates(): Promise<number> {
@@ -235,6 +279,16 @@ async function runMaintenance(): Promise<void> {
       }
     } catch (err) {
       console.warn("[db-maintenance] Consent data purging failed:", err instanceof Error ? err.message : err);
+    }
+
+    try {
+      const purged = await purgeSoftDeletedRecords();
+      const total = purged.stores + purged.conversations + purged.knowledge;
+      if (total > 0) {
+        console.log(`[db-maintenance] Purged soft-deleted records older than ${SOFT_DELETE_RETENTION_DAYS} days: ${purged.stores} stores, ${purged.conversations} conversations, ${purged.knowledge} knowledge entries`);
+      }
+    } catch (err) {
+      console.warn("[db-maintenance] Soft-delete purge failed:", err instanceof Error ? err.message : err);
     }
 
     await releaseLock(true);

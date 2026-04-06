@@ -24,6 +24,7 @@ export const shopKnowledgeTable = pgTable("shop_knowledge", {
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 }, (table) => [
   index("idx_shop_knowledge_store_category").on(table.storeDomain, table.category),
 ]);
