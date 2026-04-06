@@ -21,24 +21,32 @@ Key UI components include:
 - **Shared UI Components & Utilities**: Includes `ToolBadge`, `LoadingOverlay`, `EntityCard`, `AgentAvatar`, and `Error Utilities` for consistent design and functionality.
 
 ### Technical Implementations
-- **Monorepo**: Managed with pnpm workspaces.
+- **Monorepo**: Managed with pnpm workspaces for multiple packages (API server, frontend, shared libraries).
 - **Backend**: Express 5 serves as the API server.
-- **Database**: PostgreSQL with Drizzle ORM.
-- **LLM Integration**: Supports multiple providers (OpenAI, Anthropic, xAI, Google Gemini) with encrypted API keys (AES-256-GCM).
+- **Database**: PostgreSQL with Drizzle ORM for data persistence.
+- **LLM Integration**: Supports multiple providers (OpenAI, Anthropic, xAI, Google Gemini) with a unified interface and encrypted API keys (AES-256-GCM, requires `ENCRYPTION_KEY` env var). Keys are encrypted on store create/update and decrypted before LLM calls.
 - **API Communication**: Type-safe client-server interaction via Orval for OpenAPI codegen.
-- **Multi-Tenancy**: Secured by `store_domain` scoping, PostgreSQL Row-Level Security (RLS), and cross-tenant guard middleware.
-- **Audit Logging**: Tracks all sensitive operations in a dedicated `audit_logs` table.
-- **Session Management**: Customer and merchant sessions are persisted with defined TTLs.
-- **Shop Knowledge**: Merchants can input structured knowledge for contextual LLM responses, supporting bulk import and markdown splitting.
-- **Brand Voice & Customization**: Merchants define brand voice, custom instructions, welcome messages, and product recommendation strategies.
-- **UCP Dynamic Capability Negotiation**: Full UCP 2026-01-11 specification support for dynamic capability discovery and tool generation.
-- **Theme Embeds**: Various embed modes (Chat, AI Search) for native integration into Shopify themes.
-- **Chat Widget**: A Shopify theme app extension provides a customizable chat widget.
-- **"Shop For Me" Page**: A public-facing full-page chat interface.
-- **Performance & Caching**: LRU caches for frequently accessed data and atomic JSONB append for conversation messages.
-- **Security**: HMAC verification, strict body size limits, CORS, global error handling, LLM tool-call loop guard, DOMPurify for Markdown rendering, and prompt injection guards (regex, LLM classifier, system prompt hardening).
-- **Prompt Injection Guard**: Layered defense system with regex, LLM classifier, and system prompt hardening, along with tool response scanning and async output auditing. Merchant controls for sensitivity and blocked topics are available.
-- **Access Token Scope Validation**: OAuth callback validates Shopify access token scopes.
+- **Multi-Tenancy**: Secured by `store_domain` scoping, PostgreSQL Row-Level Security (RLS) with FORCE ROW LEVEL SECURITY, and cross-tenant guard middleware. All tenant-scoped queries use `withTenantScope(storeDomain, fn)` while administrative operations use `withAdminBypass(fn)`.
+- **Audit Logging**: Dedicated `audit_logs` table records all sensitive mutations (store CRUD, auth events, knowledge mutations, MCP operations, tool executions, cross-tenant access attempts) with actor, action, resource, metadata, IP address, and timestamp. Helpers like `logAuditFromRequest()` and `logCrossTenantAttempt()` provide consistent attribution.
+- **Graceful Shutdown**: The API server handles SIGTERM/SIGINT signals with a graceful shutdown sequence: stops accepting new connections, drains in-flight SSE streams (sends restart notification), stops DB maintenance, and closes the DB pool. Configurable timeout via `SHUTDOWN_TIMEOUT_MS` (default 10s). New chat requests during shutdown receive 503. DB maintenance tracks state in `maintenance_state` table with deduplication and stale lock recovery.
+- **Session Management**: Customer and merchant sessions are persisted in the database with defined TTLs. OAuth pending states are stored in the DB (`pending_oauth_states` table) for horizontal scaling.
+- **Shop Knowledge**: Merchants can input structured knowledge for contextual LLM responses, supporting bulk import and markdown splitting by headings.
+- **Brand Voice & Customization**: Merchants define brand voice (tone, personality, greetings), custom instructions, welcome messages, and product recommendation strategies. Settings are stored in the stores table.
+- **UCP Dynamic Capability Negotiation**: Full UCP 2026-01-11 specification support for dynamic capability discovery and tool generation. Discovered capabilities (checkout, orders, subscriptions, etc.) are persisted per store in `ucp_capabilities` with configurable refresh intervals. System prompt includes negotiated capabilities with sanitization.
+- **Theme Embeds**: Various embed modes (Chat, AI Search, Contextual Assistant) for native integration into Shopify themes via script tags or iframes.
+- **Chat Widget**: A Shopify theme app extension provides a customizable chat widget with merchant-controlled toggles.
+- **"Shop For Me" Page**: A public-facing full-page chat interface at `/shop/{storeDomain}`.
+- **Performance & Caching**: LRU caches for frequently accessed data (stores, sessions, knowledge, MCP tools, UCP discovery). Conversation messages use atomic JSONB append with a 200-message cap and automatic truncation.
+- **Middleware Organization**: Centralized middleware in `artifacts/api-server/src/middleware/` including tenant validation, session validation, merchant auth, rate limiters, cache-control, request logging, and gzip compression.
+- **Security**: HMAC verification, strict body size limits, CORS, global error handling, and LLM tool-call loop guard (default 10 iterations). Markdown rendering is sanitized with DOMPurify. Cross-tenant access detection middleware validates ownership at both middleware and DB level.
+- **Access Token Scope Validation**: OAuth callback validates that Shopify access token scopes match the minimum required set.
+- **Prompt Injection Guard**: Layered defense system in `artifacts/api-server/src/services/prompt-guard.ts`:
+  - **Layer 1 (Regex)**: Fast deterministic pattern matching against ~25 known patterns.
+  - **Layer 2 (LLM Classifier)**: Intent-based classification using Replit AI integrations proxy with configurable confidence thresholds.
+  - **Layer 3 (System Prompt Hardening)**: Explicit refusal instructions appended to every system prompt.
+  - **Tool Response Scanning**: MCP/UCP tool results are scanned for indirect injection.
+  - **Async Output Auditing**: Assistant output is audited for hallucinations and data leakage, with retraction support.
+  - **Merchant Controls**: Sensitivity settings and blocked topics available in the stores table.
 
 ### Feature Specifications
 - **Shopify OAuth**: Secure merchant authentication and app installation.

@@ -16,6 +16,7 @@ import { getCachedKnowledge } from "../services/knowledge-cache";
 import { buildLLMContext } from "../services/llm-context";
 import { fireOutputAudit } from "../services/output-audit";
 import { createToolExecutor } from "../services/tool-guard";
+import { trackSSEConnection, isServerShuttingDown } from "../services/shutdown";
 import { eq, and } from "drizzle-orm";
 import { db, userPreferencesTable } from "@workspace/db";
 import { type UserPreferencesContext } from "../services/system-prompt";
@@ -74,11 +75,18 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     return;
   }
 
+  if (isServerShuttingDown()) {
+    sendError(res, 503, "Server is shutting down. Please retry shortly.");
+    return;
+  }
+
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders();
+
+  trackSSEConnection(res);
 
   const abortController = new AbortController();
   let clientDisconnected = false;
