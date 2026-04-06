@@ -1,5 +1,5 @@
 import type { ShopKnowledge } from "@workspace/db";
-import type { UCPDiscoveryDocument } from "./mcp-client";
+import type { UCPDiscoveryDocument } from "./ucp-client";
 import { SYSTEM_PROMPT_HARDENING } from "./prompt-guard";
 
 const CATEGORY_LABELS: Record<string, string> = {

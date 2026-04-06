@@ -1,5 +1,5 @@
 import type { ShopKnowledge } from "@workspace/db/schema";
-import type { UCPDiscoveryDocument } from "./mcp-client";
+import type { UCPDiscoveryDocument } from "./ucp-client";
 import { buildSystemPrompt } from "./system-prompt";
 import type { ChatMessageRecord } from "./conversation-service";
 
