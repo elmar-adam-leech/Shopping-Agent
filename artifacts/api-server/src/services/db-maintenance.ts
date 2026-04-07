@@ -1,12 +1,10 @@
-import { sessionsTable, analyticsLogsTable, conversationsTable, shopKnowledgeTable, pendingOAuthStatesTable, maintenanceStateTable, userConsentsTable, userPreferencesTable, storesTable, withAdminBypass } from "@workspace/db";
-import { eq, sql, lt, and, isNotNull } from "drizzle-orm";
+import { sessionsTable, conversationsTable, shopKnowledgeTable, pendingOAuthStatesTable, maintenanceStateTable, storesTable, withAdminBypass } from "@workspace/db";
+import { eq, sql } from "drizzle-orm";
 import { runAutoSync } from "./shopify-sync";
 
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const BATCH_DELETE_LIMIT = 1000;
 const MAINTENANCE_KEY = "db_cleanup";
-const rawRetention = parseInt(process.env.ANALYTICS_RETENTION_DAYS || "90", 10);
-const ANALYTICS_RETENTION_DAYS = Number.isFinite(rawRetention) && rawRetention >= 1 ? rawRetention : 90;
 const rawConvRetention = parseInt(process.env.CONVERSATION_RETENTION_DAYS || "90", 10);
 const CONVERSATION_RETENTION_DAYS = Number.isFinite(rawConvRetention) && rawConvRetention >= 1 ? rawConvRetention : 90;
 const rawSoftDeleteRetention = parseInt(process.env.SOFT_DELETE_RETENTION_DAYS || "30", 10);
@@ -23,33 +21,6 @@ async function cleanExpiredSessions(): Promise<number> {
     const count = Number(result.rowCount ?? 0);
     totalDeleted += count;
     if (count < BATCH_DELETE_LIMIT) break;
-  }
-  return totalDeleted;
-}
-
-async function pruneOldAnalytics(): Promise<number> {
-  let totalDeleted = 0;
-  try {
-    const stores = await withAdminBypass(async (scopedDb) => {
-      return scopedDb.select({ storeDomain: storesTable.storeDomain, dataRetentionDays: storesTable.dataRetentionDays }).from(storesTable);
-    });
-
-    for (const store of stores) {
-      const retentionDays = Math.min(store.dataRetentionDays ?? ANALYTICS_RETENTION_DAYS, ANALYTICS_RETENTION_DAYS);
-      const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
-      while (true) {
-        const result = await withAdminBypass(async (scopedDb) => {
-          return scopedDb.execute(
-            sql`DELETE FROM ${analyticsLogsTable} WHERE ${analyticsLogsTable.storeDomain} = ${store.storeDomain} AND ${analyticsLogsTable.createdAt} < ${cutoff} AND ctid IN (SELECT ctid FROM ${analyticsLogsTable} WHERE ${analyticsLogsTable.storeDomain} = ${store.storeDomain} AND ${analyticsLogsTable.createdAt} < ${cutoff} LIMIT ${BATCH_DELETE_LIMIT})`
-          );
-        });
-        const count = Number(result.rowCount ?? 0);
-        totalDeleted += count;
-        if (count < BATCH_DELETE_LIMIT) break;
-      }
-    }
-  } catch (err) {
-    console.warn("[db-maintenance] Per-store analytics pruning failed:", err instanceof Error ? err.message : err);
   }
   return totalDeleted;
 }
@@ -77,39 +48,6 @@ async function pruneOldConversations(): Promise<number> {
     }
   } catch (err) {
     console.warn("[db-maintenance] Per-store conversation pruning failed:", err instanceof Error ? err.message : err);
-  }
-  return totalDeleted;
-}
-
-async function purgeExpiredConsentData(): Promise<number> {
-  let totalDeleted = 0;
-  try {
-    const stores = await withAdminBypass(async (scopedDb) => {
-      return scopedDb.select({ storeDomain: storesTable.storeDomain, dataRetentionDays: storesTable.dataRetentionDays }).from(storesTable);
-    });
-
-    for (const store of stores) {
-      const retentionDays = store.dataRetentionDays ?? 90;
-      const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
-
-      const deletedConsents = await withAdminBypass(async (scopedDb) => {
-        const result = await scopedDb.execute(
-          sql`DELETE FROM ${userConsentsTable} WHERE ${userConsentsTable.storeDomain} = ${store.storeDomain} AND ${userConsentsTable.deleted} = true AND ${userConsentsTable.updatedAt} < ${cutoff}`
-        );
-        return Number(result.rowCount ?? 0);
-      });
-
-      const deletedPrefs = await withAdminBypass(async (scopedDb) => {
-        const result = await scopedDb.execute(
-          sql`DELETE FROM ${userPreferencesTable} WHERE ${userPreferencesTable.storeDomain} = ${store.storeDomain} AND ${userPreferencesTable.updatedAt} < ${cutoff} AND NOT EXISTS (SELECT 1 FROM ${userConsentsTable} WHERE ${userConsentsTable.storeDomain} = ${store.storeDomain} AND ${userConsentsTable.sessionId} = ${userPreferencesTable.sessionId} AND ${userConsentsTable.deleted} = false)`
-        );
-        return Number(result.rowCount ?? 0);
-      });
-
-      totalDeleted += deletedConsents + deletedPrefs;
-    }
-  } catch (err) {
-    console.warn("[db-maintenance] Consent data purging failed:", err instanceof Error ? err.message : err);
   }
   return totalDeleted;
 }
@@ -247,15 +185,6 @@ async function runMaintenance(): Promise<void> {
     }
 
     try {
-      const analyticsDeleted = await pruneOldAnalytics();
-      if (analyticsDeleted > 0) {
-        console.log(`[db-maintenance] Pruned ${analyticsDeleted} analytics logs older than ${ANALYTICS_RETENTION_DAYS} days`);
-      }
-    } catch (err) {
-      console.warn("[db-maintenance] Analytics pruning failed:", err instanceof Error ? err.message : err);
-    }
-
-    try {
       const conversationsDeleted = await pruneOldConversations();
       if (conversationsDeleted > 0) {
         console.log(`[db-maintenance] Pruned ${conversationsDeleted} conversations older than ${CONVERSATION_RETENTION_DAYS} days`);
@@ -271,15 +200,6 @@ async function runMaintenance(): Promise<void> {
       }
     } catch (err) {
       console.warn("[db-maintenance] OAuth state cleanup failed:", err instanceof Error ? err.message : err);
-    }
-
-    try {
-      const consentDataDeleted = await purgeExpiredConsentData();
-      if (consentDataDeleted > 0) {
-        console.log(`[db-maintenance] Purged ${consentDataDeleted} expired consent/preference records`);
-      }
-    } catch (err) {
-      console.warn("[db-maintenance] Consent data purging failed:", err instanceof Error ? err.message : err);
     }
 
     try {

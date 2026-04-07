@@ -18,15 +18,12 @@ import { fireOutputAudit } from "../services/output-audit";
 import { createToolExecutor } from "../services/tool-guard";
 import { trackSSEConnection, isServerShuttingDown } from "../services/shutdown";
 import { eq, and } from "drizzle-orm";
-import { db, userPreferencesTable, userConsentsTable, sessionsTable, promptExperimentsTable, withTenantScope } from "@workspace/db";
-import type { ConsentCategories } from "@workspace/db/schema";
+import { db, userPreferencesTable, sessionsTable, withTenantScope } from "@workspace/db";
 import { type UserPreferencesContext } from "../services/system-prompt";
 import { extractAndSavePreferences } from "../services/preference-extractor";
 import { describeImageWithVision, isVisionCapable, validateImageBase64 } from "../services/vision-describe";
 import { getWishlist } from "../services/wishlist-service";
 import type { WishlistItem } from "@workspace/db/schema";
-import { detectLanguageFromText, resolveSessionLanguage } from "../services/language-detection";
-import type { LanguageConfig } from "../services/system-prompt";
 
 const MAX_USER_MESSAGE_LENGTH = 10_000;
 
@@ -179,7 +176,6 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
         layer: guardVerdict.layer,
         category: guardVerdict.category,
         reason: guardVerdict.reason,
-        confidence: guardVerdict.confidence,
         patternsMatched: guardVerdict.patternsMatched,
       });
       safeSend(`data: ${JSON.stringify({ type: "conversation_id", data: conversation.id })}\n\n`);
@@ -218,26 +214,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       console.warn(`[chat] Failed to check customer account connection:`, err instanceof Error ? err.message : err);
     }
 
-    let consentCategories: ConsentCategories | null = null;
-    try {
-      const [consentRow] = await db
-        .select()
-        .from(userConsentsTable)
-        .where(
-          and(
-            eq(userConsentsTable.storeDomain, store.storeDomain),
-            eq(userConsentsTable.sessionId, parsed.data.sessionId),
-            eq(userConsentsTable.deleted, false)
-          )
-        );
-      if (consentRow?.categories) {
-        consentCategories = consentRow.categories;
-      }
-    } catch (err) {
-      console.warn("[chat] Failed to fetch consent:", err instanceof Error ? err.message : err);
-    }
-
-    const orderHistoryConsentGranted = !consentCategories || consentCategories.orderHistoryAccess;
+    const orderHistoryConsentGranted = true;
 
     const authenticatedToolNames = new Set<string>();
     if (customerAccountConnection && orderHistoryConsentGranted) {
@@ -261,7 +238,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
     }
 
     let userPreferences: UserPreferencesContext | null = null;
-    if (!consentCategories || consentCategories.preferenceStorage) {
+    {
       try {
         const [prefsRow] = await db
           .select()
@@ -324,93 +301,6 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       recommendationStrategy: store.recommendationStrategy,
     };
 
-    try {
-      const [sessionRow] = await withTenantScope(store.storeDomain, async (scopedDb) => {
-        return scopedDb
-          .select({
-            experimentId: sessionsTable.experimentId,
-            experimentVariant: sessionsTable.experimentVariant,
-          })
-          .from(sessionsTable)
-          .where(eq(sessionsTable.id, parsed.data.sessionId))
-          .limit(1);
-      });
-
-      if (sessionRow?.experimentId && sessionRow?.experimentVariant) {
-        const [experiment] = await withTenantScope(store.storeDomain, async (scopedDb) => {
-          return scopedDb
-            .select()
-            .from(promptExperimentsTable)
-            .where(
-              eq(promptExperimentsTable.id, sessionRow.experimentId!)
-            )
-            .limit(1);
-        });
-
-        if (experiment) {
-          const variantConfig = sessionRow.experimentVariant === "A"
-            ? experiment.variantA
-            : experiment.variantB;
-
-          customization = {
-            brandVoice: variantConfig.brandVoice !== undefined
-              ? variantConfig.brandVoice as typeof store.brandVoice
-              : store.brandVoice,
-            customInstructions: variantConfig.customInstructions !== undefined
-              ? variantConfig.customInstructions
-              : store.customInstructions,
-            recommendationStrategy: variantConfig.recommendationStrategy || store.recommendationStrategy,
-          };
-        }
-      }
-    } catch (err) {
-      console.warn("[chat] Failed to load experiment variant:", err instanceof Error ? err.message : err);
-    }
-
-    let sessionLanguage: string | null = null;
-    try {
-      const [sessionLangRow] = await withTenantScope(store.storeDomain, async (scopedDb) => {
-        return scopedDb
-          .select({ detectedLanguage: sessionsTable.detectedLanguage })
-          .from(sessionsTable)
-          .where(eq(sessionsTable.id, parsed.data.sessionId))
-          .limit(1);
-      });
-      sessionLanguage = sessionLangRow?.detectedLanguage ?? null;
-    } catch (err) {
-      console.warn("[chat] Failed to fetch session language:", err instanceof Error ? err.message : err);
-    }
-
-    if (!sessionLanguage) {
-      const detectedLang = detectLanguageFromText(truncatedMessage);
-      const resolvedLang = resolveSessionLanguage(
-        detectedLang,
-        null,
-        store.supportedLanguages,
-        store.defaultLanguage
-      );
-      sessionLanguage = resolvedLang;
-
-      try {
-        await withTenantScope(store.storeDomain, async (scopedDb) => {
-          await scopedDb
-            .update(sessionsTable)
-            .set({ detectedLanguage: resolvedLang })
-            .where(eq(sessionsTable.id, parsed.data.sessionId));
-        });
-      } catch (err) {
-        console.warn("[chat] Failed to store detected language:", err instanceof Error ? err.message : err);
-      }
-    }
-
-    const languageConfig: LanguageConfig = {
-      detectedLanguage: sessionLanguage,
-      supportedLanguages: store.supportedLanguages,
-      defaultLanguage: store.defaultLanguage,
-    };
-
-    safeSend(`data: ${JSON.stringify({ type: "detected_language", data: sessionLanguage })}\n\n`);
-
     const { systemPrompt, llmMessages } = buildLLMContext(
       existingMessages,
       store.storeDomain,
@@ -418,8 +308,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       ucpDoc,
       chatContext,
       customization,
-      userPreferences,
-      languageConfig
+      userPreferences
     );
 
     let fullAssistantContent = "";
@@ -500,8 +389,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       console.warn(`[chat] Analytics persistence failed for store="${store.storeDomain}" session="${parsed.data.sessionId}"`);
     }
 
-    const preferenceConsentGranted = !consentCategories || consentCategories.preferenceStorage;
-    if (preferenceConsentGranted) {
+    {
       extractAndSavePreferences(
         store.storeDomain,
         parsed.data.sessionId,
@@ -558,6 +446,17 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       res.end();
     }
   }
+});
+
+router.post("/stores/:storeDomain/feedback", validateStoreDomain, validateSession, async (req, res) => {
+  const storeDomain = req.params.storeDomain as string;
+  const sessionId = (req as unknown as { validatedSessionId: string }).validatedSessionId;
+  const { rating, comment } = req.body ?? {};
+  if (!rating || !["positive", "negative"].includes(rating)) {
+    return sendError(res, 400, "rating must be 'positive' or 'negative'");
+  }
+  console.log(`[feedback] store=${storeDomain} rating=${rating} hasComment=${!!comment}`);
+  res.json({ success: true });
 });
 
 export default router;

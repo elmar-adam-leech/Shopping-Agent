@@ -7,9 +7,7 @@ import { useSession } from "@/hooks/use-session";
 import { useChatStream } from "@/hooks/use-chat-stream";
 import { ToolBadge } from "@/components/ui/tool-badge";
 import { MarkdownContent } from "@/components/ui/markdown-content";
-import { VoiceInputButton } from "@/components/chat/VoiceInputButton";
 import { ImageUploadButton } from "@/components/chat/ImageUploadButton";
-import { ConsentBanner } from "@/components/consent/ConsentBanner";
 
 interface StorePublicInfo {
   storeDomain: string;
@@ -210,7 +208,6 @@ export default function ShopForMePage() {
           )}
           <div className="flex items-end gap-2 bg-gray-50 rounded-2xl border border-gray-200 p-2 focus-within:border-indigo-300 focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
             <div className="flex items-center gap-1 shrink-0">
-              <VoiceInputButton onTranscript={(text) => setInput(text)} disabled={isLoading} />
               <ImageUploadButton
                 onImageSelected={(base64) => setImagePreview(base64)}
                 onImageCleared={() => setImagePreview(null)}
@@ -245,8 +242,6 @@ export default function ShopForMePage() {
           )}
         </div>
       </div>
-
-      {sessionId && <ConsentBanner storeDomain={storeDomain} sessionId={sessionId} />}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { mcpConnectionsTable, withTenantScope } from "@workspace/db";
 import type { McpConnection } from "@workspace/db/schema";
 import { encrypt, decrypt } from "./encryption";
 import { invalidateDiscoveryCache } from "./customer-account-discovery";
-import { logAnalyticsEvent } from "./analytics-logger";
+
 
 export async function refreshTokenIfNeeded(connection: McpConnection): Promise<McpConnection> {
   if (connection.expiresAt && connection.expiresAt > new Date()) {
@@ -58,8 +58,6 @@ export async function refreshTokenIfNeeded(connection: McpConnection): Promise<M
       .returning();
   });
 
-  await logAnalyticsEvent(connection.storeDomain, "mcp_customer_account_refresh", connection.sessionId);
-
   return updated;
 }
 
@@ -110,7 +108,6 @@ export async function revokeConnection(
   invalidateDiscoveryCache(storeDomain);
 
   if (deleted.length > 0) {
-    await logAnalyticsEvent(storeDomain, "mcp_customer_account_revoke", sessionId);
     return true;
   }
 

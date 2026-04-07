@@ -9,18 +9,14 @@ import { MemoryPanel } from "@/components/chat/MemoryPanel";
 import { ChatEmptyState } from "@/components/chat/ChatEmptyState";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { CustomerAccountConnect } from "@/components/chat/CustomerAccountConnect";
-import { ConsentBanner } from "@/components/consent/ConsentBanner";
-import { PrivacySettingsPanel } from "@/components/consent/PrivacySettingsPanel";
-import { CheckoutRecoveryCard } from "@/components/chat/CheckoutRecoveryCard";
 import { ChatActionsProvider, type QuickAddProduct } from "@/contexts/chat-actions-context";
-import { I18nProvider, useI18n } from "@/contexts/i18n-context";
 import { useSession } from "@/hooks/use-session";
 import { useChatOrchestration, messageKey } from "@/hooks/use-chat-orchestration";
 import { useCartStore } from "@/store/use-cart-store";
-import { useListConversations, useListDeletedConversations, restoreConversation, useGetPreferences, useUpdatePreferences, deleteConversation, getGetPreferencesQueryKey, useGetStorePublic, useCheckAbandonedCheckout, useCheckoutRecoveryAction, getCheckAbandonedCheckoutQueryKey, type Conversation } from "@workspace/api-client-react";
+import { useListConversations, useListDeletedConversations, restoreConversation, useGetPreferences, useUpdatePreferences, deleteConversation, getGetPreferencesQueryKey, useGetStorePublic, type Conversation } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChatLoadingIndicator } from "@/components/chat/ChatLoadingIndicator";
-import { Sparkles, Settings2, Shield } from "lucide-react";
+import { Sparkles, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
@@ -30,14 +26,8 @@ import { useEffect, useRef } from "react";
 export default function ChatPage() {
   const [, params] = useRoute("/:storeDomain/chat");
   const storeDomain = params?.storeDomain || "";
-  const { data: storePublic } = useGetStorePublic(storeDomain);
-  const defaultLocale = (storePublic as any)?.defaultLanguage || "en";
 
-  return (
-    <I18nProvider defaultLocale={defaultLocale}>
-      <ChatPageContent storeDomain={storeDomain} />
-    </I18nProvider>
-  );
+  return <ChatPageContent storeDomain={storeDomain} />;
 }
 
 function ChatPageContent({ storeDomain }: { storeDomain: string }) {
@@ -45,22 +35,18 @@ function ChatPageContent({ storeDomain }: { storeDomain: string }) {
   const cartStore = useCartStore();
   const { toast } = useToast();
   const { data: storePublic } = useGetStorePublic(storeDomain);
-  const { setLocale, t } = useI18n();
   const queryClient = useQueryClient();
 
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [showPrefs, setShowPrefs] = useState(false);
-  const [showPrivacy, setShowPrivacy] = useState(false);
   const [convOffset, setConvOffset] = useState(0);
   const [allConversations, setAllConversations] = useState<Conversation[]>([]);
-  const [recoveryDismissed, setRecoveryDismissed] = useState(false);
 
   const CONV_PAGE_SIZE = 50;
   const convParams = { sessionId: sessionId || "", limit: String(CONV_PAGE_SIZE), offset: String(convOffset) };
   const conversationsResult = useListConversations(storeDomain, convParams);
   const refetchConversations = conversationsResult.refetch;
-  const deletedConvParams = { sessionId: sessionId || "" };
-  const deletedConvsResult = useListDeletedConversations(storeDomain, deletedConvParams);
+  const deletedConvsResult = useListDeletedConversations(storeDomain);
   const refetchDeletedConversations = deletedConvsResult.refetch;
 
   useEffect(() => {
@@ -111,7 +97,6 @@ function ChatPageContent({ storeDomain }: { storeDomain: string }) {
     onSuccess: () => { setConvOffset(0); refetchConversations(); },
     onCartError: (msg) => toast({ title: "Cart Error", description: msg, variant: "destructive" }),
     onPreferencesUpdated: handlePreferencesUpdated,
-    onLanguageDetected: setLocale,
   });
 
   const prevErrorRef = useRef<string | null>(null);
@@ -175,7 +160,6 @@ function ChatPageContent({ storeDomain }: { storeDomain: string }) {
         const body = await response.json();
         if (body?.error) msg = body.error;
       } catch {
-        // ignore parse error
       }
       throw new Error(msg);
     }
@@ -194,39 +178,6 @@ function ChatPageContent({ storeDomain }: { storeDomain: string }) {
     setConvOffset(0);
     loadMessages([]);
   }, [loadMessages]);
-
-  const recoveryParams = { sessionId: sessionId || "" };
-  const recoveryQueryKey = getCheckAbandonedCheckoutQueryKey(storeDomain, recoveryParams);
-  const { data: recoveryData } = useCheckAbandonedCheckout(storeDomain, recoveryParams, {
-    query: {
-      queryKey: recoveryQueryKey,
-      enabled: !!sessionId && !recoveryDismissed && messages.length === 0,
-      staleTime: 5 * 60 * 1000,
-      retry: false,
-    },
-  });
-  const { mutateAsync: recoveryAction } = useCheckoutRecoveryAction();
-
-  const handleRecoveryResume = useCallback(() => {
-    if (!sessionId) return;
-    recoveryAction({ storeDomain, data: { sessionId, action: "resumed" } }).catch(() => {});
-    const itemsSummary = recoveryData?.cartItems?.map(i => i.title).join(", ") || "my previous items";
-    setInput(`I'd like to resume my checkout with ${itemsSummary}. Can you help me complete my purchase?`);
-    setRecoveryDismissed(true);
-  }, [sessionId, storeDomain, recoveryAction, recoveryData, setInput]);
-
-  const handleRecoveryDismiss = useCallback(() => {
-    if (!sessionId) return;
-    recoveryAction({ storeDomain, data: { sessionId, action: "dismissed" } }).catch(() => {});
-    setRecoveryDismissed(true);
-  }, [sessionId, storeDomain, recoveryAction]);
-
-  const handleRecoveryStartFresh = useCallback(() => {
-    if (!sessionId) return;
-    recoveryAction({ storeDomain, data: { sessionId, action: "dismissed", metadata: { reason: "start_fresh" } } }).catch(() => {});
-    setRecoveryDismissed(true);
-    startNewConversation();
-  }, [sessionId, storeDomain, recoveryAction, startNewConversation]);
 
   const selectConversation = useCallback((conv: Conversation) => {
     setActiveConversationId(conv.id);
@@ -249,7 +200,7 @@ function ChatPageContent({ storeDomain }: { storeDomain: string }) {
 
   const handleRestoreConversation = useCallback(async (convId: number) => {
     try {
-      await restoreConversation(storeDomain, convId, {
+      await restoreConversation({ storeDomain, conversationId: String(convId) }, {
         headers: { 'x-session-id': sessionId || '' },
       });
       setConvOffset(0);
@@ -264,7 +215,7 @@ function ChatPageContent({ storeDomain }: { storeDomain: string }) {
     return (
       <AppLayout storeDomain={storeDomain}>
         <div className="flex h-full items-center justify-center">
-          <p className="text-muted-foreground">{t.chatDisabled}</p>
+          <p className="text-muted-foreground">Chat is currently disabled for this store.</p>
         </div>
       </AppLayout>
     );
@@ -302,33 +253,19 @@ function ChatPageContent({ storeDomain }: { storeDomain: string }) {
             <div className="min-h-[56px] border-b border-border/50 flex items-center justify-between px-4 sm:px-6 bg-background/80 backdrop-blur-md sticky top-0 z-20">
               <div className="flex items-center gap-3">
                 <AgentAvatar icon={Sparkles} size="sm" />
-                <h2 className="font-bold text-sm">{t.shoppingAssistant}</h2>
+                <h2 className="font-bold text-sm">Shopping Assistant</h2>
               </div>
               <div className="flex items-center gap-2">
                 {sessionId && <CustomerAccountConnect storeDomain={storeDomain} sessionId={sessionId} />}
-                <Button variant="ghost" size="icon" onClick={() => { setShowPrivacy(!showPrivacy); if (!showPrivacy) setShowPrefs(false); }} className="rounded-lg" title="Privacy settings" aria-label="Toggle privacy settings" aria-expanded={showPrivacy}>
-                  <Shield className="w-4 h-4" aria-hidden="true" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={() => { setShowPrefs(!showPrefs); if (!showPrefs) setShowPrivacy(false); }} className="rounded-lg" title="Preferences" aria-label="Toggle preferences" aria-expanded={showPrefs}>
+                <Button variant="ghost" size="icon" onClick={() => { setShowPrefs(!showPrefs); }} className="rounded-lg" title="Preferences" aria-label="Toggle preferences" aria-expanded={showPrefs}>
                   <Settings2 className="w-4 h-4" aria-hidden="true" />
                 </Button>
               </div>
             </div>
 
-            {showPrivacy && <PrivacySettingsPanel storeDomain={storeDomain} sessionId={sessionId} onClose={() => setShowPrivacy(false)} />}
             {showPrefs && <PreferencesPanel userPrefs={userPrefs} onPrefChange={handlePrefChange} />}
 
             <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-32">
-              {recoveryData?.hasAbandonedCheckout && !recoveryDismissed && messages.length === 0 && (
-                <CheckoutRecoveryCard
-                  cartItems={recoveryData.cartItems ?? []}
-                  cartTotal={recoveryData.cartTotal ?? 0}
-                  abandonedAt={recoveryData.abandonedAt ?? new Date().toISOString()}
-                  onResume={handleRecoveryResume}
-                  onDismiss={handleRecoveryDismiss}
-                  onStartFresh={handleRecoveryStartFresh}
-                />
-              )}
               {messages.length === 0 ? (
                 <ChatEmptyState storeDomain={storeDomain} onPresetClick={setInput} welcomeMessage={storePublic?.welcomeMessage} />
               ) : (
@@ -363,8 +300,6 @@ function ChatPageContent({ storeDomain }: { storeDomain: string }) {
 
           <CartPanel />
         </ChatActionsProvider>
-
-        <ConsentBanner storeDomain={storeDomain} sessionId={sessionId} />
       </div>
     </AppLayout>
   );

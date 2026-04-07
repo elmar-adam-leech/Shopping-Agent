@@ -1,6 +1,6 @@
 import crypto from "crypto";
-import { eq, and, isNull, desc } from "drizzle-orm";
-import { db, storesTable, shopKnowledgeTable, knowledgeVersionsTable, withTenantScope, withAdminBypass } from "@workspace/db";
+import { eq, and, isNull } from "drizzle-orm";
+import { db, storesTable, shopKnowledgeTable, withTenantScope, withAdminBypass } from "@workspace/db";
 import { shopifyGraphQL } from "./graphql-client";
 import { decrypt } from "./encryption";
 import { invalidateKnowledgeCache } from "./knowledge-cache";
@@ -273,28 +273,6 @@ export async function syncShopifyContent(storeDomain: string): Promise<SyncResul
     if (existing) {
       if (existing.contentHash !== hash) {
         try {
-          const maxVersionResult = await withTenantScope(storeDomain, async (scopedDb) => {
-            return scopedDb
-              .select({ versionNumber: knowledgeVersionsTable.versionNumber })
-              .from(knowledgeVersionsTable)
-              .where(eq(knowledgeVersionsTable.knowledgeId, existing.id))
-              .orderBy(desc(knowledgeVersionsTable.versionNumber))
-              .limit(1);
-          });
-          const nextVersion = (maxVersionResult[0]?.versionNumber ?? 0) + 1;
-
-          await withTenantScope(storeDomain, async (scopedDb) => {
-            await scopedDb.insert(knowledgeVersionsTable).values({
-              knowledgeId: existing.id,
-              storeDomain,
-              category: existing.category,
-              title: existing.title,
-              content: existing.content,
-              tags: existing.tags,
-              versionNumber: nextVersion,
-            });
-          });
-
           await withTenantScope(storeDomain, async (scopedDb) => {
             await scopedDb
               .update(shopKnowledgeTable)

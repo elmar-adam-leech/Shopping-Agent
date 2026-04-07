@@ -1,5 +1,4 @@
 export * from "./generated/api";
-export * from "./generated/types";
 
 import { z } from "zod";
 
@@ -17,6 +16,7 @@ export const ListDeletedConversationsParams = z.object({
 });
 
 export const ListDeletedConversationsQueryParams = z.object({
+  sessionId: z.string(),
   limit: z.coerce.number().optional(),
   offset: z.coerce.number().optional(),
 });
@@ -24,17 +24,6 @@ export const ListDeletedConversationsQueryParams = z.object({
 export const RestoreConversationParams = z.object({
   storeDomain: z.string(),
   conversationId: z.string(),
-});
-
-export const ListKnowledgeVersionsParams = z.object({
-  storeDomain: z.string(),
-  knowledgeId: z.string(),
-});
-
-export const RestoreKnowledgeVersionParams = z.object({
-  storeDomain: z.string(),
-  knowledgeId: z.string(),
-  versionId: z.string(),
 });
 
 export const SearchKnowledgeParams = z.object({

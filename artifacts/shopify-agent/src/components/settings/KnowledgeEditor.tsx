@@ -6,16 +6,13 @@ import {
   useUpdateKnowledge,
   useListDeletedKnowledge,
   useRestoreKnowledge,
-  useListKnowledgeVersions,
-  useRestoreKnowledgeVersion,
   getListKnowledgeQueryKey,
   getListDeletedKnowledgeQueryKey,
-  getListKnowledgeVersionsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Trash2, Plus, ArrowUp, ArrowDown, Edit2, Check, X,
-  BookOpen, RotateCcw, Archive, History, Search, Tag, Cloud, AlertTriangle,
+  BookOpen, RotateCcw, Archive, Search, Tag, Cloud, AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,18 +38,6 @@ interface KnowledgeEntry {
   lastSyncedAt?: string | null;
   createdAt: string;
   updatedAt: string;
-}
-
-interface KnowledgeVersionData {
-  id: number;
-  knowledgeId: number;
-  storeDomain: string;
-  category: string;
-  title: string;
-  content: string;
-  tags: string[];
-  versionNumber: number;
-  createdAt: string;
 }
 
 export const CATEGORIES = [
@@ -118,116 +103,6 @@ function TagInput({ tags, onChange }: { tags: string[]; onChange: (tags: string[
   );
 }
 
-function VersionHistoryPanel({
-  storeDomain,
-  knowledgeId,
-  onClose,
-}: {
-  storeDomain: string;
-  knowledgeId: number;
-  onClose: () => void;
-}) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const { data: versions } = useListKnowledgeVersions(storeDomain, knowledgeId, {
-    query: {
-      queryKey: getListKnowledgeVersionsQueryKey(storeDomain, knowledgeId),
-      staleTime: 10_000,
-    },
-  });
-  const { mutateAsync: restoreVersion } = useRestoreKnowledgeVersion();
-  const [expandedVersion, setExpandedVersion] = useState<number | null>(null);
-
-  const handleRestore = async (versionId: number) => {
-    try {
-      await restoreVersion({ storeDomain, knowledgeId, versionId });
-      queryClient.invalidateQueries({ queryKey: getListKnowledgeQueryKey(storeDomain) });
-      queryClient.invalidateQueries({ queryKey: getListKnowledgeVersionsQueryKey(storeDomain, knowledgeId) });
-      toast({ title: "Version restored" });
-      onClose();
-    } catch {
-      toast({ title: "Failed to restore version", variant: "destructive" });
-    }
-  };
-
-  const versionList = (versions ?? []) as KnowledgeVersionData[];
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div
-        className="bg-card border border-border rounded-2xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="p-5 border-b border-border flex items-center justify-between">
-          <h3 className="font-bold text-lg flex items-center gap-2">
-            <History className="w-5 h-5 text-primary" />
-            Version History
-          </h3>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
-        <div className="p-5 overflow-y-auto flex-1 space-y-3">
-          {versionList.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              No previous versions found. Versions are created automatically when you edit an entry.
-            </p>
-          ) : (
-            versionList.map((v) => (
-              <div key={v.id} className="p-3 rounded-xl bg-secondary/20 border border-border/50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono bg-secondary px-2 py-0.5 rounded-full">
-                      v{v.versionNumber}
-                    </span>
-                    <span className="text-sm font-medium">{v.title}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(v.createdAt).toLocaleString()}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setExpandedVersion(expandedVersion === v.id ? null : v.id)}
-                      className="rounded-lg text-xs h-7"
-                    >
-                      {expandedVersion === v.id ? "Hide" : "View"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="default"
-                      onClick={() => handleRestore(v.id)}
-                      className="rounded-lg text-xs h-7"
-                    >
-                      <RotateCcw className="w-3 h-3 mr-1" /> Restore
-                    </Button>
-                  </div>
-                </div>
-                {expandedVersion === v.id && (
-                  <div className="mt-3 p-3 rounded-lg bg-background/80 text-sm">
-                    <p className="text-xs text-muted-foreground mb-1">Category: {v.category}</p>
-                    <p className="whitespace-pre-wrap">{v.content}</p>
-                    {v.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {v.tags.map(tag => (
-                          <span key={tag} className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
   const queryClient = useQueryClient();
   const knowledgeQueryKey = getListKnowledgeQueryKey(storeDomain);
@@ -252,7 +127,6 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editTags, setEditTags] = useState<string[]>([]);
-  const [versionHistoryId, setVersionHistoryId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTag, setSearchTag] = useState("");
 
@@ -310,7 +184,7 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
 
   const handleRestore = async (id: number) => {
     try {
-      await restoreKnowledge({ storeDomain, knowledgeId: id });
+      await restoreKnowledge({ storeDomain, knowledgeId: String(id) });
       refetch();
       refetchDeleted();
       toast({ title: "Restored" });
@@ -594,15 +468,6 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
                       </div>
                       {editingId !== item.id && (
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-all">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setVersionHistoryId(item.id)}
-                            className="text-muted-foreground hover:text-primary hover:bg-primary/10 -mt-1"
-                            aria-label={`View history for ${item.title}`}
-                          >
-                            <History className="w-4 h-4" aria-hidden="true" />
-                          </Button>
                           <Button 
                             variant="ghost" 
                             size="icon" 
@@ -673,13 +538,6 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
 
       </div>
 
-      {versionHistoryId !== null && (
-        <VersionHistoryPanel
-          storeDomain={storeDomain}
-          knowledgeId={versionHistoryId}
-          onClose={() => setVersionHistoryId(null)}
-        />
-      )}
     </section>
   );
 }

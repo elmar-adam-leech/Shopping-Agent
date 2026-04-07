@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { MessageSquare, Settings, BarChart2, Store as StoreIcon, ShoppingBag, Menu, Shield, LayoutDashboard } from "lucide-react";
+import { MessageSquare, Settings, Store as StoreIcon, ShoppingBag, Menu, Shield, LayoutDashboard } from "lucide-react";
 import { useCartStore } from "@/store/use-cart-store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,14 +20,12 @@ export function AppLayout({ children, storeDomain }: AppLayoutProps) {
   const navigation = storeDomain ? [
     { name: 'Chat', href: `/${storeDomain}/chat`, icon: MessageSquare },
     { name: 'Knowledge & Settings', href: `/${storeDomain}/settings`, icon: Settings },
-    { name: 'Analytics', href: `/${storeDomain}/analytics`, icon: BarChart2 },
   ] : [];
 
   const bottomNavItems = storeDomain ? [
     { name: 'Home', href: '/', icon: LayoutDashboard },
     { name: 'Chat', href: `/${storeDomain}/chat`, icon: MessageSquare },
     { name: 'Settings', href: `/${storeDomain}/settings`, icon: Settings },
-    { name: 'Analytics', href: `/${storeDomain}/analytics`, icon: BarChart2 },
     { name: 'Cart', href: '#cart', icon: ShoppingBag, action: () => cartStore.setIsOpen(true) },
   ] : [];
 

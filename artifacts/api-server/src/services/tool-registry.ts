@@ -9,28 +9,6 @@ import {
   type UCPNegotiationResult,
 } from "./ucp-client";
 import { getInternalToolDefinitions } from "./internal-tools";
-import { db } from "@workspace/db";
-import { analyticsLogsTable } from "@workspace/db/schema";
-
-async function logNegotiationToAnalytics(result: UCPNegotiationResult): Promise<void> {
-  try {
-    await db.insert(analyticsLogsTable).values({
-      storeDomain: result.storeDomain,
-      eventType: "ucp_negotiation",
-      metadata: {
-        success: result.success,
-        version: result.version ?? null,
-        source: result.source,
-        servicesCount: result.servicesCount,
-        capabilitiesFound: result.capabilitiesFound,
-        paymentMethodsFound: result.paymentMethodsFound,
-        error: result.error ?? null,
-      },
-    });
-  } catch (err) {
-    console.warn(`[tool-registry] Failed to log UCP negotiation analytics:`, err instanceof Error ? err.message : err);
-  }
-}
 
 export async function listTools(
   storeDomain: string,
@@ -50,7 +28,6 @@ export async function listTools(
 
   if (negotiation) {
     logNegotiationResult(negotiation);
-    logNegotiationToAnalytics(negotiation);
   }
 
   if (ucpEnabled && ucpDoc) {

@@ -6,9 +6,6 @@ export const sessionsTable = pgTable("sessions", {
   storeDomain: text("store_domain")
     .notNull()
     .references(() => storesTable.storeDomain, { onDelete: "cascade" }),
-  experimentId: text("experiment_id"),
-  experimentVariant: text("experiment_variant"),
-  detectedLanguage: text("detected_language"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 }, (table) => [

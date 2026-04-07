@@ -11,7 +11,6 @@ const HomePage = lazy(() => import("./pages/home"));
 const InstallPage = lazy(() => import("./pages/install"));
 const SettingsPage = lazy(() => import("./pages/settings"));
 const ChatPage = lazy(() => import("./pages/chat"));
-const AnalyticsPage = lazy(() => import("./pages/analytics"));
 const ShopForMePage = lazy(() => import("./pages/shop-for-me"));
 const EmbedChatPage = lazy(() => import("./pages/embed-chat"));
 const EmbedSearchPage = lazy(() => import("./pages/embed-search"));
@@ -56,7 +55,6 @@ function DashboardRoutes() {
           <Route path="/install" component={InstallPage} />
           <Route path="/:storeDomain/settings" component={SettingsPage} />
           <Route path="/:storeDomain/chat" component={ChatPage} />
-          <Route path="/:storeDomain/analytics" component={AnalyticsPage} />
           <Route path="/shop/:storeDomain" component={ShopForMePage} />
           <Route component={NotFound} />
         </Switch>

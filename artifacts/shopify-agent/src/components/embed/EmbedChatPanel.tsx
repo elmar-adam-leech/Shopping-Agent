@@ -8,7 +8,6 @@ import { Sparkles } from "lucide-react";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { AgentAvatar } from "@/components/ui/agent-avatar";
 import { useGetStorePublic } from "@workspace/api-client-react";
-import { I18nProvider, useI18n } from "@/contexts/i18n-context";
 
 interface EmbedChatPanelProps {
   storeDomain: string;
@@ -19,13 +18,7 @@ interface EmbedChatPanelProps {
 }
 
 export function EmbedChatPanel(props: EmbedChatPanelProps) {
-  const { data: storePublic } = useGetStorePublic(props.storeDomain);
-  const defaultLocale = (storePublic as any)?.defaultLanguage || "en";
-  return (
-    <I18nProvider defaultLocale={defaultLocale}>
-      <EmbedChatPanelInner {...props} />
-    </I18nProvider>
-  );
+  return <EmbedChatPanelInner {...props} />;
 }
 
 function EmbedChatPanelInner({
@@ -37,7 +30,6 @@ function EmbedChatPanelInner({
 }: EmbedChatPanelProps) {
   const { sessionId, sessionError, chatDisabled, refreshSession } = useSession(storeDomain);
   const { data: storePublic } = useGetStorePublic(storeDomain);
-  const { setLocale, t } = useI18n();
   const [conversationId, setConversationId] = useState<number | null>(null);
 
   const context = productHandle || collectionHandle || cartToken
@@ -61,7 +53,6 @@ function EmbedChatPanelInner({
     context,
     onConversationId: (id) => setConversationId(id),
     autoSendMessage: initialMessage,
-    onLanguageDetected: setLocale,
   });
 
   if (chatDisabled) {

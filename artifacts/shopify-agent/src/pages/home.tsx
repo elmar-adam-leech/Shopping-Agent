@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Store as StoreIcon, Plus, ArrowRight, Settings, MessageSquare, Activity, LogIn } from "lucide-react";
+import { Store as StoreIcon, Plus, ArrowRight, Settings, MessageSquare, LogIn } from "lucide-react";
 import { useListStores } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { StoreDomainInput } from "@/components/ui/store-domain-input";
@@ -198,7 +198,7 @@ function StoreCard({ store }: { store: StoreInfo }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 mt-auto">
+      <div className="grid grid-cols-2 gap-2 mt-auto">
         <Link href={`/${store.storeDomain}/chat`} className="col-span-1">
           <Button variant="secondary" className="w-full bg-secondary/50 hover:bg-secondary rounded-xl tooltip-trigger" title="Test Chat" aria-label="Test Chat">
             <MessageSquare className="w-4 h-4" aria-hidden="true" />
@@ -207,11 +207,6 @@ function StoreCard({ store }: { store: StoreInfo }) {
         <Link href={`/${store.storeDomain}/settings`} className="col-span-1">
           <Button variant="secondary" className="w-full bg-secondary/50 hover:bg-secondary rounded-xl tooltip-trigger" title="Settings" aria-label="Settings">
             <Settings className="w-4 h-4" aria-hidden="true" />
-          </Button>
-        </Link>
-        <Link href={`/${store.storeDomain}/analytics`} className="col-span-1">
-          <Button variant="secondary" className="w-full bg-secondary/50 hover:bg-secondary rounded-xl tooltip-trigger" title="Analytics" aria-label="Analytics">
-            <Activity className="w-4 h-4" aria-hidden="true" />
           </Button>
         </Link>
       </div>

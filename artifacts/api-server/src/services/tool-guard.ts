@@ -2,41 +2,12 @@ import { scanToolResponse, logGuardEvent, type GuardSensitivity } from "./prompt
 import { callTool } from "./mcp-client";
 import { fetchBlogs, fetchCollections, fetchMetaobjects } from "./graphql-client";
 import { callAuthenticatedMCPTool } from "./customer-account-mcp";
-import { logAnalyticsEvent } from "./analytics-logger";
 import { validateUCPInvokeParams } from "./ucp-client";
 import type { McpConnection } from "@workspace/db/schema";
 import { logAudit } from "./audit-logger";
 import { INTERNAL_TOOL_NAMES, executeInternalTool, type InternalToolContext } from "./internal-tools";
 import type { UserPreferencesContext } from "./system-prompt";
 
-const CART_TOOLS = new Set(["create_cart", "add_to_cart", "update_cart", "propose_cart_edit"]);
-const CHECKOUT_TOOLS = new Set(["create_checkout", "get_checkout_url"]);
-const CHECKOUT_COMPLETE_TOOLS = new Set(["complete_checkout", "checkout_complete", "process_checkout"]);
-const PRODUCT_TOOLS = new Set(["search_products", "get_product", "get_product_by_handle"]);
-
-const NEGOTIATION_TOOL_EVENTS: Record<string, string> = {
-  get_loyalty_balance: "loyalty_balance_checked",
-  redeem_loyalty_points: "loyalty_redeemed",
-  apply_discount: "discount_applied",
-  validate_discount_code: "discount_validated",
-  list_available_discounts: "discounts_listed",
-  set_subscription_cadence: "subscription_configured",
-  create_subscription: "subscription_configured",
-  list_subscription_options: "subscription_options_listed",
-  manage_subscription: "subscription_managed",
-  check_preorder_availability: "preorder_checked",
-  create_preorder: "preorder_created",
-  add_gift_wrap: "gift_wrap_added",
-  add_gift_message: "gift_message_added",
-  create_gift_order: "gift_order_created",
-  manage_wishlist: "wishlist_managed",
-};
-
-const ORDER_TOOL_ANALYTICS: Record<string, string> = {
-  get_orders: "order_history_query",
-  get_order_status: "order_status_query",
-  request_return: "return_request",
-};
 
 export async function executeToolWithFallback(
   storeDomain: string,
@@ -100,7 +71,6 @@ async function guardToolResult(
       layer: toolGuard.layer,
       category: toolGuard.category,
       reason: toolGuard.reason,
-      confidence: toolGuard.confidence,
     });
     return JSON.stringify({ error: "Tool response was filtered for security reasons." });
   }
@@ -120,79 +90,12 @@ export function createToolExecutor(opts: {
 }): (toolName: string, args: Record<string, unknown>) => Promise<string> {
   const { storeDomain, storefrontToken, sessionId, ucpEnabled, guardSensitivity, blockedTopics, authenticatedToolNames, activeConnection, userPreferences } = opts;
 
-  function logToolAnalytics(toolName: string, args: Record<string, unknown>, guardedResult: string): void {
-    logAnalyticsEvent(storeDomain, "tool_call", sessionId, {
-      metadata: { toolName, args: Object.keys(args) },
-    }).catch(() => {});
-
-    if (CART_TOOLS.has(toolName)) {
-      logAnalyticsEvent(storeDomain, "cart_created", sessionId, {
-        metadata: { toolName },
-      }).catch(() => {});
-    }
-
-    if (CHECKOUT_TOOLS.has(toolName)) {
-      logAnalyticsEvent(storeDomain, "checkout_started", sessionId, {
-        metadata: { toolName },
-      }).catch(() => {});
-    }
-
-    if (CHECKOUT_COMPLETE_TOOLS.has(toolName)) {
-      try {
-        const parsed = JSON.parse(guardedResult);
-        const orderTotal = parsed?.totalPrice?.amount || parsed?.total_price || parsed?.totalAmount || parsed?.order?.total_price;
-        logAnalyticsEvent(storeDomain, "checkout_completed", sessionId, {
-          metadata: {
-            toolName,
-            ...(orderTotal !== undefined ? { orderTotal: Number(orderTotal) } : {}),
-          },
-        }).catch(() => {});
-      } catch {
-        logAnalyticsEvent(storeDomain, "checkout_completed", sessionId, {
-          metadata: { toolName },
-        }).catch(() => {});
-      }
-    }
-
-    if (PRODUCT_TOOLS.has(toolName)) {
-      try {
-        const parsed = JSON.parse(guardedResult);
-        const handles: string[] = [];
-        if (Array.isArray(parsed?.products)) {
-          for (const p of parsed.products.slice(0, 5)) {
-            if (p.handle) handles.push(p.handle);
-          }
-        } else if (parsed?.handle) {
-          handles.push(parsed.handle);
-        }
-        for (const handle of handles) {
-          logAnalyticsEvent(storeDomain, "product_recommended", sessionId, {
-            metadata: { productHandle: handle, toolName },
-          }).catch(() => {});
-        }
-      } catch {}
-    }
-
-    const negotiationEvent = NEGOTIATION_TOOL_EVENTS[toolName];
-    if (negotiationEvent) {
-      logAnalyticsEvent(storeDomain, negotiationEvent, sessionId, {
-        metadata: { toolName, args: Object.keys(args) },
-      }).catch(() => {});
-    }
-  }
-
   return async function executeAndGuardTool(toolName: string, args: Record<string, unknown>): Promise<string> {
     if (toolName === "propose_cart_edit") {
       const action = args.action as string;
       if ((action === "swap" || action === "variant_change") && !args.newItem) {
         return JSON.stringify({ error: "newItem is required for swap and variant_change actions" });
       }
-      logAnalyticsEvent(storeDomain, "tool_call", sessionId, {
-        metadata: { toolName, args: Object.keys(args) },
-      }).catch(() => {});
-      logAnalyticsEvent(storeDomain, "cart_edit_proposed", sessionId, {
-        metadata: { action },
-      }).catch(() => {});
       return JSON.stringify({ _cartEditPreview: true, ...args });
     }
 
@@ -208,9 +111,6 @@ export function createToolExecutor(opts: {
           userPreferences: userPreferences || null,
         };
         const result = await executeInternalTool(toolName, args, internalCtx);
-        logAnalyticsEvent(storeDomain, "tool_call", sessionId, {
-          metadata: { toolName, args: Object.keys(args), internal: true },
-        }).catch(() => {});
         return result;
       } catch (err) {
         console.error(`[tool-guard] Internal tool "${toolName}" failed:`, err instanceof Error ? err.message : err);
@@ -229,13 +129,6 @@ export function createToolExecutor(opts: {
       if (!validation.valid) {
         return JSON.stringify({ error: validation.error });
       }
-    }
-
-    const orderEventType = ORDER_TOOL_ANALYTICS[toolName];
-    if (orderEventType) {
-      logAnalyticsEvent(storeDomain, orderEventType, sessionId, {
-        query: typeof args.order_id === "string" ? args.order_id : toolName,
-      }).catch(() => {});
     }
 
     if (authenticatedToolNames.has(toolName) && !activeConnection) {
@@ -268,7 +161,6 @@ export function createToolExecutor(opts: {
             metadata: { authenticated: true, durationMs: Date.now() - startTime },
           });
           const guarded = await guardToolResult(authResult, toolName, storeDomain, sessionId, guardSensitivity, blockedTopics);
-          logToolAnalytics(toolName, args, guarded);
           return detectAndHandleEscalation(guarded, toolName, storeDomain, sessionId);
         }
         if (authParsed && typeof authParsed === "object" && (authParsed as Record<string, unknown>).error) {
@@ -284,7 +176,6 @@ export function createToolExecutor(opts: {
             metadata: { authenticated: true, durationMs: Date.now() - startTime },
           });
           const guarded = await guardToolResult(authResult, toolName, storeDomain, sessionId, guardSensitivity, blockedTopics);
-          logToolAnalytics(toolName, args, guarded);
           return detectAndHandleEscalation(guarded, toolName, storeDomain, sessionId);
         }
       } catch (err) {
@@ -313,7 +204,6 @@ export function createToolExecutor(opts: {
     });
 
     const guarded = await guardToolResult(result, toolName, storeDomain, sessionId, guardSensitivity, blockedTopics);
-    logToolAnalytics(toolName, args, guarded);
 
     const withEscalation = detectAndHandleEscalation(guarded, toolName, storeDomain, sessionId);
     return withEscalation;
@@ -330,13 +220,6 @@ function detectAndHandleEscalation(
     const parsed = JSON.parse(result);
     if (parsed && typeof parsed === "object" && (parsed as Record<string, unknown>).requires_escalation === true) {
       const escalationData = parsed as Record<string, unknown>;
-      logAnalyticsEvent(storeDomain, "escalation_triggered", sessionId, {
-        metadata: {
-          toolName,
-          reason: typeof escalationData.escalation_reason === "string" ? escalationData.escalation_reason : "unknown",
-        },
-      }).catch(() => {});
-
       const escalation: Record<string, unknown> = {
         ...escalationData,
         _escalation: true,

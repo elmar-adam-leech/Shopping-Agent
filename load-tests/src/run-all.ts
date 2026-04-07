@@ -5,7 +5,6 @@ const tests = [
   { name: "Session Creation", script: "test:sessions" },
   { name: "Database Connection Pool", script: "test:db-pool" },
   { name: "Rate Limiter", script: "test:rate-limit" },
-  { name: "Analytics Load", script: "test:analytics" },
   { name: "Concurrent Chat Sessions", script: "test:chat" },
   { name: "SSE Scalability", script: "test:sse" },
   { name: "Full User Journey", script: "test:journey" },

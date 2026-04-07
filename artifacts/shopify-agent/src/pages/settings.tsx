@@ -6,9 +6,6 @@ import { ThemeIntegrationSettings } from "@/components/settings/ThemeIntegration
 import { BrandVoiceSettings } from "@/components/settings/BrandVoiceSettings";
 import { CustomInstructionsSettings } from "@/components/settings/CustomInstructionsSettings";
 import { DataRetentionSettings } from "@/components/settings/DataRetentionSettings";
-import { ExperimentSettings } from "@/components/settings/ExperimentSettings";
-import { CheckoutRecoverySettings } from "@/components/settings/CheckoutRecoverySettings";
-import { LanguageSettings } from "@/components/settings/LanguageSettings";
 import { WebhookSettings } from "@/components/settings/WebhookSettings";
 
 export default function SettingsPage() {
@@ -23,19 +20,13 @@ export default function SettingsPage() {
           <p className="text-muted-foreground text-lg">Configure the brain behind your AI shopping assistant.</p>
         </div>
 
-        <LanguageSettings storeDomain={storeDomain} />
-
         <BrandVoiceSettings storeDomain={storeDomain} />
 
         <CustomInstructionsSettings storeDomain={storeDomain} />
 
-        <ExperimentSettings storeDomain={storeDomain} />
-
         <LLMConfigForm storeDomain={storeDomain} />
 
         <ThemeIntegrationSettings storeDomain={storeDomain} />
-
-        <CheckoutRecoverySettings storeDomain={storeDomain} />
 
         <WebhookSettings storeDomain={storeDomain} />
 

@@ -41,26 +41,6 @@ export const shopKnowledgeTable = pgTable("shop_knowledge", {
   index("idx_shop_knowledge_source_id").on(table.storeDomain, table.sourceId),
 ]);
 
-export const knowledgeVersionsTable = pgTable("knowledge_versions", {
-  id: serial("id").primaryKey(),
-  knowledgeId: integer("knowledge_id")
-    .notNull()
-    .references(() => shopKnowledgeTable.id, { onDelete: "cascade" }),
-  storeDomain: text("store_domain")
-    .notNull()
-    .references(() => storesTable.storeDomain, { onDelete: "cascade" }),
-  category: knowledgeCategoryEnum("category").notNull(),
-  title: text("title").notNull(),
-  content: text("content").notNull(),
-  tags: text("tags").array().notNull().default([]),
-  versionNumber: integer("version_number").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [
-  index("idx_knowledge_versions_knowledge_id").on(table.knowledgeId),
-  index("idx_knowledge_versions_store").on(table.storeDomain),
-]);
-
 export const insertKnowledgeSchema = createInsertSchema(shopKnowledgeTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertKnowledge = z.infer<typeof insertKnowledgeSchema>;
 export type ShopKnowledge = typeof shopKnowledgeTable.$inferSelect;
-export type KnowledgeVersion = typeof knowledgeVersionsTable.$inferSelect;

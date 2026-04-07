@@ -85,7 +85,7 @@ router.get("/stores/:storeDomain/conversations/:conversationId", validateStoreDo
       .from(conversationsTable)
       .where(
         and(
-          eq(conversationsTable.id, params.data.conversationId),
+          eq(conversationsTable.id, Number(params.data.conversationId)),
           eq(conversationsTable.storeDomain, params.data.storeDomain),
           eq(conversationsTable.sessionId, sessionId),
           isNull(conversationsTable.deletedAt)
@@ -121,7 +121,7 @@ router.delete("/stores/:storeDomain/conversations/:conversationId", validateStor
       .set({ deletedAt: new Date() })
       .where(
         and(
-          eq(conversationsTable.id, params.data.conversationId),
+          eq(conversationsTable.id, Number(params.data.conversationId)),
           eq(conversationsTable.storeDomain, params.data.storeDomain),
           eq(conversationsTable.sessionId, sessionId),
           isNull(conversationsTable.deletedAt)
@@ -197,7 +197,7 @@ router.patch("/stores/:storeDomain/conversations/:conversationId/restore", valid
       .set({ deletedAt: null })
       .where(
         and(
-          eq(conversationsTable.id, params.data.conversationId),
+          eq(conversationsTable.id, Number(params.data.conversationId)),
           eq(conversationsTable.storeDomain, params.data.storeDomain),
           eq(conversationsTable.sessionId, sessionId),
           isNotNull(conversationsTable.deletedAt)

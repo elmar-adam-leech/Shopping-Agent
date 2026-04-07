@@ -3,7 +3,7 @@ import { lt, eq, and, gt } from "drizzle-orm";
 import { db, mcpConnectionsTable, pendingOAuthStatesTable, withTenantScope } from "@workspace/db";
 import { encrypt } from "./encryption";
 import { discoverCustomerAccountMCP, resolveClientId, invalidateDiscoveryCache, type CustomerAccountDiscovery } from "./customer-account-discovery";
-import { logAnalyticsEvent } from "./analytics-logger";
+
 
 function getRedirectUri(): string {
   const appUrl = process.env.REPLIT_APP_URL;
@@ -160,8 +160,6 @@ export async function handleOAuthCallback(
   });
 
   invalidateDiscoveryCache(storeDomain);
-
-  await logAnalyticsEvent(storeDomain, "mcp_customer_account_connect", sessionId);
 
   return { storeDomain, sessionId };
 }

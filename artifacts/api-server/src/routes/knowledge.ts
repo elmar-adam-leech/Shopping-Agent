@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, and, isNull, isNotNull, or, ilike, sql, desc } from "drizzle-orm";
-import { shopKnowledgeTable, knowledgeVersionsTable, storesTable, withTenantScope } from "@workspace/db";
+import { shopKnowledgeTable, storesTable, withTenantScope } from "@workspace/db";
 import type { ShopKnowledge } from "@workspace/db/schema";
 import {
   CreateKnowledgeBody,
@@ -14,8 +14,6 @@ import {
   DeleteKnowledgeParams,
   ListDeletedKnowledgeParams,
   RestoreKnowledgeParams,
-  ListKnowledgeVersionsParams,
-  RestoreKnowledgeVersionParams,
   SearchKnowledgeParams,
   SearchKnowledgeQueryParams,
   TriggerKnowledgeSyncParams,
@@ -32,30 +30,6 @@ import { syncShopifyContent } from "../services/shopify-sync";
 const router: IRouter = Router();
 
 type KnowledgeCategory = ShopKnowledge["category"];
-
-async function createVersionSnapshot(storeDomain: string, entry: ShopKnowledge): Promise<void> {
-  const maxVersionResult = await withTenantScope(storeDomain, async (scopedDb) => {
-    return scopedDb
-      .select({ versionNumber: knowledgeVersionsTable.versionNumber })
-      .from(knowledgeVersionsTable)
-      .where(eq(knowledgeVersionsTable.knowledgeId, entry.id))
-      .orderBy(desc(knowledgeVersionsTable.versionNumber))
-      .limit(1);
-  });
-  const nextVersion = (maxVersionResult[0]?.versionNumber ?? 0) + 1;
-
-  await withTenantScope(storeDomain, async (scopedDb) => {
-    await scopedDb.insert(knowledgeVersionsTable).values({
-      knowledgeId: entry.id,
-      storeDomain,
-      category: entry.category,
-      title: entry.title,
-      content: entry.content,
-      tags: entry.tags,
-      versionNumber: nextVersion,
-    });
-  });
-}
 
 router.get("/stores/:storeDomain/knowledge", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
   const params = ListKnowledgeParams.safeParse(req.params);
@@ -134,30 +108,6 @@ router.patch("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain,
   if (!parsed.success) {
     sendZodError(res, parsed.error, "PATCH /stores/:storeDomain/knowledge/:knowledgeId body", req.body);
     return;
-  }
-
-  const [existing] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
-    return scopedDb
-      .select()
-      .from(shopKnowledgeTable)
-      .where(
-        and(
-          eq(shopKnowledgeTable.id, params.data.knowledgeId),
-          eq(shopKnowledgeTable.storeDomain, params.data.storeDomain),
-          isNull(shopKnowledgeTable.deletedAt)
-        )
-      );
-  });
-
-  if (!existing) {
-    sendError(res, 404, "Knowledge entry not found");
-    return;
-  }
-
-  try {
-    await createVersionSnapshot(params.data.storeDomain, existing);
-  } catch (err) {
-    console.warn("[knowledge] Failed to create version snapshot:", err instanceof Error ? err.message : err);
   }
 
   const updateData: Partial<Pick<ShopKnowledge, "category" | "title" | "content" | "sortOrder" | "tags">> = {};
@@ -268,7 +218,7 @@ router.patch("/stores/:storeDomain/knowledge/:knowledgeId/restore", validateStor
       .set({ deletedAt: null })
       .where(
         and(
-          eq(shopKnowledgeTable.id, params.data.knowledgeId),
+          eq(shopKnowledgeTable.id, Number(params.data.knowledgeId)),
           eq(shopKnowledgeTable.storeDomain, params.data.storeDomain),
           isNotNull(shopKnowledgeTable.deletedAt)
         )
@@ -290,111 +240,6 @@ router.patch("/stores/:storeDomain/knowledge/:knowledgeId/restore", validateStor
     action: "knowledge_restored",
     resourceType: "knowledge",
     resourceId: String(params.data.knowledgeId),
-  });
-
-  res.json(restored);
-});
-
-router.get("/stores/:storeDomain/knowledge/:knowledgeId/versions", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
-  const params = ListKnowledgeVersionsParams.safeParse(req.params);
-  if (!params.success) {
-    sendZodError(res, params.error, "GET /stores/:storeDomain/knowledge/:knowledgeId/versions", req.params);
-    return;
-  }
-
-  const versions = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
-    return scopedDb
-      .select()
-      .from(knowledgeVersionsTable)
-      .where(
-        and(
-          eq(knowledgeVersionsTable.knowledgeId, params.data.knowledgeId),
-          eq(knowledgeVersionsTable.storeDomain, params.data.storeDomain)
-        )
-      )
-      .orderBy(desc(knowledgeVersionsTable.versionNumber));
-  });
-
-  res.json(versions);
-});
-
-router.post("/stores/:storeDomain/knowledge/:knowledgeId/versions/:versionId/restore", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
-  const params = RestoreKnowledgeVersionParams.safeParse(req.params);
-  if (!params.success) {
-    sendZodError(res, params.error, "POST /stores/:storeDomain/knowledge/:knowledgeId/versions/:versionId/restore", req.params);
-    return;
-  }
-
-  const [version] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
-    return scopedDb
-      .select()
-      .from(knowledgeVersionsTable)
-      .where(
-        and(
-          eq(knowledgeVersionsTable.id, params.data.versionId),
-          eq(knowledgeVersionsTable.knowledgeId, params.data.knowledgeId),
-          eq(knowledgeVersionsTable.storeDomain, params.data.storeDomain)
-        )
-      );
-  });
-
-  if (!version) {
-    sendError(res, 404, "Version not found");
-    return;
-  }
-
-  const [currentEntry] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
-    return scopedDb
-      .select()
-      .from(shopKnowledgeTable)
-      .where(
-        and(
-          eq(shopKnowledgeTable.id, params.data.knowledgeId),
-          eq(shopKnowledgeTable.storeDomain, params.data.storeDomain)
-        )
-      );
-  });
-
-  if (currentEntry) {
-    try {
-      await createVersionSnapshot(params.data.storeDomain, currentEntry);
-    } catch (err) {
-      console.warn("[knowledge] Failed to create version snapshot before restore:", err instanceof Error ? err.message : err);
-    }
-  }
-
-  const [restored] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
-    return scopedDb
-      .update(shopKnowledgeTable)
-      .set({
-        category: version.category,
-        title: version.title,
-        content: version.content,
-        tags: version.tags,
-      })
-      .where(
-        and(
-          eq(shopKnowledgeTable.id, params.data.knowledgeId),
-          eq(shopKnowledgeTable.storeDomain, params.data.storeDomain)
-        )
-      )
-      .returning();
-  });
-
-  if (!restored) {
-    sendError(res, 404, "Knowledge entry not found");
-    return;
-  }
-
-  invalidateKnowledgeCache(params.data.storeDomain);
-
-  logAuditFromRequest(req, {
-    storeDomain: params.data.storeDomain,
-    actor: "merchant",
-    action: "knowledge_version_restored",
-    resourceType: "knowledge",
-    resourceId: String(params.data.knowledgeId),
-    metadata: { versionId: params.data.versionId, versionNumber: version.versionNumber },
   });
 
   res.json(restored);

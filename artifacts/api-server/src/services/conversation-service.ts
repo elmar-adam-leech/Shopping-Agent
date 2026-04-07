@@ -1,7 +1,7 @@
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { conversationsTable, withTenantScope } from "@workspace/db";
 import type { Conversation } from "@workspace/db/schema";
-import { logAnalyticsEvent } from "./analytics-logger";
+
 
 const MAX_MESSAGES_PER_CONVERSATION = 200;
 
@@ -106,10 +106,5 @@ export async function persistChatResult(
     console.error(`[chat] FAILED to save conversation id="${conversationId}" store="${storeDomain}":`, err instanceof Error ? err.message : "Unknown error");
   }
 
-  const analyticsResult = await logAnalyticsEvent(storeDomain, "chat", sessionId, { query: userQuery.slice(0, 500) });
-  if (!analyticsResult) {
-    analyticsSaved = false;
-  }
-
-  return { conversationSaved, analyticsSaved };
+  return { conversationSaved, analyticsSaved: true };
 }
