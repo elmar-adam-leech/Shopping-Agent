@@ -36,6 +36,7 @@ export interface UseChatStreamOptions {
   onSessionExpired?: () => Promise<string | null>;
   onCartError?: (message: string) => void;
   onPreferencesUpdated?: (extracted: Record<string, string>) => void;
+  onLanguageDetected?: (language: string) => void;
 }
 
 export function useChatStream({
@@ -49,6 +50,7 @@ export function useChatStream({
   onSessionExpired,
   onCartError,
   onPreferencesUpdated,
+  onLanguageDetected,
 }: UseChatStreamOptions) {
   const [messages, setMessages] = useState<ChatMessageWithId[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -85,6 +87,9 @@ export function useChatStream({
 
   const onPreferencesUpdatedRef = useRef(onPreferencesUpdated);
   onPreferencesUpdatedRef.current = onPreferencesUpdated;
+
+  const onLanguageDetectedRef = useRef(onLanguageDetected);
+  onLanguageDetectedRef.current = onLanguageDetected;
 
   useEffect(() => {
     return () => {
@@ -255,6 +260,9 @@ export function useChatStream({
             } else if (event.type === 'preferences_updated') {
               const extracted = event.data as Record<string, string>;
               onPreferencesUpdatedRef.current?.(extracted);
+            } else if (event.type === 'detected_language') {
+              const lang = event.data as string;
+              onLanguageDetectedRef.current?.(lang);
             }
           },
           controller.signal

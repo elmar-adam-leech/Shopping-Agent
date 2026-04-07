@@ -8,6 +8,7 @@ import { CustomInstructionsSettings } from "@/components/settings/CustomInstruct
 import { DataRetentionSettings } from "@/components/settings/DataRetentionSettings";
 import { ExperimentSettings } from "@/components/settings/ExperimentSettings";
 import { CheckoutRecoverySettings } from "@/components/settings/CheckoutRecoverySettings";
+import { LanguageSettings } from "@/components/settings/LanguageSettings";
 
 export default function SettingsPage() {
   const [, params] = useRoute("/:storeDomain/settings");
@@ -20,6 +21,8 @@ export default function SettingsPage() {
           <h1 className="text-3xl font-display font-bold mb-2">Agent Settings</h1>
           <p className="text-muted-foreground text-lg">Configure the brain behind your AI shopping assistant.</p>
         </div>
+
+        <LanguageSettings storeDomain={storeDomain} />
 
         <BrandVoiceSettings storeDomain={storeDomain} />
 

@@ -1,6 +1,6 @@
 import type { ShopKnowledge } from "@workspace/db/schema";
 import type { UCPDiscoveryDocument } from "./ucp-client";
-import { buildSystemPrompt, type ChatContext, type StoreCustomization, type UserPreferencesContext } from "./system-prompt";
+import { buildSystemPrompt, type ChatContext, type StoreCustomization, type UserPreferencesContext, type LanguageConfig } from "./system-prompt";
 import type { ChatMessageRecord } from "./conversation-service";
 
 const MESSAGE_WINDOW_SIZE = 20;
@@ -12,13 +12,14 @@ export function buildLLMContext(
   ucpDoc: UCPDiscoveryDocument | null,
   chatContext?: ChatContext,
   customization?: StoreCustomization,
-  userPreferences?: UserPreferencesContext | null
+  userPreferences?: UserPreferencesContext | null,
+  languageConfig?: LanguageConfig | null
 ) {
   const windowedMessages = existingMessages.length > MESSAGE_WINDOW_SIZE
     ? existingMessages.slice(-MESSAGE_WINDOW_SIZE)
     : existingMessages;
 
-  const systemPrompt = buildSystemPrompt(storeDomain, knowledge, ucpDoc, chatContext, customization, userPreferences);
+  const systemPrompt = buildSystemPrompt(storeDomain, knowledge, ucpDoc, chatContext, customization, userPreferences, languageConfig);
 
   const llmMessages = windowedMessages.map((m) => ({
     role: m.role,

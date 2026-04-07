@@ -25,6 +25,8 @@ import { extractAndSavePreferences } from "../services/preference-extractor";
 import { describeImageWithVision, isVisionCapable, validateImageBase64 } from "../services/vision-describe";
 import { getWishlist } from "../services/wishlist-service";
 import type { WishlistItem } from "@workspace/db/schema";
+import { detectLanguageFromText, resolveSessionLanguage } from "../services/language-detection";
+import type { LanguageConfig } from "../services/system-prompt";
 
 const MAX_USER_MESSAGE_LENGTH = 10_000;
 
@@ -365,6 +367,50 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       console.warn("[chat] Failed to load experiment variant:", err instanceof Error ? err.message : err);
     }
 
+    let sessionLanguage: string | null = null;
+    try {
+      const [sessionLangRow] = await withTenantScope(store.storeDomain, async (scopedDb) => {
+        return scopedDb
+          .select({ detectedLanguage: sessionsTable.detectedLanguage })
+          .from(sessionsTable)
+          .where(eq(sessionsTable.id, parsed.data.sessionId))
+          .limit(1);
+      });
+      sessionLanguage = sessionLangRow?.detectedLanguage ?? null;
+    } catch (err) {
+      console.warn("[chat] Failed to fetch session language:", err instanceof Error ? err.message : err);
+    }
+
+    if (!sessionLanguage) {
+      const detectedLang = detectLanguageFromText(truncatedMessage);
+      const resolvedLang = resolveSessionLanguage(
+        detectedLang,
+        null,
+        store.supportedLanguages,
+        store.defaultLanguage
+      );
+      sessionLanguage = resolvedLang;
+
+      try {
+        await withTenantScope(store.storeDomain, async (scopedDb) => {
+          await scopedDb
+            .update(sessionsTable)
+            .set({ detectedLanguage: resolvedLang })
+            .where(eq(sessionsTable.id, parsed.data.sessionId));
+        });
+      } catch (err) {
+        console.warn("[chat] Failed to store detected language:", err instanceof Error ? err.message : err);
+      }
+    }
+
+    const languageConfig: LanguageConfig = {
+      detectedLanguage: sessionLanguage,
+      supportedLanguages: store.supportedLanguages,
+      defaultLanguage: store.defaultLanguage,
+    };
+
+    safeSend(`data: ${JSON.stringify({ type: "detected_language", data: sessionLanguage })}\n\n`);
+
     const { systemPrompt, llmMessages } = buildLLMContext(
       existingMessages,
       store.storeDomain,
@@ -372,7 +418,8 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       ucpDoc,
       chatContext,
       customization,
-      userPreferences
+      userPreferences,
+      languageConfig
     );
 
     let fullAssistantContent = "";

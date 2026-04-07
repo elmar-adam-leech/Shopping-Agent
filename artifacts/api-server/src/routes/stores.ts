@@ -43,6 +43,8 @@ interface StoreResponse {
   dataRetentionDays: number;
   checkoutRecoveryEnabled: boolean;
   checkoutRecoveryDelayMinutes: number;
+  supportedLanguages: string[];
+  defaultLanguage: string;
   createdAt: Date;
 }
 
@@ -65,6 +67,8 @@ function storeToResponse(store: Store): StoreResponse {
     dataRetentionDays: store.dataRetentionDays,
     checkoutRecoveryEnabled: store.checkoutRecoveryEnabled,
     checkoutRecoveryDelayMinutes: store.checkoutRecoveryDelayMinutes,
+    supportedLanguages: store.supportedLanguages,
+    defaultLanguage: store.defaultLanguage,
     createdAt: store.createdAt,
   };
 }
@@ -165,7 +169,7 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
     return;
   }
 
-  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey" | "ucpCompliant" | "chatEnabled" | "embedEnabled" | "guardSensitivity" | "blockedTopics" | "brandVoice" | "customInstructions" | "welcomeMessage" | "recommendationStrategy" | "dataRetentionDays" | "checkoutRecoveryEnabled" | "checkoutRecoveryDelayMinutes">> = {};
+  const updateData: Partial<Pick<Store, "storefrontToken" | "provider" | "model" | "apiKey" | "ucpCompliant" | "chatEnabled" | "embedEnabled" | "guardSensitivity" | "blockedTopics" | "brandVoice" | "customInstructions" | "welcomeMessage" | "recommendationStrategy" | "dataRetentionDays" | "checkoutRecoveryEnabled" | "checkoutRecoveryDelayMinutes" | "supportedLanguages" | "defaultLanguage">> = {};
   if (parsed.data.storefrontToken !== undefined) updateData.storefrontToken = parsed.data.storefrontToken;
   if (parsed.data.provider !== undefined) updateData.provider = parsed.data.provider as ProviderValue;
   if (parsed.data.model !== undefined) updateData.model = parsed.data.model;
@@ -198,6 +202,8 @@ router.patch("/stores/:storeDomain", validateMerchantAuth, async (req, res): Pro
   }
   if (parsed.data.checkoutRecoveryEnabled !== undefined) updateData.checkoutRecoveryEnabled = parsed.data.checkoutRecoveryEnabled;
   if (parsed.data.checkoutRecoveryDelayMinutes !== undefined) updateData.checkoutRecoveryDelayMinutes = parsed.data.checkoutRecoveryDelayMinutes;
+  if (parsed.data.supportedLanguages !== undefined) updateData.supportedLanguages = parsed.data.supportedLanguages;
+  if (parsed.data.defaultLanguage !== undefined) updateData.defaultLanguage = parsed.data.defaultLanguage;
 
   const [store] = await db
     .update(storesTable)
@@ -253,6 +259,8 @@ router.get("/stores/:storeDomain/public", async (req, res): Promise<void> => {
     chatEnabled: store.chatEnabled,
     welcomeMessage: store.welcomeMessage ?? null,
     visionSupported,
+    supportedLanguages: store.supportedLanguages,
+    defaultLanguage: store.defaultLanguage,
   });
 });
 

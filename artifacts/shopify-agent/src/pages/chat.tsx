@@ -13,6 +13,7 @@ import { ConsentBanner } from "@/components/consent/ConsentBanner";
 import { PrivacySettingsPanel } from "@/components/consent/PrivacySettingsPanel";
 import { CheckoutRecoveryCard } from "@/components/chat/CheckoutRecoveryCard";
 import { ChatActionsProvider, type QuickAddProduct } from "@/contexts/chat-actions-context";
+import { I18nProvider, useI18n } from "@/contexts/i18n-context";
 import { useSession } from "@/hooks/use-session";
 import { useChatOrchestration, messageKey } from "@/hooks/use-chat-orchestration";
 import { useCartStore } from "@/store/use-cart-store";
@@ -29,10 +30,22 @@ import { useEffect, useRef } from "react";
 export default function ChatPage() {
   const [, params] = useRoute("/:storeDomain/chat");
   const storeDomain = params?.storeDomain || "";
+  const { data: storePublic } = useGetStorePublic(storeDomain);
+  const defaultLocale = (storePublic as any)?.defaultLanguage || "en";
+
+  return (
+    <I18nProvider defaultLocale={defaultLocale}>
+      <ChatPageContent storeDomain={storeDomain} />
+    </I18nProvider>
+  );
+}
+
+function ChatPageContent({ storeDomain }: { storeDomain: string }) {
   const { sessionId, sessionError, chatDisabled, refreshSession } = useSession(storeDomain);
   const cartStore = useCartStore();
   const { toast } = useToast();
   const { data: storePublic } = useGetStorePublic(storeDomain);
+  const { setLocale, t } = useI18n();
   const queryClient = useQueryClient();
 
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
@@ -98,6 +111,7 @@ export default function ChatPage() {
     onSuccess: () => { setConvOffset(0); refetchConversations(); },
     onCartError: (msg) => toast({ title: "Cart Error", description: msg, variant: "destructive" }),
     onPreferencesUpdated: handlePreferencesUpdated,
+    onLanguageDetected: setLocale,
   });
 
   const prevErrorRef = useRef<string | null>(null);
@@ -250,7 +264,7 @@ export default function ChatPage() {
     return (
       <AppLayout storeDomain={storeDomain}>
         <div className="flex h-full items-center justify-center">
-          <p className="text-muted-foreground">Chat is currently disabled for this store.</p>
+          <p className="text-muted-foreground">{t.chatDisabled}</p>
         </div>
       </AppLayout>
     );
@@ -288,7 +302,7 @@ export default function ChatPage() {
             <div className="min-h-[56px] border-b border-border/50 flex items-center justify-between px-4 sm:px-6 bg-background/80 backdrop-blur-md sticky top-0 z-20">
               <div className="flex items-center gap-3">
                 <AgentAvatar icon={Sparkles} size="sm" />
-                <h2 className="font-bold text-sm">Shopping Assistant</h2>
+                <h2 className="font-bold text-sm">{t.shoppingAssistant}</h2>
               </div>
               <div className="flex items-center gap-2">
                 {sessionId && <CustomerAccountConnect storeDomain={storeDomain} sessionId={sessionId} />}

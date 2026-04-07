@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { VoiceInputButton } from "./VoiceInputButton";
 import { ImageUploadButton } from "./ImageUploadButton";
+import { useI18n } from "@/contexts/i18n-context";
 
 interface ChatComposerProps {
   input: string;
@@ -15,6 +16,7 @@ interface ChatComposerProps {
 }
 
 export const ChatComposer = memo(function ChatComposer({ input, isLoading, onInputChange, onSubmit, onImageSubmit, visionSupported }: ChatComposerProps) {
+  const { t } = useI18n();
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -61,12 +63,12 @@ export const ChatComposer = memo(function ChatComposer({ input, isLoading, onInp
                 type="button"
                 onClick={handleImageCleared}
                 className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
-                aria-label="Remove image"
+                aria-label={t.removeImage}
               >
                 <X className="w-3 h-3" />
               </button>
             </div>
-            <span className="text-xs text-muted-foreground">Image attached — send to search for similar products</span>
+            <span className="text-xs text-muted-foreground">{t.imageAttached}</span>
           </div>
         )}
         <form 
@@ -87,24 +89,24 @@ export const ChatComposer = memo(function ChatComposer({ input, isLoading, onInp
             value={input}
             onChange={(e) => onInputChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={imagePreview ? "Add a description (optional)..." : "Ask about products, sizing, or policies..."}
+            placeholder={imagePreview ? t.chatPlaceholderWithImage : t.chatPlaceholder}
             className="min-h-[60px] max-h-[200px] w-full resize-none border-0 focus-visible:ring-0 bg-transparent py-4 pl-2 pr-14"
             rows={1}
-            aria-label="Message input"
+            aria-label={t.sendMessage}
           />
           <Button 
             type="submit" 
             size="icon" 
             disabled={!canSend}
             className="absolute right-2 bottom-2 rounded-xl bg-primary text-white hover:bg-primary/90"
-            aria-label="Send message"
+            aria-label={t.sendMessage}
           >
             <Send className="w-4 h-4" aria-hidden="true" />
           </Button>
         </form>
         <div className="text-center mt-2">
           <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-            Powered by Shopify MCP Agent
+            {t.poweredBy}
           </span>
         </div>
       </div>

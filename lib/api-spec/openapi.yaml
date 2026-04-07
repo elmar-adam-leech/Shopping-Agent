@@ -984,6 +984,12 @@ components:
           type: boolean
         checkoutRecoveryDelayMinutes:
           type: integer
+        supportedLanguages:
+          type: array
+          items:
+            type: string
+        defaultLanguage:
+          type: string
         createdAt:
           type: string
           format: date-time
@@ -999,6 +1005,8 @@ components:
         - recommendationStrategy
         - checkoutRecoveryEnabled
         - checkoutRecoveryDelayMinutes
+        - supportedLanguages
+        - defaultLanguage
         - createdAt
 
     StorePublicInfo:
@@ -1013,10 +1021,18 @@ components:
         visionSupported:
           type: boolean
           description: Whether the store's LLM provider supports vision/image input
+        supportedLanguages:
+          type: array
+          items:
+            type: string
+        defaultLanguage:
+          type: string
       required:
         - storeDomain
         - chatEnabled
         - visionSupported
+        - supportedLanguages
+        - defaultLanguage
 
     CreateStoreBody:
       type: object
@@ -1094,6 +1110,12 @@ components:
           type: integer
           minimum: 1
           maximum: 10080
+        supportedLanguages:
+          type: array
+          items:
+            type: string
+        defaultLanguage:
+          type: string
 
     KnowledgeEntry:
       type: object

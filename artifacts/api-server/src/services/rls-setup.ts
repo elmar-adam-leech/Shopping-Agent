@@ -35,6 +35,24 @@ DO $$ BEGIN
   ) THEN
     ALTER TABLE sessions ADD COLUMN experiment_variant TEXT;
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'sessions' AND column_name = 'detected_language'
+  ) THEN
+    ALTER TABLE sessions ADD COLUMN detected_language TEXT;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'stores' AND column_name = 'supported_languages'
+  ) THEN
+    ALTER TABLE stores ADD COLUMN supported_languages TEXT[] NOT NULL DEFAULT '{}';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'stores' AND column_name = 'default_language'
+  ) THEN
+    ALTER TABLE stores ADD COLUMN default_language TEXT NOT NULL DEFAULT 'en';
+  END IF;
 END $$;
 `;
 

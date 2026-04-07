@@ -45,6 +45,12 @@ export interface ChatContext {
   wishlistContext?: WishlistContext | null;
 }
 
+export interface LanguageConfig {
+  detectedLanguage?: string | null;
+  supportedLanguages?: string[];
+  defaultLanguage?: string;
+}
+
 export interface StoreCustomization {
   brandVoice?: BrandVoice | null;
   customInstructions?: string | null;
@@ -59,7 +65,8 @@ export function buildSystemPrompt(
   ucpDoc?: UCPDiscoveryDocument | null,
   context?: ChatContext,
   customization?: StoreCustomization,
-  userPreferences?: UserPreferencesContext | null
+  userPreferences?: UserPreferencesContext | null,
+  languageConfig?: LanguageConfig | null
 ): string {
   let prompt = `You are a fully UCP-compliant Shopify Agent and helpful, knowledgeable shopping assistant for the store "${storeDomain}". Use the Universal Commerce Protocol primitives via MCP for all commerce actions (capability discovery, checkout negotiation, orders, post-purchase). Your job is to help customers find products, understand their options, and make informed purchasing decisions.
 
@@ -99,6 +106,26 @@ When a customer wants to modify their cart (swap an item, change a variant like 
 3. After a change is confirmed, let the customer know they can undo the last change if needed
 4. For variant changes (e.g. "change to size large" or "switch to the red one"), look up the new variant details first, then propose the edit
 5. Only propose one cart edit at a time — do not batch multiple changes into one proposal`;
+
+  if (languageConfig) {
+    const lang = languageConfig.detectedLanguage || languageConfig.defaultLanguage || "en";
+    const supported = languageConfig.supportedLanguages && languageConfig.supportedLanguages.length > 0
+      ? languageConfig.supportedLanguages
+      : null;
+
+    prompt += `\n\n## Language Instructions`;
+    prompt += `\nYou MUST respond in **${lang}** for this conversation.`;
+    prompt += `\nMaintain this language consistently throughout the entire conversation.`;
+    if (supported) {
+      prompt += `\nThis store supports the following languages: ${supported.join(", ")}.`;
+      prompt += `\nIf the customer switches to one of these supported languages, follow their lead and switch to that language.`;
+      prompt += `\nIf the customer writes in an unsupported language, politely respond in the store's default language (${languageConfig.defaultLanguage || "en"}) and let them know which languages are available.`;
+    } else {
+      prompt += `\nIf the customer switches to a different language, follow their lead and respond in their language.`;
+    }
+    prompt += `\nAlways use natural, fluent language — never use machine-translation-style phrasing.`;
+    prompt += `\nFormat product names, prices, and descriptions in a way that is natural for the detected language and locale.`;
+  }
 
   if (customization?.brandVoice) {
     const bv = customization.brandVoice;
