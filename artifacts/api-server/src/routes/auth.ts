@@ -7,6 +7,7 @@ import { encrypt } from "../services/encryption";
 import { SHOPIFY_DOMAIN_PATTERN } from "../lib/validation";
 import { sendError } from "../lib/error-response";
 import { logAuditFromRequest } from "../services/audit-logger";
+import { registerWebhooks } from "../services/webhook-service";
 
 const router: IRouter = Router();
 
@@ -238,6 +239,12 @@ router.get("/auth/callback", async (req, res): Promise<void> => {
       resourceType: "store",
       resourceId: shop,
       metadata: { grantedScopes: tokenData.scope },
+    });
+
+    registerWebhooks(shop).then(result => {
+      console.log(`[auth] Webhooks registered for shop="${shop}": ${result.registered.length} ok, ${result.failed.length} failed`);
+    }).catch(err => {
+      console.error(`[auth] Webhook registration error for shop="${shop}":`, err instanceof Error ? err.message : err);
     });
 
     const merchantToken = await createMerchantSession(shop);

@@ -34,6 +34,7 @@ Key architectural decisions include:
 - **Prompt Injection Guard**: A layered defense system combining regex, an LLM classifier, system prompt hardening, and tool response scanning.
 - **Privacy & Data Management**: Comprehensive consent management system for GDPR/CCPA compliance, data export/deletion, and configurable retention periods.
 - **Customer Account MCP**: OAuth 2.0 + PKCE flow for connecting shoppers to their Shopify customer accounts for post-purchase and order management features.
+- **Webhooks Integration**: Real-time sync via Shopify webhooks for product, inventory, and order updates. Webhook receiver at `POST /api/webhooks/shopify` with HMAC-SHA256 signature verification, in-memory idempotency deduplication, and store-domain scoping. Supports topics: `products/create`, `products/update`, `products/delete`, `inventory_levels/update`, `orders/updated`, `app/uninstalled`. Product webhooks invalidate caches, inventory webhooks update an in-memory availability index, order webhooks push real-time status to active SSE sessions, and app uninstall triggers soft-delete cleanup. Webhook registration is automatic during OAuth onboarding. DB tables: `webhook_registrations` (unique per store+topic, tracks health via `last_delivery_at` and `failure_count`) and `webhook_delivery_logs` (with PII redaction). Merchant dashboard includes a Webhooks settings section with registered topics, delivery log, and re-register button.
 
 ### Feature Specifications
 - **Shopify OAuth**: Secure merchant authentication and app installation.

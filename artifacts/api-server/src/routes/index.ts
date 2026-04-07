@@ -13,6 +13,7 @@ import mcpAuthRouter from "./mcp-auth";
 import consentsRouter from "./consents";
 import experimentsRouter from "./experiments";
 import checkoutRecoveryRouter from "./checkout-recovery";
+import webhooksRouter from "./webhooks";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(preferencesRouter);
 router.use(analyticsRouter);
 router.use(consentsRouter);
 router.use(experimentsRouter);
+router.use(webhooksRouter);
 
 export default router;

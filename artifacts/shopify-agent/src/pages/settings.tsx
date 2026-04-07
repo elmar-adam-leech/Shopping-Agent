@@ -9,6 +9,7 @@ import { DataRetentionSettings } from "@/components/settings/DataRetentionSettin
 import { ExperimentSettings } from "@/components/settings/ExperimentSettings";
 import { CheckoutRecoverySettings } from "@/components/settings/CheckoutRecoverySettings";
 import { LanguageSettings } from "@/components/settings/LanguageSettings";
+import { WebhookSettings } from "@/components/settings/WebhookSettings";
 
 export default function SettingsPage() {
   const [, params] = useRoute("/:storeDomain/settings");
@@ -35,6 +36,8 @@ export default function SettingsPage() {
         <ThemeIntegrationSettings storeDomain={storeDomain} />
 
         <CheckoutRecoverySettings storeDomain={storeDomain} />
+
+        <WebhookSettings storeDomain={storeDomain} />
 
         <KnowledgeEditor storeDomain={storeDomain} />
 

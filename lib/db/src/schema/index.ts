@@ -11,3 +11,4 @@ export * from "./audit-logs";
 export * from "./maintenance";
 export * from "./consents";
 export * from "./wishlists";
+export * from "./webhooks";

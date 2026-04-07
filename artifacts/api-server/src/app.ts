@@ -25,6 +25,12 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 const isProduction = process.env.NODE_ENV === "production";
 
 app.use(cookieParser());
+app.use("/api/webhooks/shopify", express.json({
+  limit: "8mb",
+  verify: (req, _res, buf) => {
+    (req as unknown as { rawBody: Buffer }).rawBody = buf;
+  },
+}));
 app.use(express.json({ limit: "8mb" }));
 app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 
