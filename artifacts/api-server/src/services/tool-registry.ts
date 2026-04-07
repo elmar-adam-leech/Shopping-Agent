@@ -65,5 +65,28 @@ export async function listTools(
     mcpTools = mcpTools.filter(t => !ucpToolNameSet.has(t.name));
   }
 
+  const storeContentTool: MCPTool = {
+    name: "get_store_content",
+    description: "Fetch store content (metaobjects) by type handle. Use this for size guides, FAQs, styling tips, return policies, and other structured store content. Common type handles include: 'faq', 'size_guide', 'size_chart', 'styling_tip', 'return_policy'.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        type: {
+          type: "string",
+          description: "The metaobject type handle to fetch (e.g. 'faq', 'size_guide', 'size_chart', 'styling_tip', 'return_policy')",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of entries to return (default 10)",
+        },
+      },
+      required: ["type"],
+    },
+  };
+
+  if (!mcpTools.some((t) => t.name === "get_store_content")) {
+    mcpTools.push(storeContentTool);
+  }
+
   return { tools: mcpTools, ucpDoc, negotiation };
 }

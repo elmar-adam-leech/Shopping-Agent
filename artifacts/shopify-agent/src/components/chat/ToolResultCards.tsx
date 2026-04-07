@@ -4,9 +4,11 @@ import { ComparisonTable } from "./ComparisonTable";
 import { CartSummaryCard } from "./CartSummaryCard";
 import { CollectionCard, type CollectionCardData } from "./CollectionCard";
 import { ArticleCard, type BlogArticleData } from "./ArticleCard";
+import { ArticleCarousel } from "./ArticleCarousel";
 import { OrderCard, type OrderCardData } from "./OrderCard";
 import { OrderStatusCard, type OrderStatusCardData, type FulfillmentData } from "./OrderStatusCard";
 import { ReturnConfirmationCard, type ReturnConfirmationData } from "./ReturnConfirmationCard";
+import { MetaobjectCard, type MetaobjectData } from "./MetaobjectCard";
 
 interface BlogData {
   title?: string;
@@ -246,10 +248,33 @@ export function ToolResultCards({ toolName, content }: { toolName: string; conte
 
     if (articles.length === 0) return null;
 
+    if (articles.length >= 3) {
+      return <ArticleCarousel articles={articles.slice(0, 12)} />;
+    }
+
     return (
       <div className="grid gap-2 mt-2">
         {articles.slice(0, 6).map((a, i) => (
           <ArticleCard key={i} article={a} />
+        ))}
+      </div>
+    );
+  }
+
+  if (toolName === 'get_store_content' || toolName === 'get_metaobjects') {
+    const metaobjects: MetaobjectData[] = [];
+    if (data.metaobjects && Array.isArray((data.metaobjects as Record<string, unknown>).edges)) {
+      for (const edge of (data.metaobjects as { edges: Array<{ node: MetaobjectData }> }).edges) {
+        metaobjects.push(edge.node);
+      }
+    }
+
+    if (metaobjects.length === 0) return null;
+
+    return (
+      <div className="grid gap-2 mt-2">
+        {metaobjects.slice(0, 10).map((m, i) => (
+          <MetaobjectCard key={i} data={m} />
         ))}
       </div>
     );

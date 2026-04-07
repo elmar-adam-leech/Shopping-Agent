@@ -1,6 +1,6 @@
 import { scanToolResponse, logGuardEvent, type GuardSensitivity } from "./prompt-guard";
 import { callTool } from "./mcp-client";
-import { fetchBlogs, fetchCollections } from "./graphql-client";
+import { fetchBlogs, fetchCollections, fetchMetaobjects } from "./graphql-client";
 import { callAuthenticatedMCPTool } from "./customer-account-mcp";
 import { logAnalyticsEvent } from "./analytics-logger";
 import type { McpConnection } from "@workspace/db/schema";
@@ -44,6 +44,15 @@ export async function executeToolWithFallback(
     if (toolName === "get_blogs" || toolName === "list_blogs") {
       const limit = typeof args.limit === "number" ? args.limit : 5;
       const data = await fetchBlogs(storeDomain, storefrontToken, limit);
+      return JSON.stringify(data);
+    }
+    if (toolName === "get_store_content" || toolName === "get_metaobjects") {
+      const typeHandle = typeof args.type === "string" ? args.type : "";
+      if (!typeHandle) {
+        return JSON.stringify({ error: "type parameter is required for metaobject queries" });
+      }
+      const limit = typeof args.limit === "number" ? args.limit : 10;
+      const data = await fetchMetaobjects(storeDomain, storefrontToken, typeHandle, limit);
       return JSON.stringify(data);
     }
     return JSON.stringify({ error: `Tool ${toolName} failed and no fallback available` });

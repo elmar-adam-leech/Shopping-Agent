@@ -1,3 +1,5 @@
+import { LRUCache } from "./lru-cache";
+
 interface GraphQLResponse {
   data?: Record<string, unknown>;
   errors?: Array<{ message: string }>;
@@ -52,7 +54,11 @@ export async function fetchBlogs(storeDomain: string, storefrontToken: string, l
                   title
                   handle
                   excerpt
+                  contentHtml
                   publishedAt
+                  authorV2 {
+                    name
+                  }
                   image {
                     url
                     altText
@@ -69,6 +75,45 @@ export async function fetchBlogs(storeDomain: string, storefrontToken: string, l
     }
   `;
   return shopifyGraphQL(storeDomain, storefrontToken, query, { limit });
+}
+
+const metaobjectCache = new LRUCache<Record<string, unknown>>(100, 5 * 60 * 1000, "metaobjects");
+
+export async function fetchMetaobjects(
+  storeDomain: string,
+  storefrontToken: string,
+  typeHandle: string,
+  limit = 10
+): Promise<Record<string, unknown>> {
+  const cacheKey = `${storeDomain}::${typeHandle}::${limit}`;
+  const cached = metaobjectCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const query = `
+    query ($type: String!, $limit: Int!) {
+      metaobjects(type: $type, first: $limit) {
+        edges {
+          node {
+            id
+            type
+            handle
+            fields {
+              key
+              value
+              type
+            }
+          }
+        }
+      }
+    }
+  `;
+  const data = await shopifyGraphQL(storeDomain, storefrontToken, query, { type: typeHandle, limit });
+
+  metaobjectCache.set(cacheKey, data);
+
+  return data;
 }
 
 export async function fetchCollections(storeDomain: string, storefrontToken: string, limit = 10) {

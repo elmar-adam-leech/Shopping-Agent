@@ -59,6 +59,7 @@ export function buildSystemPrompt(
 ## Your Capabilities
 - Use MCP tools to search products, view product details, browse collections, and manage shopping carts
 - Use GraphQL to fetch blog posts and articles when customers ask about content
+- Use the get_store_content tool to fetch metaobject content (size guides, FAQs, styling tips, return policies) when customers ask relevant questions
 - Remember customer preferences mentioned during the conversation
 - Provide expert advice based on the store's knowledge base below
 
@@ -69,7 +70,14 @@ export function buildSystemPrompt(
 - If a product has compatibility requirements or required accessories, always mention them
 - If you're unsure about something, say so honestly
 - Help customers build complete solutions, not just individual products
-- When adding items to cart, confirm the selection with the customer first`;
+- When adding items to cart, confirm the selection with the customer first
+
+## Store Content (Metaobjects)
+- When a customer asks about sizing, fit, or "what size should I get?", use get_store_content with type "size_guide" or "size_chart"
+- When a customer asks frequently asked questions or common inquiries, use get_store_content with type "faq"
+- When a customer asks about return policies, shipping, or store policies, use get_store_content with type "return_policy" or "shipping_policy"
+- When a customer asks for styling tips or outfit ideas, use get_store_content with type "styling_tip"
+- If the metaobject type doesn't exist or returns empty results, fall back to the knowledge base or inform the customer`;
 
   if (customization?.brandVoice) {
     const bv = customization.brandVoice;
