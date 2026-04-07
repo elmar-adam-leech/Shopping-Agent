@@ -147,6 +147,9 @@ When a customer wants to modify their cart (swap an item, change a variant like 
         prompt += `\n- ${hType}${methods ? `: ${methods}` : ""}`;
       }
     }
+
+    const capSet = new Set(capabilities);
+    prompt += buildNegotiationInstructions(capSet);
   }
 
   if (context) {
@@ -190,4 +193,76 @@ When a customer wants to modify their cart (swap an item, change a variant like 
   prompt += SYSTEM_PROMPT_HARDENING;
 
   return prompt;
+}
+
+function buildNegotiationInstructions(capabilities: Set<string>): string {
+  let instructions = "";
+  const sections: string[] = [];
+
+  const hasLoyalty = capabilities.has("loyalty") || capabilities.has("loyalty.balance") || capabilities.has("loyalty.redeem");
+  const hasDiscounts = capabilities.has("discounts") || capabilities.has("discounts.apply") || capabilities.has("discounts.validate");
+  const hasSubscriptions = capabilities.has("subscriptions") || capabilities.has("subscriptions.cadence") || capabilities.has("subscriptions.list_options");
+  const hasPreorders = capabilities.has("preorders") || capabilities.has("preorders.check_availability") || capabilities.has("preorders.create");
+  const hasGifting = capabilities.has("gifting") || capabilities.has("gifting.wrap") || capabilities.has("gifting.message") || capabilities.has("gifting.create");
+
+  if (!hasLoyalty && !hasDiscounts && !hasSubscriptions && !hasPreorders && !hasGifting) {
+    return "";
+  }
+
+  instructions += `\n\n## Checkout Negotiation Flow`;
+  instructions += `\nDuring checkout, guide the customer through available options conversationally. Follow these steps naturally:`;
+
+  if (hasLoyalty) {
+    sections.push(`### Loyalty & Rewards
+- When a customer is checking out and has a connected account, proactively check their loyalty balance using get_loyalty_balance.
+- If they have redeemable points, inform them of their balance and ask if they would like to apply points toward their purchase.
+- When they agree, use redeem_loyalty_points to apply the discount. Show them the updated total.
+- Always confirm the number of points being redeemed and the dollar value before applying.`);
+  }
+
+  if (hasDiscounts) {
+    sections.push(`### Discount & Promo Codes
+- If a customer mentions a coupon, promo code, or asks about discounts, first validate the code using validate_discount_code to check eligibility and details.
+- Show the customer what the discount offers (percentage off, fixed amount, free shipping, etc.) before applying.
+- If valid, apply it using apply_discount and confirm the updated total.
+- If invalid or expired, let the customer know and offer to check for other available promotions using list_available_discounts.
+- Never guess at discount amounts — always use the validation tool first.`);
+  }
+
+  if (hasSubscriptions) {
+    sections.push(`### Subscription Configuration
+- For subscription-eligible products, proactively offer subscription options by using list_subscription_options.
+- Present available cadences (weekly, biweekly, monthly, quarterly) with any associated savings.
+- Help the customer select a cadence using set_subscription_cadence. Confirm their selection before finalizing.
+- Explain subscription benefits like savings percentage and flexible management (pause, cancel anytime).`);
+  }
+
+  if (hasPreorders) {
+    sections.push(`### Pre-Order Handling
+- For out-of-stock or upcoming products, use check_preorder_availability to get availability dates and terms.
+- Clearly communicate the estimated availability date, any deposit requirements, and cancellation terms before proceeding.
+- Only create a pre-order with create_preorder after the customer explicitly agrees to the terms.
+- Make sure the customer understands they are placing a pre-order, not an immediate purchase.`);
+  }
+
+  if (hasGifting) {
+    sections.push(`### Gifting Options
+- During checkout, ask if the order is a gift. If so, offer available gifting options.
+- Offer gift wrapping using add_gift_wrap and let them choose a wrapping style if options are available.
+- Offer to add a personalized gift message using add_gift_message.
+- For complete gift orders, use create_gift_order which combines wrapping, messaging, and recipient notification.
+- Confirm all gift details (message text, recipient info, wrapping style) before finalizing.`);
+  }
+
+  sections.push(`### Escalation Handling
+- If any tool response contains a requires_escalation flag, immediately stop the current flow.
+- Present the escalation message and contact information to the customer clearly and empathetically.
+- Do not attempt to retry or work around escalated requests — these require human assistance.
+- Offer to help with other questions while they wait for support.`);
+
+  for (const section of sections) {
+    instructions += `\n\n${section}`;
+  }
+
+  return instructions;
 }

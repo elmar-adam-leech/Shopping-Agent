@@ -3,6 +3,7 @@ import { callTool } from "./mcp-client";
 import { fetchBlogs, fetchCollections, fetchMetaobjects } from "./graphql-client";
 import { callAuthenticatedMCPTool } from "./customer-account-mcp";
 import { logAnalyticsEvent } from "./analytics-logger";
+import { validateUCPInvokeParams } from "./ucp-client";
 import type { McpConnection } from "@workspace/db/schema";
 import { logAudit } from "./audit-logger";
 
@@ -10,6 +11,24 @@ const CART_TOOLS = new Set(["create_cart", "add_to_cart", "update_cart", "propos
 const CHECKOUT_TOOLS = new Set(["create_checkout", "get_checkout_url"]);
 const CHECKOUT_COMPLETE_TOOLS = new Set(["complete_checkout", "checkout_complete", "process_checkout"]);
 const PRODUCT_TOOLS = new Set(["search_products", "get_product", "get_product_by_handle"]);
+
+const NEGOTIATION_TOOL_EVENTS: Record<string, string> = {
+  get_loyalty_balance: "loyalty_balance_checked",
+  redeem_loyalty_points: "loyalty_redeemed",
+  apply_discount: "discount_applied",
+  validate_discount_code: "discount_validated",
+  list_available_discounts: "discounts_listed",
+  set_subscription_cadence: "subscription_configured",
+  create_subscription: "subscription_configured",
+  list_subscription_options: "subscription_options_listed",
+  manage_subscription: "subscription_managed",
+  check_preorder_availability: "preorder_checked",
+  create_preorder: "preorder_created",
+  add_gift_wrap: "gift_wrap_added",
+  add_gift_message: "gift_message_added",
+  create_gift_order: "gift_order_created",
+  manage_wishlist: "wishlist_managed",
+};
 
 const ORDER_TOOL_ANALYTICS: Record<string, string> = {
   get_orders: "order_history_query",
@@ -150,6 +169,13 @@ export function createToolExecutor(opts: {
         }
       } catch {}
     }
+
+    const negotiationEvent = NEGOTIATION_TOOL_EVENTS[toolName];
+    if (negotiationEvent) {
+      logAnalyticsEvent(storeDomain, negotiationEvent, sessionId, {
+        metadata: { toolName, args: Object.keys(args) },
+      }).catch(() => {});
+    }
   }
 
   return async function executeAndGuardTool(toolName: string, args: Record<string, unknown>): Promise<string> {
@@ -168,6 +194,19 @@ export function createToolExecutor(opts: {
     }
 
     const startTime = Date.now();
+
+    if (toolName === "ucp_invoke") {
+      const service = typeof args.service === "string" ? args.service.trim() : "";
+      const capability = typeof args.capability === "string" ? args.capability.trim() : "";
+      if (!service || !capability) {
+        return JSON.stringify({ error: "ucp_invoke requires both 'service' and 'capability' parameters" });
+      }
+      const params = typeof args.params === "object" && args.params !== null ? args.params as Record<string, unknown> : {};
+      const validation = validateUCPInvokeParams(service, capability, params);
+      if (!validation.valid) {
+        return JSON.stringify({ error: validation.error });
+      }
+    }
 
     const orderEventType = ORDER_TOOL_ANALYTICS[toolName];
     if (orderEventType) {
@@ -207,7 +246,7 @@ export function createToolExecutor(opts: {
           });
           const guarded = await guardToolResult(authResult, toolName, storeDomain, sessionId, guardSensitivity, blockedTopics);
           logToolAnalytics(toolName, args, guarded);
-          return guarded;
+          return detectAndHandleEscalation(guarded, toolName, storeDomain, sessionId);
         }
         if (authParsed && typeof authParsed === "object" && (authParsed as Record<string, unknown>).error) {
           console.warn(`[chat] Authenticated MCP tool "${toolName}" returned error, falling back to public MCP`);
@@ -223,7 +262,7 @@ export function createToolExecutor(opts: {
           });
           const guarded = await guardToolResult(authResult, toolName, storeDomain, sessionId, guardSensitivity, blockedTopics);
           logToolAnalytics(toolName, args, guarded);
-          return guarded;
+          return detectAndHandleEscalation(guarded, toolName, storeDomain, sessionId);
         }
       } catch (err) {
         console.warn(`[chat] Authenticated MCP call failed, falling back to public:`, err instanceof Error ? err.message : err);
@@ -252,6 +291,53 @@ export function createToolExecutor(opts: {
 
     const guarded = await guardToolResult(result, toolName, storeDomain, sessionId, guardSensitivity, blockedTopics);
     logToolAnalytics(toolName, args, guarded);
-    return guarded;
+
+    const withEscalation = detectAndHandleEscalation(guarded, toolName, storeDomain, sessionId);
+    return withEscalation;
   };
+}
+
+function detectAndHandleEscalation(
+  result: string,
+  toolName: string,
+  storeDomain: string,
+  sessionId: string
+): string {
+  try {
+    const parsed = JSON.parse(result);
+    if (parsed && typeof parsed === "object" && (parsed as Record<string, unknown>).requires_escalation === true) {
+      const escalationData = parsed as Record<string, unknown>;
+      logAnalyticsEvent(storeDomain, "escalation_triggered", sessionId, {
+        metadata: {
+          toolName,
+          reason: typeof escalationData.escalation_reason === "string" ? escalationData.escalation_reason : "unknown",
+        },
+      }).catch(() => {});
+
+      const escalation: Record<string, unknown> = {
+        ...escalationData,
+        _escalation: true,
+        _escalation_message: buildEscalationMessage(escalationData),
+      };
+      return JSON.stringify(escalation);
+    }
+  } catch {}
+  return result;
+}
+
+function buildEscalationMessage(data: Record<string, unknown>): string {
+  const reason = typeof data.escalation_reason === "string" ? data.escalation_reason : "This request requires human assistance.";
+  const contactEmail = typeof data.contact_email === "string" ? data.contact_email : null;
+  const contactPhone = typeof data.contact_phone === "string" ? data.contact_phone : null;
+  const contactUrl = typeof data.contact_url === "string" ? data.contact_url : null;
+
+  let message = `This request needs to be handled by our support team. Reason: ${reason}`;
+  const contactMethods: string[] = [];
+  if (contactEmail) contactMethods.push(`Email: ${contactEmail}`);
+  if (contactPhone) contactMethods.push(`Phone: ${contactPhone}`);
+  if (contactUrl) contactMethods.push(`Support: ${contactUrl}`);
+  if (contactMethods.length > 0) {
+    message += `\n\nYou can reach our support team at:\n${contactMethods.join("\n")}`;
+  }
+  return message;
 }

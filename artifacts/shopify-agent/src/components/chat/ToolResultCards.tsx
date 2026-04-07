@@ -10,6 +10,11 @@ import { OrderCard, type OrderCardData } from "./OrderCard";
 import { OrderStatusCard, type OrderStatusCardData, type FulfillmentData } from "./OrderStatusCard";
 import { ReturnConfirmationCard, type ReturnConfirmationData } from "./ReturnConfirmationCard";
 import { MetaobjectCard, type MetaobjectData } from "./MetaobjectCard";
+import { LoyaltyBalanceCard, type LoyaltyBalanceData } from "./LoyaltyBalanceCard";
+import { DiscountCard, type DiscountCardData } from "./DiscountCard";
+import { SubscriptionCadenceCard, type SubscriptionCadenceData, type CadenceOption } from "./SubscriptionCadenceCard";
+import { PreOrderCard, type PreOrderData } from "./PreOrderCard";
+import { EscalationCard, type EscalationData } from "./EscalationCard";
 
 interface BlogData {
   title?: string;
@@ -283,6 +288,90 @@ export function ToolResultCards({ toolName, content }: { toolName: string; conte
         ))}
       </div>
     );
+  }
+
+  if (toolName === 'get_loyalty_balance') {
+    const loyaltyData: LoyaltyBalanceData = {
+      balance: typeof data.balance === 'number' ? data.balance : typeof data.points === 'number' ? data.points : undefined,
+      tier: str(data.tier || data.tierStatus || data.tier_status),
+      pointsValue: str(data.pointsValue || data.points_value || (data.value as Record<string, unknown>)?.amount),
+      currencyCode: str(data.currencyCode || data.currency),
+      nextTier: str(data.nextTier || data.next_tier),
+      pointsToNextTier: typeof data.pointsToNextTier === 'number' ? data.pointsToNextTier : typeof data.points_to_next_tier === 'number' ? data.points_to_next_tier as number : undefined,
+    };
+    if (loyaltyData.balance === undefined) return null;
+    return <div className="mt-2"><LoyaltyBalanceCard data={loyaltyData} /></div>;
+  }
+
+  if (toolName === 'apply_discount' || toolName === 'validate_discount_code') {
+    const discountData: DiscountCardData = {
+      code: str(data.code || data.discountCode || data.discount_code),
+      valid: data.valid !== false && data.error === undefined,
+      type: str(data.type || data.discountType || data.discount_type),
+      value: str(data.value || data.amount || data.discountValue || data.discount_value),
+      description: str(data.description || data.summary),
+      minimumPurchase: str(data.minimumPurchase || data.minimum_purchase || data.minimumOrderAmount),
+      expiresAt: str(data.expiresAt || data.expires_at || data.expiry),
+      applied: toolName === 'apply_discount' && data.error === undefined,
+      newTotal: str(data.newTotal || data.new_total || data.updatedTotal || data.updated_total),
+      savings: str(data.savings || data.savedAmount || data.saved_amount),
+      currencyCode: str(data.currencyCode || data.currency),
+    };
+    return <div className="mt-2"><DiscountCard data={discountData} /></div>;
+  }
+
+  if (toolName === 'list_subscription_options' || toolName === 'set_subscription_cadence') {
+    const options: CadenceOption[] = [];
+    const rawOptions = data.options || data.cadenceOptions || data.cadence_options || data.plans;
+    if (Array.isArray(rawOptions)) {
+      for (const opt of rawOptions as Record<string, unknown>[]) {
+        options.push({
+          cadence: String(opt.cadence || opt.interval || opt.frequency || ""),
+          label: str(opt.label || opt.name),
+          price: str(opt.price || (opt.priceAmount as Record<string, unknown>)?.amount),
+          savings: str(opt.savings || opt.discount),
+          currencyCode: str(opt.currencyCode || opt.currency),
+        });
+      }
+    }
+    const subData: SubscriptionCadenceData = {
+      productName: str(data.productName || data.product_name || data.productTitle),
+      productId: str(data.productId || data.product_id),
+      options: options.length > 0 ? options : undefined,
+      selectedCadence: str(data.selectedCadence || data.selected_cadence || data.cadence || data.interval),
+      subscriptionId: str(data.subscriptionId || data.subscription_id),
+      confirmed: toolName === 'set_subscription_cadence' && data.error === undefined,
+    };
+    return <div className="mt-2"><SubscriptionCadenceCard data={subData} /></div>;
+  }
+
+  if (toolName === 'check_preorder_availability' || toolName === 'create_preorder') {
+    const preorderData: PreOrderData = {
+      productName: str(data.productName || data.product_name || data.productTitle),
+      productId: str(data.productId || data.product_id),
+      available: data.available !== false,
+      estimatedDate: str(data.estimatedDate || data.estimated_date || data.availableDate || data.available_date || data.estimatedAvailability),
+      deposit: str(data.deposit || data.depositAmount || data.deposit_amount),
+      depositPercentage: str(data.depositPercentage || data.deposit_percentage),
+      fullPrice: str(data.fullPrice || data.full_price || data.price || (data.totalPrice as Record<string, unknown>)?.amount),
+      currencyCode: str(data.currencyCode || data.currency),
+      terms: str(data.terms || data.preorderTerms || data.preorder_terms),
+      cancellable: typeof data.cancellable === 'boolean' ? data.cancellable : typeof data.cancelable === 'boolean' ? data.cancelable : undefined,
+      confirmed: toolName === 'create_preorder' && data.error === undefined,
+      preorderId: str(data.preorderId || data.preorder_id || data.id),
+    };
+    return <div className="mt-2"><PreOrderCard data={preorderData} /></div>;
+  }
+
+  if (data._escalation === true || data.requires_escalation === true) {
+    const escalationData: EscalationData = {
+      reason: str(data.escalation_reason || data.reason),
+      message: str(data._escalation_message || data.message),
+      contactEmail: str(data.contact_email || data.contactEmail),
+      contactPhone: str(data.contact_phone || data.contactPhone),
+      contactUrl: str(data.contact_url || data.contactUrl),
+    };
+    return <div className="mt-2"><EscalationCard data={escalationData} /></div>;
   }
 
   return null;

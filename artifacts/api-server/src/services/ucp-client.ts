@@ -498,6 +498,53 @@ const DYNAMIC_TOOL_TEMPLATES: Record<string, (serviceType: string, capability?: 
       required: ["action", "customer_email"],
     },
   }),
+  "discounts.validate": () => ({
+    name: "validate_discount_code",
+    description: "Validate a discount or promo code and return its details (discount amount, restrictions, expiry) without applying it",
+    inputSchema: {
+      type: "object",
+      properties: {
+        code: { type: "string", description: "Discount or promo code to validate" },
+        checkout_session_id: { type: "string", description: "Optional checkout session to validate against" },
+      },
+      required: ["code"],
+    },
+  }),
+  "subscriptions.cadence": () => ({
+    name: "set_subscription_cadence",
+    description: "Set or change the delivery cadence for a subscription (weekly, biweekly, monthly, quarterly)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        subscription_id: { type: "string", description: "The subscription ID" },
+        cadence: { type: "string", description: "Delivery cadence: 'weekly', 'biweekly', 'monthly', 'quarterly'" },
+      },
+      required: ["subscription_id", "cadence"],
+    },
+  }),
+  "subscriptions.list_options": () => ({
+    name: "list_subscription_options",
+    description: "List available subscription plans and cadence options for a product",
+    inputSchema: {
+      type: "object",
+      properties: {
+        product_id: { type: "string", description: "Product ID to list subscription options for" },
+      },
+      required: ["product_id"],
+    },
+  }),
+  "preorders.check_availability": () => ({
+    name: "check_preorder_availability",
+    description: "Check pre-order availability for a product including estimated availability date, deposit requirements, and terms",
+    inputSchema: {
+      type: "object",
+      properties: {
+        product_id: { type: "string", description: "Product ID to check" },
+        variant_id: { type: "string", description: "Variant ID to check" },
+      },
+      required: ["product_id"],
+    },
+  }),
   gifting: () => null,
   "gifting.create": () => ({
     name: "create_gift_order",
@@ -511,6 +558,32 @@ const DYNAMIC_TOOL_TEMPLATES: Record<string, (serviceType: string, capability?: 
         gift_wrapping: { type: "boolean", description: "Whether to add gift wrapping" },
       },
       required: ["checkout_session_id"],
+    },
+  }),
+  "gifting.wrap": () => ({
+    name: "add_gift_wrap",
+    description: "Add gift wrapping to a checkout session with optional wrapping style selection",
+    inputSchema: {
+      type: "object",
+      properties: {
+        checkout_session_id: { type: "string", description: "The checkout session ID" },
+        wrapping_style: { type: "string", description: "Gift wrapping style (e.g. 'standard', 'premium', 'holiday')" },
+      },
+      required: ["checkout_session_id"],
+    },
+  }),
+  "gifting.message": () => ({
+    name: "add_gift_message",
+    description: "Add a personalized gift message to a checkout session",
+    inputSchema: {
+      type: "object",
+      properties: {
+        checkout_session_id: { type: "string", description: "The checkout session ID" },
+        message: { type: "string", description: "The gift message text" },
+        recipient_name: { type: "string", description: "Name of the gift recipient" },
+        sender_name: { type: "string", description: "Name of the gift sender" },
+      },
+      required: ["checkout_session_id", "message"],
     },
   }),
 };
@@ -608,16 +681,114 @@ export function generateToolsFromCapabilities(ucpDoc: UCPDiscoveryDocument): MCP
   return tools;
 }
 
+const UCP_INVOKE_PARAM_SCHEMAS: Record<string, { required: string[]; properties: Record<string, { type: string; description: string }> }> = {
+  "loyalty.balance": {
+    required: ["customer_email"],
+    properties: { customer_email: { type: "string", description: "Customer email" } },
+  },
+  "loyalty.redeem": {
+    required: ["customer_email", "points"],
+    properties: {
+      customer_email: { type: "string", description: "Customer email" },
+      points: { type: "number", description: "Points to redeem" },
+      checkout_session_id: { type: "string", description: "Checkout session to apply to" },
+    },
+  },
+  "discounts.apply": {
+    required: ["checkout_session_id", "code"],
+    properties: {
+      checkout_session_id: { type: "string", description: "Checkout session ID" },
+      code: { type: "string", description: "Discount code" },
+    },
+  },
+  "discounts.validate": {
+    required: ["code"],
+    properties: { code: { type: "string", description: "Discount code to validate" } },
+  },
+  "subscriptions.cadence": {
+    required: ["subscription_id", "cadence"],
+    properties: {
+      subscription_id: { type: "string", description: "Subscription ID" },
+      cadence: { type: "string", description: "Delivery cadence" },
+    },
+  },
+  "subscriptions.list_options": {
+    required: ["product_id"],
+    properties: { product_id: { type: "string", description: "Product ID" } },
+  },
+  "preorders.create": {
+    required: ["product_id", "quantity"],
+    properties: {
+      product_id: { type: "string", description: "Product ID" },
+      quantity: { type: "number", description: "Quantity" },
+      customer_email: { type: "string", description: "Customer email" },
+    },
+  },
+  "preorders.check_availability": {
+    required: ["product_id"],
+    properties: { product_id: { type: "string", description: "Product ID" } },
+  },
+  "gifting.wrap": {
+    required: ["checkout_session_id"],
+    properties: {
+      checkout_session_id: { type: "string", description: "Checkout session ID" },
+      wrapping_style: { type: "string", description: "Wrapping style" },
+    },
+  },
+  "gifting.message": {
+    required: ["checkout_session_id", "message"],
+    properties: {
+      checkout_session_id: { type: "string", description: "Checkout session ID" },
+      message: { type: "string", description: "Gift message" },
+    },
+  },
+  "gifting.create": {
+    required: ["checkout_session_id"],
+    properties: {
+      checkout_session_id: { type: "string", description: "Checkout session ID" },
+      gift_message: { type: "string", description: "Gift message" },
+      recipient_email: { type: "string", description: "Recipient email" },
+    },
+  },
+};
+
+export function validateUCPInvokeParams(
+  service: string,
+  capability: string,
+  params: Record<string, unknown>
+): { valid: boolean; error?: string } {
+  const key = `${service}.${capability}`;
+  const schema = UCP_INVOKE_PARAM_SCHEMAS[key];
+  if (!schema) return { valid: true };
+  for (const req of schema.required) {
+    if (params[req] === undefined || params[req] === null) {
+      return { valid: false, error: `Missing required parameter "${req}" for ${key}` };
+    }
+  }
+  for (const [name, propSchema] of Object.entries(schema.properties)) {
+    const value = params[name];
+    if (value === undefined || value === null) continue;
+    if (propSchema.type === "string" && typeof value !== "string") {
+      return { valid: false, error: `Parameter "${name}" for ${key} must be a string` };
+    }
+    if (propSchema.type === "number" && typeof value !== "number") {
+      return { valid: false, error: `Parameter "${name}" for ${key} must be a number` };
+    }
+  }
+  return { valid: true };
+}
+
 const ALL_UCP_TOOL_NAMES = new Set([
   UCP_GENERIC_DISPATCHER_NAME,
   "create_checkout", "update_checkout", "complete_checkout",
   "get_order_status", "get_orders", "request_return",
   "create_subscription", "manage_subscription",
   "get_loyalty_balance", "redeem_loyalty_points",
-  "apply_discount", "list_available_discounts",
-  "create_preorder",
+  "apply_discount", "list_available_discounts", "validate_discount_code",
+  "set_subscription_cadence", "list_subscription_options",
+  "create_preorder", "check_preorder_availability",
   "manage_wishlist",
-  "create_gift_order",
+  "create_gift_order", "add_gift_wrap", "add_gift_message",
 ]);
 
 export function getUCPToolNames(ucpDoc?: UCPDiscoveryDocument | null): Set<string> {
