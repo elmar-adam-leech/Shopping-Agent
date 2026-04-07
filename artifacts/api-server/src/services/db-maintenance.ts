@@ -1,5 +1,6 @@
 import { sessionsTable, analyticsLogsTable, conversationsTable, shopKnowledgeTable, pendingOAuthStatesTable, maintenanceStateTable, userConsentsTable, userPreferencesTable, storesTable, withAdminBypass } from "@workspace/db";
 import { eq, sql, lt, and, isNotNull } from "drizzle-orm";
+import { runAutoSync } from "./shopify-sync";
 
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const BATCH_DELETE_LIMIT = 1000;
@@ -289,6 +290,12 @@ async function runMaintenance(): Promise<void> {
       }
     } catch (err) {
       console.warn("[db-maintenance] Soft-delete purge failed:", err instanceof Error ? err.message : err);
+    }
+
+    try {
+      await runAutoSync();
+    } catch (err) {
+      console.warn("[db-maintenance] Auto-sync failed:", err instanceof Error ? err.message : err);
     }
 
     await releaseLock(true);

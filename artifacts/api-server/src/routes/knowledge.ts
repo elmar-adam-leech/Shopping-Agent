@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq, and, isNull, isNotNull } from "drizzle-orm";
-import { shopKnowledgeTable, withTenantScope } from "@workspace/db";
+import { eq, and, isNull, isNotNull, or, ilike, sql, desc } from "drizzle-orm";
+import { shopKnowledgeTable, knowledgeVersionsTable, storesTable, withTenantScope } from "@workspace/db";
 import type { ShopKnowledge } from "@workspace/db/schema";
 import {
   CreateKnowledgeBody,
@@ -14,15 +14,48 @@ import {
   DeleteKnowledgeParams,
   ListDeletedKnowledgeParams,
   RestoreKnowledgeParams,
+  ListKnowledgeVersionsParams,
+  RestoreKnowledgeVersionParams,
+  SearchKnowledgeParams,
+  SearchKnowledgeQueryParams,
+  TriggerKnowledgeSyncParams,
+  GetKnowledgeSyncStatusParams,
+  UpdateSyncSettingsParams,
+  UpdateSyncSettingsBody,
 } from "@workspace/api-zod";
 import { validateStoreDomain, validateMerchantAuth } from "../middleware";
 import { invalidateKnowledgeCache } from "../services/knowledge-cache";
 import { sendError, sendZodError } from "../lib/error-response";
 import { logAuditFromRequest } from "../services/audit-logger";
+import { syncShopifyContent } from "../services/shopify-sync";
 
 const router: IRouter = Router();
 
 type KnowledgeCategory = ShopKnowledge["category"];
+
+async function createVersionSnapshot(storeDomain: string, entry: ShopKnowledge): Promise<void> {
+  const maxVersionResult = await withTenantScope(storeDomain, async (scopedDb) => {
+    return scopedDb
+      .select({ versionNumber: knowledgeVersionsTable.versionNumber })
+      .from(knowledgeVersionsTable)
+      .where(eq(knowledgeVersionsTable.knowledgeId, entry.id))
+      .orderBy(desc(knowledgeVersionsTable.versionNumber))
+      .limit(1);
+  });
+  const nextVersion = (maxVersionResult[0]?.versionNumber ?? 0) + 1;
+
+  await withTenantScope(storeDomain, async (scopedDb) => {
+    await scopedDb.insert(knowledgeVersionsTable).values({
+      knowledgeId: entry.id,
+      storeDomain,
+      category: entry.category,
+      title: entry.title,
+      content: entry.content,
+      tags: entry.tags,
+      versionNumber: nextVersion,
+    });
+  });
+}
 
 router.get("/stores/:storeDomain/knowledge", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
   const params = ListKnowledgeParams.safeParse(req.params);
@@ -71,6 +104,7 @@ router.post("/stores/:storeDomain/knowledge", validateStoreDomain, validateMerch
         title: parsed.data.title,
         content: parsed.data.content,
         sortOrder: parsed.data.sortOrder ?? 0,
+        tags: parsed.data.tags ?? [],
       })
       .returning();
   });
@@ -102,11 +136,36 @@ router.patch("/stores/:storeDomain/knowledge/:knowledgeId", validateStoreDomain,
     return;
   }
 
-  const updateData: Partial<Pick<ShopKnowledge, "category" | "title" | "content" | "sortOrder">> = {};
+  const [existing] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return scopedDb
+      .select()
+      .from(shopKnowledgeTable)
+      .where(
+        and(
+          eq(shopKnowledgeTable.id, params.data.knowledgeId),
+          eq(shopKnowledgeTable.storeDomain, params.data.storeDomain),
+          isNull(shopKnowledgeTable.deletedAt)
+        )
+      );
+  });
+
+  if (!existing) {
+    sendError(res, 404, "Knowledge entry not found");
+    return;
+  }
+
+  try {
+    await createVersionSnapshot(params.data.storeDomain, existing);
+  } catch (err) {
+    console.warn("[knowledge] Failed to create version snapshot:", err instanceof Error ? err.message : err);
+  }
+
+  const updateData: Partial<Pick<ShopKnowledge, "category" | "title" | "content" | "sortOrder" | "tags">> = {};
   if (parsed.data.category !== undefined) updateData.category = parsed.data.category as KnowledgeCategory;
   if (parsed.data.title !== undefined) updateData.title = parsed.data.title;
   if (parsed.data.content !== undefined) updateData.content = parsed.data.content;
   if (parsed.data.sortOrder !== undefined) updateData.sortOrder = parsed.data.sortOrder;
+  if (parsed.data.tags !== undefined) updateData.tags = parsed.data.tags;
 
   const [entry] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
     return scopedDb
@@ -234,6 +293,279 @@ router.patch("/stores/:storeDomain/knowledge/:knowledgeId/restore", validateStor
   });
 
   res.json(restored);
+});
+
+router.get("/stores/:storeDomain/knowledge/:knowledgeId/versions", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
+  const params = ListKnowledgeVersionsParams.safeParse(req.params);
+  if (!params.success) {
+    sendZodError(res, params.error, "GET /stores/:storeDomain/knowledge/:knowledgeId/versions", req.params);
+    return;
+  }
+
+  const versions = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return scopedDb
+      .select()
+      .from(knowledgeVersionsTable)
+      .where(
+        and(
+          eq(knowledgeVersionsTable.knowledgeId, params.data.knowledgeId),
+          eq(knowledgeVersionsTable.storeDomain, params.data.storeDomain)
+        )
+      )
+      .orderBy(desc(knowledgeVersionsTable.versionNumber));
+  });
+
+  res.json(versions);
+});
+
+router.post("/stores/:storeDomain/knowledge/:knowledgeId/versions/:versionId/restore", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
+  const params = RestoreKnowledgeVersionParams.safeParse(req.params);
+  if (!params.success) {
+    sendZodError(res, params.error, "POST /stores/:storeDomain/knowledge/:knowledgeId/versions/:versionId/restore", req.params);
+    return;
+  }
+
+  const [version] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return scopedDb
+      .select()
+      .from(knowledgeVersionsTable)
+      .where(
+        and(
+          eq(knowledgeVersionsTable.id, params.data.versionId),
+          eq(knowledgeVersionsTable.knowledgeId, params.data.knowledgeId),
+          eq(knowledgeVersionsTable.storeDomain, params.data.storeDomain)
+        )
+      );
+  });
+
+  if (!version) {
+    sendError(res, 404, "Version not found");
+    return;
+  }
+
+  const [currentEntry] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return scopedDb
+      .select()
+      .from(shopKnowledgeTable)
+      .where(
+        and(
+          eq(shopKnowledgeTable.id, params.data.knowledgeId),
+          eq(shopKnowledgeTable.storeDomain, params.data.storeDomain)
+        )
+      );
+  });
+
+  if (currentEntry) {
+    try {
+      await createVersionSnapshot(params.data.storeDomain, currentEntry);
+    } catch (err) {
+      console.warn("[knowledge] Failed to create version snapshot before restore:", err instanceof Error ? err.message : err);
+    }
+  }
+
+  const [restored] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return scopedDb
+      .update(shopKnowledgeTable)
+      .set({
+        category: version.category,
+        title: version.title,
+        content: version.content,
+        tags: version.tags,
+      })
+      .where(
+        and(
+          eq(shopKnowledgeTable.id, params.data.knowledgeId),
+          eq(shopKnowledgeTable.storeDomain, params.data.storeDomain)
+        )
+      )
+      .returning();
+  });
+
+  if (!restored) {
+    sendError(res, 404, "Knowledge entry not found");
+    return;
+  }
+
+  invalidateKnowledgeCache(params.data.storeDomain);
+
+  logAuditFromRequest(req, {
+    storeDomain: params.data.storeDomain,
+    actor: "merchant",
+    action: "knowledge_version_restored",
+    resourceType: "knowledge",
+    resourceId: String(params.data.knowledgeId),
+    metadata: { versionId: params.data.versionId, versionNumber: version.versionNumber },
+  });
+
+  res.json(restored);
+});
+
+router.get("/stores/:storeDomain/knowledge/search", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
+  const params = SearchKnowledgeParams.safeParse(req.params);
+  if (!params.success) {
+    sendZodError(res, params.error, "GET /stores/:storeDomain/knowledge/search", req.params);
+    return;
+  }
+
+  const query = SearchKnowledgeQueryParams.safeParse(req.query);
+  if (!query.success) {
+    sendZodError(res, query.error, "GET /stores/:storeDomain/knowledge/search query", req.query);
+    return;
+  }
+
+  const searchTerm = `%${query.data.q}%`;
+  const conditions = [
+    eq(shopKnowledgeTable.storeDomain, params.data.storeDomain),
+    isNull(shopKnowledgeTable.deletedAt),
+    or(
+      ilike(shopKnowledgeTable.title, searchTerm),
+      ilike(shopKnowledgeTable.content, searchTerm),
+      sql`EXISTS (SELECT 1 FROM unnest(${shopKnowledgeTable.tags}) AS tag WHERE tag ILIKE ${searchTerm})`
+    ),
+  ];
+
+  if (query.data.tag) {
+    conditions.push(
+      sql`${query.data.tag} = ANY(${shopKnowledgeTable.tags})`
+    );
+  }
+
+  const entries = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return scopedDb
+      .select()
+      .from(shopKnowledgeTable)
+      .where(and(...conditions))
+      .orderBy(shopKnowledgeTable.sortOrder);
+  });
+
+  res.json(entries);
+});
+
+router.post("/stores/:storeDomain/knowledge/sync", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
+  const params = TriggerKnowledgeSyncParams.safeParse(req.params);
+  if (!params.success) {
+    sendZodError(res, params.error, "POST /stores/:storeDomain/knowledge/sync", req.params);
+    return;
+  }
+
+  try {
+    const result = await syncShopifyContent(params.data.storeDomain);
+
+    logAuditFromRequest(req, {
+      storeDomain: params.data.storeDomain,
+      actor: "merchant",
+      action: "knowledge_sync_triggered",
+      resourceType: "knowledge",
+      metadata: { created: result.created, updated: result.updated, deleted: result.deleted, errors: result.errors.length },
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error("[knowledge] Sync failed:", err instanceof Error ? err.message : err);
+    sendError(res, 500, "Sync failed");
+  }
+});
+
+router.get("/stores/:storeDomain/knowledge/sync/status", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
+  const params = GetKnowledgeSyncStatusParams.safeParse(req.params);
+  if (!params.success) {
+    sendZodError(res, params.error, "GET /stores/:storeDomain/knowledge/sync/status", req.params);
+    return;
+  }
+
+  const [store] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return scopedDb
+      .select({
+        syncFrequency: storesTable.syncFrequency,
+        knowledgeLastSyncedAt: storesTable.knowledgeLastSyncedAt,
+      })
+      .from(storesTable)
+      .where(eq(storesTable.storeDomain, params.data.storeDomain));
+  });
+
+  if (!store) {
+    sendError(res, 404, "Store not found");
+    return;
+  }
+
+  const syncedEntries = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    const result = await scopedDb
+      .select({ count: sql<number>`count(*)::int` })
+      .from(shopKnowledgeTable)
+      .where(
+        and(
+          eq(shopKnowledgeTable.storeDomain, params.data.storeDomain),
+          eq(shopKnowledgeTable.source, "synced"),
+          isNull(shopKnowledgeTable.deletedAt)
+        )
+      );
+    return result[0]?.count ?? 0;
+  });
+
+  res.json({
+    syncFrequency: store.syncFrequency,
+    lastSyncedAt: store.knowledgeLastSyncedAt?.toISOString() ?? null,
+    syncedEntryCount: syncedEntries,
+  });
+});
+
+router.patch("/stores/:storeDomain/knowledge/sync/settings", validateStoreDomain, validateMerchantAuth, async (req, res): Promise<void> => {
+  const params = UpdateSyncSettingsParams.safeParse(req.params);
+  if (!params.success) {
+    sendZodError(res, params.error, "PATCH /stores/:storeDomain/knowledge/sync/settings", req.params);
+    return;
+  }
+
+  const parsed = UpdateSyncSettingsBody.safeParse(req.body);
+  if (!parsed.success) {
+    sendZodError(res, parsed.error, "PATCH /stores/:storeDomain/knowledge/sync/settings body", req.body);
+    return;
+  }
+
+  await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    await scopedDb
+      .update(storesTable)
+      .set({ syncFrequency: parsed.data.syncFrequency as "manual" | "daily" | "weekly" })
+      .where(eq(storesTable.storeDomain, params.data.storeDomain));
+  });
+
+  const [store] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    return scopedDb
+      .select({
+        syncFrequency: storesTable.syncFrequency,
+        knowledgeLastSyncedAt: storesTable.knowledgeLastSyncedAt,
+      })
+      .from(storesTable)
+      .where(eq(storesTable.storeDomain, params.data.storeDomain));
+  });
+
+  const syncedEntries = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
+    const result = await scopedDb
+      .select({ count: sql<number>`count(*)::int` })
+      .from(shopKnowledgeTable)
+      .where(
+        and(
+          eq(shopKnowledgeTable.storeDomain, params.data.storeDomain),
+          eq(shopKnowledgeTable.source, "synced"),
+          isNull(shopKnowledgeTable.deletedAt)
+        )
+      );
+    return result[0]?.count ?? 0;
+  });
+
+  logAuditFromRequest(req, {
+    storeDomain: params.data.storeDomain,
+    actor: "merchant",
+    action: "sync_settings_updated",
+    resourceType: "store",
+    metadata: { syncFrequency: parsed.data.syncFrequency },
+  });
+
+  res.json({
+    syncFrequency: store?.syncFrequency ?? parsed.data.syncFrequency,
+    lastSyncedAt: store?.knowledgeLastSyncedAt?.toISOString() ?? null,
+    syncedEntryCount: syncedEntries,
+  });
 });
 
 export default router;

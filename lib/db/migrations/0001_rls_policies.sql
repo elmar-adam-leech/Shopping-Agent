@@ -132,6 +132,36 @@ DO $$ BEGIN
     USING (current_setting('app.rls_bypass', true) = 'on')
     WITH CHECK (current_setting('app.rls_bypass', true) = 'on');
 
+  -- knowledge_versions
+  ALTER TABLE "knowledge_versions" ENABLE ROW LEVEL SECURITY;
+  ALTER TABLE "knowledge_versions" FORCE ROW LEVEL SECURITY;
+
+  DROP POLICY IF EXISTS tenant_isolation_select ON "knowledge_versions";
+  CREATE POLICY tenant_isolation_select ON "knowledge_versions"
+    FOR SELECT
+    USING (store_domain = current_setting('app.current_store_domain', true));
+
+  DROP POLICY IF EXISTS tenant_isolation_insert ON "knowledge_versions";
+  CREATE POLICY tenant_isolation_insert ON "knowledge_versions"
+    FOR INSERT
+    WITH CHECK (store_domain = current_setting('app.current_store_domain', true));
+
+  DROP POLICY IF EXISTS tenant_isolation_update ON "knowledge_versions";
+  CREATE POLICY tenant_isolation_update ON "knowledge_versions"
+    FOR UPDATE
+    USING (store_domain = current_setting('app.current_store_domain', true));
+
+  DROP POLICY IF EXISTS tenant_isolation_delete ON "knowledge_versions";
+  CREATE POLICY tenant_isolation_delete ON "knowledge_versions"
+    FOR DELETE
+    USING (store_domain = current_setting('app.current_store_domain', true));
+
+  DROP POLICY IF EXISTS tenant_bypass_owner ON "knowledge_versions";
+  CREATE POLICY tenant_bypass_owner ON "knowledge_versions"
+    FOR ALL
+    USING (current_setting('app.rls_bypass', true) = 'on')
+    WITH CHECK (current_setting('app.rls_bypass', true) = 'on');
+
   -- user_preferences
   ALTER TABLE "user_preferences" ENABLE ROW LEVEL SECURITY;
   ALTER TABLE "user_preferences" FORCE ROW LEVEL SECURITY;

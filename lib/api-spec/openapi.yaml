@@ -385,6 +385,161 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /stores/{storeDomain}/knowledge/{knowledgeId}/versions:
+    get:
+      operationId: listKnowledgeVersions
+      tags: [knowledge]
+      summary: List version history for a knowledge entry
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: knowledgeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Version history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KnowledgeVersion"
+
+  /stores/{storeDomain}/knowledge/{knowledgeId}/versions/{versionId}/restore:
+    post:
+      operationId: restoreKnowledgeVersion
+      tags: [knowledge]
+      summary: Restore a knowledge entry to a previous version
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: knowledgeId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Knowledge entry restored to version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KnowledgeEntry"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /stores/{storeDomain}/knowledge/search:
+    get:
+      operationId: searchKnowledge
+      tags: [knowledge]
+      summary: Search knowledge entries by title, content, or tags
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: tag
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/KnowledgeEntry"
+
+  /stores/{storeDomain}/knowledge/sync:
+    post:
+      operationId: triggerKnowledgeSync
+      tags: [knowledge]
+      summary: Trigger a manual Shopify content sync
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sync result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncResult"
+
+  /stores/{storeDomain}/knowledge/sync/status:
+    get:
+      operationId: getKnowledgeSyncStatus
+      tags: [knowledge]
+      summary: Get sync status for a store
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Sync status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatus"
+
+  /stores/{storeDomain}/knowledge/sync/settings:
+    patch:
+      operationId: updateSyncSettings
+      tags: [knowledge]
+      summary: Update sync frequency settings
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSyncSettingsBody"
+      responses:
+        "200":
+          description: Updated sync settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatus"
+
   /stores/{storeDomain}/chat:
     post:
       operationId: sendChat
@@ -1133,6 +1288,20 @@ components:
           type: string
         sortOrder:
           type: integer
+        tags:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+          enum: [manual, synced]
+        sourceId:
+          type: ["string", "null"]
+        contentHash:
+          type: ["string", "null"]
+        lastSyncedAt:
+          type: ["string", "null"]
+          format: date-time
         createdAt:
           type: string
           format: date-time
@@ -1146,8 +1315,97 @@ components:
         - title
         - content
         - sortOrder
+        - tags
+        - source
         - createdAt
         - updatedAt
+
+    KnowledgeVersion:
+      type: object
+      properties:
+        id:
+          type: integer
+        knowledgeId:
+          type: integer
+        storeDomain:
+          type: string
+        category:
+          type: string
+          enum: [general, sizing, compatibility, required_accessories, restrictions, policies, custom]
+        title:
+          type: string
+        content:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        versionNumber:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - knowledgeId
+        - storeDomain
+        - category
+        - title
+        - content
+        - tags
+        - versionNumber
+        - createdAt
+
+    SyncResult:
+      type: object
+      properties:
+        created:
+          type: integer
+        updated:
+          type: integer
+        deleted:
+          type: integer
+        unchanged:
+          type: integer
+        errors:
+          type: array
+          items:
+            type: string
+        syncedAt:
+          type: string
+          format: date-time
+      required:
+        - created
+        - updated
+        - deleted
+        - unchanged
+        - errors
+        - syncedAt
+
+    SyncStatus:
+      type: object
+      properties:
+        syncFrequency:
+          type: string
+          enum: [manual, daily, weekly]
+        lastSyncedAt:
+          type: ["string", "null"]
+          format: date-time
+        syncedEntryCount:
+          type: integer
+      required:
+        - syncFrequency
+        - lastSyncedAt
+        - syncedEntryCount
+
+    UpdateSyncSettingsBody:
+      type: object
+      properties:
+        syncFrequency:
+          type: string
+          enum: [manual, daily, weekly]
+      required:
+        - syncFrequency
 
     CreateKnowledgeBody:
       type: object
@@ -1161,6 +1419,10 @@ components:
           type: string
         sortOrder:
           type: integer
+        tags:
+          type: array
+          items:
+            type: string
       required:
         - category
         - title
@@ -1178,6 +1440,10 @@ components:
           type: string
         sortOrder:
           type: integer
+        tags:
+          type: array
+          items:
+            type: string
 
     ChatRequest:
       type: object

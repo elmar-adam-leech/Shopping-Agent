@@ -11,6 +11,12 @@ export const recommendationStrategyEnum = pgEnum("recommendation_strategy", [
   "personalized",
 ]);
 
+export const syncFrequencyEnum = pgEnum("sync_frequency", [
+  "manual",
+  "daily",
+  "weekly",
+]);
+
 export interface BrandVoice {
   tone: "friendly" | "professional" | "playful" | "luxury";
   personality: string;
@@ -60,6 +66,8 @@ export const storesTable = pgTable("stores", {
   checkoutRecoveryDelayMinutes: integer("checkout_recovery_delay_minutes").notNull().default(60),
   supportedLanguages: text("supported_languages").array().notNull().default([]),
   defaultLanguage: text("default_language").notNull().default("en"),
+  syncFrequency: syncFrequencyEnum("sync_frequency").notNull().default("manual"),
+  knowledgeLastSyncedAt: timestamp("knowledge_last_synced_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });

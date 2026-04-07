@@ -1,7 +1,22 @@
 import { useState } from "react";
-import { useListKnowledge, useCreateKnowledge, useDeleteKnowledge, useUpdateKnowledge, useListDeletedKnowledge, useRestoreKnowledge, getListKnowledgeQueryKey, getListDeletedKnowledgeQueryKey } from "@workspace/api-client-react";
+import {
+  useListKnowledge,
+  useCreateKnowledge,
+  useDeleteKnowledge,
+  useUpdateKnowledge,
+  useListDeletedKnowledge,
+  useRestoreKnowledge,
+  useListKnowledgeVersions,
+  useRestoreKnowledgeVersion,
+  getListKnowledgeQueryKey,
+  getListDeletedKnowledgeQueryKey,
+  getListKnowledgeVersionsQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Trash2, Plus, ArrowUp, ArrowDown, Edit2, Check, X, BookOpen, RotateCcw, Archive } from "lucide-react";
+import {
+  Trash2, Plus, ArrowUp, ArrowDown, Edit2, Check, X,
+  BookOpen, RotateCcw, Archive, History, Search, Tag, Cloud, AlertTriangle,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { LastUpdated } from "@/components/ui/last-updated";
 import { BulkKnowledgeImport } from "./BulkKnowledgeImport";
+import { ShopifySyncSettings } from "./ShopifySyncSettings";
 
 interface KnowledgeEntry {
   id: number;
@@ -18,8 +34,25 @@ interface KnowledgeEntry {
   title: string;
   content: string;
   sortOrder: number;
+  tags: string[];
+  source: string;
+  sourceId?: string | null;
+  contentHash?: string | null;
+  lastSyncedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface KnowledgeVersionData {
+  id: number;
+  knowledgeId: number;
+  storeDomain: string;
+  category: string;
+  title: string;
+  content: string;
+  tags: string[];
+  versionNumber: number;
+  createdAt: string;
 }
 
 export const CATEGORIES = [
@@ -31,6 +64,169 @@ export const CATEGORIES = [
   { id: 'policies', label: 'Store Policies', desc: 'Returns, shipping, warranties' },
   { id: 'custom', label: 'Custom', desc: 'Other knowledge' },
 ];
+
+function TagInput({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
+  const [input, setInput] = useState("");
+
+  const addTag = () => {
+    const tag = input.trim().toLowerCase();
+    if (tag && !tags.includes(tag)) {
+      onChange([...tags, tag]);
+    }
+    setInput("");
+  };
+
+  const removeTag = (tag: string) => {
+    onChange(tags.filter(t => t !== tag));
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {tags.map(tag => (
+          <span
+            key={tag}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium"
+          >
+            <Tag className="w-3 h-3" />
+            {tag}
+            <button
+              onClick={() => removeTag(tag)}
+              className="hover:text-destructive ml-0.5"
+              aria-label={`Remove tag ${tag}`}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </span>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <Input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); addTag(); }
+          }}
+          placeholder="Add tag..."
+          className="rounded-lg text-sm h-8"
+        />
+        <Button size="sm" variant="outline" onClick={addTag} disabled={!input.trim()} className="rounded-lg h-8">
+          Add
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function VersionHistoryPanel({
+  storeDomain,
+  knowledgeId,
+  onClose,
+}: {
+  storeDomain: string;
+  knowledgeId: number;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: versions } = useListKnowledgeVersions(storeDomain, knowledgeId, {
+    query: {
+      queryKey: getListKnowledgeVersionsQueryKey(storeDomain, knowledgeId),
+      staleTime: 10_000,
+    },
+  });
+  const { mutateAsync: restoreVersion } = useRestoreKnowledgeVersion();
+  const [expandedVersion, setExpandedVersion] = useState<number | null>(null);
+
+  const handleRestore = async (versionId: number) => {
+    try {
+      await restoreVersion({ storeDomain, knowledgeId, versionId });
+      queryClient.invalidateQueries({ queryKey: getListKnowledgeQueryKey(storeDomain) });
+      queryClient.invalidateQueries({ queryKey: getListKnowledgeVersionsQueryKey(storeDomain, knowledgeId) });
+      toast({ title: "Version restored" });
+      onClose();
+    } catch {
+      toast({ title: "Failed to restore version", variant: "destructive" });
+    }
+  };
+
+  const versionList = (versions ?? []) as KnowledgeVersionData[];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div
+        className="bg-card border border-border rounded-2xl shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-5 border-b border-border flex items-center justify-between">
+          <h3 className="font-bold text-lg flex items-center gap-2">
+            <History className="w-5 h-5 text-primary" />
+            Version History
+          </h3>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+        <div className="p-5 overflow-y-auto flex-1 space-y-3">
+          {versionList.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No previous versions found. Versions are created automatically when you edit an entry.
+            </p>
+          ) : (
+            versionList.map((v) => (
+              <div key={v.id} className="p-3 rounded-xl bg-secondary/20 border border-border/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono bg-secondary px-2 py-0.5 rounded-full">
+                      v{v.versionNumber}
+                    </span>
+                    <span className="text-sm font-medium">{v.title}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(v.createdAt).toLocaleString()}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setExpandedVersion(expandedVersion === v.id ? null : v.id)}
+                      className="rounded-lg text-xs h-7"
+                    >
+                      {expandedVersion === v.id ? "Hide" : "View"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="default"
+                      onClick={() => handleRestore(v.id)}
+                      className="rounded-lg text-xs h-7"
+                    >
+                      <RotateCcw className="w-3 h-3 mr-1" /> Restore
+                    </Button>
+                  </div>
+                </div>
+                {expandedVersion === v.id && (
+                  <div className="mt-3 p-3 rounded-lg bg-background/80 text-sm">
+                    <p className="text-xs text-muted-foreground mb-1">Category: {v.category}</p>
+                    <p className="whitespace-pre-wrap">{v.content}</p>
+                    {v.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {v.tags.map(tag => (
+                          <span key={tag} className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
   const queryClient = useQueryClient();
@@ -51,9 +247,14 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
   const [category, setCategory] = useState<string>("general");
+  const [newTags, setNewTags] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [versionHistoryId, setVersionHistoryId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchTag, setSearchTag] = useState("");
 
   const handleAdd = async () => {
     if (!newTitle || !newContent) return;
@@ -64,6 +265,8 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
       title: newTitle,
       content: newContent,
       sortOrder: 0,
+      tags: newTags,
+      source: "manual",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -71,10 +274,17 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
     queryClient.setQueryData<KnowledgeEntry[]>(knowledgeQueryKey, (old) => [...(old ?? []), optimisticEntry]);
     setNewTitle("");
     setNewContent("");
+    setNewTags([]);
     try {
       await createKnowledge({
         storeDomain,
-        data: { title: optimisticEntry.title, content: optimisticEntry.content, category: category as "general" | "sizing" | "compatibility" | "required_accessories" | "restrictions" | "policies" | "custom", sortOrder: 0 }
+        data: {
+          title: optimisticEntry.title,
+          content: optimisticEntry.content,
+          category: category as "general" | "sizing" | "compatibility" | "required_accessories" | "restrictions" | "policies" | "custom",
+          sortOrder: 0,
+          tags: optimisticEntry.tags,
+        }
       });
       refetch();
       toast({ title: "Knowledge entry added" });
@@ -110,29 +320,37 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
   };
 
   const startEdit = (item: KnowledgeEntry) => {
+    if (item.source === "synced") {
+      const confirmed = window.confirm(
+        "This entry is auto-managed by Shopify sync. Manual edits may be overwritten on the next sync. Continue?"
+      );
+      if (!confirmed) return;
+    }
     setEditingId(item.id);
     setEditTitle(item.title);
     setEditContent(item.content);
+    setEditTags(item.tags ?? []);
   };
 
   const cancelEdit = () => {
     setEditingId(null);
     setEditTitle("");
     setEditContent("");
+    setEditTags([]);
   };
 
   const saveEdit = async () => {
     if (!editingId || !editTitle || !editContent) return;
     const previousData = queryClient.getQueryData<KnowledgeEntry[]>(knowledgeQueryKey);
     queryClient.setQueryData<KnowledgeEntry[]>(knowledgeQueryKey, (old) =>
-      (old ?? []).map((e) => e.id === editingId ? { ...e, title: editTitle, content: editContent, updatedAt: new Date().toISOString() } : e)
+      (old ?? []).map((e) => e.id === editingId ? { ...e, title: editTitle, content: editContent, tags: editTags, updatedAt: new Date().toISOString() } : e)
     );
     cancelEdit();
     try {
       await updateKnowledge({
         storeDomain,
         knowledgeId: editingId,
-        data: { title: editTitle, content: editContent }
+        data: { title: editTitle, content: editContent, tags: editTags }
       });
       refetch();
       toast({ title: "Updated" });
@@ -167,15 +385,29 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
     }
   };
 
+  const allEntries = (knowledgeList ?? []) as KnowledgeEntry[];
+
+  const allTags = Array.from(new Set(allEntries.flatMap(e => e.tags ?? [])));
+
+  const filteredEntries = allEntries.filter(entry => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchesTitle = entry.title.toLowerCase().includes(q);
+      const matchesContent = entry.content.toLowerCase().includes(q);
+      const matchesTags = (entry.tags ?? []).some(t => t.toLowerCase().includes(q));
+      if (!matchesTitle && !matchesContent && !matchesTags) return false;
+    }
+    if (searchTag && !(entry.tags ?? []).includes(searchTag)) return false;
+    return true;
+  });
+
   const entriesByCategory: Record<string, KnowledgeEntry[]> = {};
-  if (knowledgeList) {
-    for (const entry of knowledgeList as KnowledgeEntry[]) {
-      if (!entriesByCategory[entry.category]) entriesByCategory[entry.category] = [];
-      entriesByCategory[entry.category].push(entry);
-    }
-    for (const cat of Object.keys(entriesByCategory)) {
-      entriesByCategory[cat].sort((a, b) => a.sortOrder - b.sortOrder);
-    }
+  for (const entry of filteredEntries) {
+    if (!entriesByCategory[entry.category]) entriesByCategory[entry.category] = [];
+    entriesByCategory[entry.category].push(entry);
+  }
+  for (const cat of Object.keys(entriesByCategory)) {
+    entriesByCategory[cat].sort((a, b) => a.sortOrder - b.sortOrder);
   }
 
   return (
@@ -192,7 +424,34 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
       </div>
 
       <div className="p-6 md:p-8 space-y-10">
+        <ShopifySyncSettings storeDomain={storeDomain} />
+
         <BulkKnowledgeImport storeDomain={storeDomain} />
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search entries by title, content, or tag..."
+              className="pl-9 rounded-xl bg-background"
+            />
+          </div>
+          {allTags.length > 0 && (
+            <Select value={searchTag} onValueChange={(v) => setSearchTag(v === "all" ? "" : v)}>
+              <SelectTrigger className="w-full sm:w-48 rounded-xl bg-background">
+                <SelectValue placeholder="Filter by tag" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Tags</SelectItem>
+                {allTags.map(tag => (
+                  <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
 
         <div className="p-5 border-2 border-dashed border-border rounded-2xl bg-background/50 space-y-4">
           <h3 className="font-semibold flex items-center gap-2">
@@ -230,6 +489,10 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
               onChange={(e) => setNewContent(e.target.value)}
               className="min-h-[100px] rounded-xl resize-y bg-background"
             />
+          </div>
+          <div className="space-y-2">
+            <Label>Tags</Label>
+            <TagInput tags={newTags} onChange={setNewTags} />
           </div>
           <div className="flex justify-end">
             <Button onClick={handleAdd} disabled={creating} className="rounded-xl">
@@ -286,6 +549,7 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
                               onChange={(e) => setEditContent(e.target.value)}
                               className="rounded-lg min-h-[80px]"
                             />
+                            <TagInput tags={editTags} onChange={setEditTags} />
                             <div className="flex gap-2">
                               <Button size="sm" onClick={saveEdit} className="rounded-lg">
                                 <Check className="w-3 h-3 mr-1" /> Save
@@ -297,13 +561,48 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
                           </div>
                         ) : (
                           <>
-                            <h5 className="font-semibold text-sm mb-1">{item.title}</h5>
+                            <div className="flex items-center gap-2 mb-1">
+                              <h5 className="font-semibold text-sm">{item.title}</h5>
+                              {item.source === "synced" && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 text-[10px] font-medium">
+                                  <Cloud className="w-3 h-3" />
+                                  Synced
+                                </span>
+                              )}
+                            </div>
                             <p className="text-sm text-muted-foreground leading-relaxed">{item.content}</p>
+                            {(item.tags ?? []).length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-2">
+                                {item.tags.map(tag => (
+                                  <span
+                                    key={tag}
+                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium"
+                                  >
+                                    <Tag className="w-2.5 h-2.5" />
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {item.source === "synced" && item.lastSyncedAt && (
+                              <p className="text-[10px] text-muted-foreground mt-1">
+                                Last synced: {new Date(item.lastSyncedAt).toLocaleString()}
+                              </p>
+                            )}
                           </>
                         )}
                       </div>
                       {editingId !== item.id && (
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-all">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setVersionHistoryId(item.id)}
+                            className="text-muted-foreground hover:text-primary hover:bg-primary/10 -mt-1"
+                            aria-label={`View history for ${item.title}`}
+                          >
+                            <History className="w-4 h-4" aria-hidden="true" />
+                          </Button>
                           <Button 
                             variant="ghost" 
                             size="icon" 
@@ -311,7 +610,11 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
                             className="text-muted-foreground hover:text-primary hover:bg-primary/10 -mt-1"
                             aria-label={`Edit ${item.title}`}
                           >
-                            <Edit2 className="w-4 h-4" aria-hidden="true" />
+                            {item.source === "synced" ? (
+                              <AlertTriangle className="w-4 h-4 text-amber-500" aria-hidden="true" />
+                            ) : (
+                              <Edit2 className="w-4 h-4" aria-hidden="true" />
+                            )}
                           </Button>
                           <Button 
                             variant="ghost" 
@@ -369,6 +672,14 @@ export function KnowledgeEditor({ storeDomain }: { storeDomain: string }) {
         )}
 
       </div>
+
+      {versionHistoryId !== null && (
+        <VersionHistoryPanel
+          storeDomain={storeDomain}
+          knowledgeId={versionHistoryId}
+          onClose={() => setVersionHistoryId(null)}
+        />
+      )}
     </section>
   );
 }
