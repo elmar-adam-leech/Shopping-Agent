@@ -728,6 +728,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/DailyQueriesData"
 
+  /stores/{storeDomain}/feedback:
+    post:
+      operationId: submitFeedback
+      tags: [analytics]
+      summary: Submit thumbs up/down feedback on an AI response
+      parameters:
+        - name: storeDomain
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: x-session-id
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackBody"
+      responses:
+        "200":
+          description: Feedback recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackResponse"
+
   /stores/{storeDomain}/experiments:
     get:
       operationId: listExperiments
@@ -1408,6 +1438,12 @@ components:
           type: integer
         estimatedRevenue:
           type: number
+        feedbackStats:
+          $ref: "#/components/schemas/FeedbackStats"
+        negativeFeedbackLog:
+          type: array
+          items:
+            $ref: "#/components/schemas/NegativeFeedbackEntry"
       required:
         - totalChats
         - totalSessions
@@ -1418,6 +1454,103 @@ components:
         - topProducts
         - abandonedCarts
         - estimatedRevenue
+
+    FeedbackBody:
+      type: object
+      properties:
+        messageId:
+          type: string
+        rating:
+          type: string
+          enum: [positive, negative]
+        messageContent:
+          type: string
+        comment:
+          type: string
+        conversationId:
+          type: integer
+      required:
+        - messageId
+        - rating
+
+    FeedbackResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
+
+    FeedbackStats:
+      type: object
+      properties:
+        totalFeedback:
+          type: integer
+        positiveFeedback:
+          type: integer
+        negativeFeedback:
+          type: integer
+        satisfactionRate:
+          type: number
+        dailySatisfaction:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailySatisfaction"
+        topNegativeQueries:
+          type: array
+          items:
+            $ref: "#/components/schemas/NegativeQueryCount"
+      required:
+        - totalFeedback
+        - positiveFeedback
+        - negativeFeedback
+        - satisfactionRate
+        - dailySatisfaction
+        - topNegativeQueries
+
+    DailySatisfaction:
+      type: object
+      properties:
+        date:
+          type: string
+        positive:
+          type: integer
+        negative:
+          type: integer
+        rate:
+          type: number
+      required:
+        - date
+        - positive
+        - negative
+        - rate
+
+    NegativeQueryCount:
+      type: object
+      properties:
+        query:
+          type: string
+        count:
+          type: integer
+      required:
+        - query
+        - count
+
+    NegativeFeedbackEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        messageContent:
+          type: string
+        comment:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - createdAt
 
     DailyQueriesData:
       type: object

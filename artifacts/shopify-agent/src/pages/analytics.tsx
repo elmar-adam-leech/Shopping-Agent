@@ -19,6 +19,9 @@ import {
   CalendarDays,
   Download,
   ChevronDown,
+  ThumbsUp,
+  ThumbsDown,
+  MessageCircle,
 } from "lucide-react";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { LastUpdated } from "@/components/ui/last-updated";
@@ -345,6 +348,11 @@ export default function AnalyticsPage() {
           />
         )}
 
+        <ResponseQualitySection
+          feedbackStats={data?.feedbackStats}
+          negativeFeedbackLog={data?.negativeFeedbackLog}
+        />
+
         <div className="bg-card border border-border/50 rounded-3xl p-6 shadow-sm">
           <h3 className="font-bold font-display text-lg mb-6">Top Customer Queries</h3>
           <div className="overflow-x-auto">
@@ -531,6 +539,167 @@ function ExportButton({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function ResponseQualitySection({
+  feedbackStats,
+  negativeFeedbackLog,
+}: {
+  feedbackStats?: {
+    totalFeedback: number;
+    positiveFeedback: number;
+    negativeFeedback: number;
+    satisfactionRate: number;
+    dailySatisfaction: Array<{ date: string; positive: number; negative: number; rate: number }>;
+    topNegativeQueries: Array<{ query: string; count: number }>;
+  };
+  negativeFeedbackLog?: Array<{ id: number; messageContent?: string; comment?: string; createdAt: string }>;
+}) {
+  const [showLog, setShowLog] = useState(false);
+
+  const totalFeedback = feedbackStats?.totalFeedback ?? 0;
+  const satisfactionRate = feedbackStats?.satisfactionRate ?? 0;
+  const positiveFeedback = feedbackStats?.positiveFeedback ?? 0;
+  const negativeFeedback = feedbackStats?.negativeFeedback ?? 0;
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 bg-card border border-border/50 rounded-3xl p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="font-bold font-display text-lg">
+            <MessageCircle className="inline w-4 h-4 mr-2 text-muted-foreground" />
+            Response Quality
+          </h3>
+          {totalFeedback > 0 && (
+            <div className="flex items-center gap-4 text-sm">
+              <span className="flex items-center gap-1.5">
+                <ThumbsUp className="w-3.5 h-3.5 text-green-500" />
+                <span className="font-bold text-green-600">{positiveFeedback}</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <ThumbsDown className="w-3.5 h-3.5 text-red-500" />
+                <span className="font-bold text-red-500">{negativeFeedback}</span>
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary font-bold text-xs">
+                {satisfactionRate}% satisfied
+              </span>
+            </div>
+          )}
+        </div>
+
+        {feedbackStats?.dailySatisfaction && feedbackStats.dailySatisfaction.length > 0 ? (
+          <div className="h-[220px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={feedbackStats.dailySatisfaction} barGap={2}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                <XAxis
+                  dataKey="date"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                  dy={10}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }}
+                  dx={-10}
+                />
+                <Tooltip
+                  contentStyle={{
+                    borderRadius: "12px",
+                    border: "1px solid hsl(var(--border))",
+                    backgroundColor: "hsl(var(--card))",
+                    color: "hsl(var(--foreground))",
+                  }}
+                />
+                <Bar dataKey="positive" name="Positive" fill="hsl(142, 71%, 45%)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="negative" name="Negative" fill="hsl(0, 84%, 60%)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <EmptyState message="No feedback data yet. Shoppers can rate AI responses in the chat." />
+        )}
+
+        {negativeFeedbackLog && negativeFeedbackLog.length > 0 && (
+          <div className="mt-4 border-t border-border/30 pt-4">
+            <button
+              onClick={() => setShowLog(!showLog)}
+              className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ChevronDown className={`w-4 h-4 transition-transform ${showLog ? "rotate-180" : ""}`} />
+              Negative Feedback Log ({negativeFeedbackLog.length})
+            </button>
+            {showLog && (
+              <div className="mt-3 max-h-[300px] overflow-y-auto space-y-2">
+                {negativeFeedbackLog.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="p-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200/50 dark:border-red-800/30 text-sm"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        {entry.messageContent && (
+                          <p className="text-foreground/80 text-xs line-clamp-2 mb-1">
+                            <span className="font-medium text-muted-foreground">AI said: </span>
+                            {entry.messageContent}
+                          </p>
+                        )}
+                        {entry.comment && (
+                          <p className="text-foreground text-xs">
+                            <span className="font-medium text-red-600 dark:text-red-400">Feedback: </span>
+                            {entry.comment}
+                          </p>
+                        )}
+                        {!entry.messageContent && !entry.comment && (
+                          <p className="text-muted-foreground text-xs italic">No details provided</p>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                        {new Date(entry.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="lg:col-span-1 bg-card border border-border/50 rounded-3xl p-6 shadow-sm flex flex-col">
+        <h3 className="font-bold font-display text-lg mb-6">
+          <ThumbsDown className="inline w-4 h-4 mr-2 text-red-500" />
+          Most Downvoted Patterns
+        </h3>
+        <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+          {feedbackStats?.topNegativeQueries && feedbackStats.topNegativeQueries.length > 0 ? (
+            feedbackStats.topNegativeQueries.map((item, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between gap-3 p-3 rounded-xl bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100/50 dark:hover:bg-red-900/20 transition-colors"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-xs font-bold text-muted-foreground w-5 text-right shrink-0">
+                    {i + 1}
+                  </span>
+                  <p className="text-sm font-medium leading-snug truncate">
+                    {item.query}
+                  </p>
+                </div>
+                <div className="px-2 py-1 rounded-md bg-red-100 dark:bg-red-900/30 border border-red-200/50 dark:border-red-800/30 text-xs font-bold text-red-600 dark:text-red-400 whitespace-nowrap shrink-0">
+                  {item.count}
+                </div>
+              </div>
+            ))
+          ) : (
+            <EmptyState message="No negative feedback patterns yet." />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

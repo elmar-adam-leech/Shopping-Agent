@@ -321,7 +321,15 @@ export default function ChatPage() {
                 <div className="max-w-4xl mx-auto space-y-6" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions">
                   <MemoryPanel userPrefs={userPrefs} onPrefChange={handlePrefChange} onPrefDelete={handlePrefDelete} />
                   {displayMessages.map((msg, i) => (
-                    <MessageBubble key={messageKey(messages[i], i)} message={msg} />
+                    <MessageBubble
+                      key={messageKey(messages[i], i)}
+                      message={msg}
+                      feedbackProps={{
+                        storeDomain,
+                        sessionId,
+                        conversationId: activeConversationId,
+                      }}
+                    />
                   ))}
                   {isLoading && <ChatLoadingIndicator />}
                   <div ref={messagesEndRef} />

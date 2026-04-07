@@ -1,5 +1,5 @@
-import { memo } from "react";
-import { Sparkles, AlertTriangle } from "lucide-react";
+import { memo, useState, useCallback } from "react";
+import { Sparkles, AlertTriangle, ThumbsUp, ThumbsDown, Send, X } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { MarkdownContent } from "@/components/ui/markdown-content";
 import { cn } from "@/lib/utils";
@@ -16,13 +16,182 @@ export interface ChatMessageDisplay {
   serverMessageId?: string;
 }
 
-function MessageBubbleInner({ message }: { message: ChatMessageDisplay }) {
+interface FeedbackProps {
+  storeDomain: string;
+  sessionId: string;
+  conversationId?: number | null;
+}
+
+type FeedbackState = "none" | "positive" | "negative";
+
+function FeedbackButtons({
+  message,
+  feedbackProps,
+}: {
+  message: ChatMessageDisplay;
+  feedbackProps?: FeedbackProps;
+}) {
+  const [feedbackState, setFeedbackState] = useState<FeedbackState>("none");
+  const [showCommentInput, setShowCommentInput] = useState(false);
+  const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const submitFeedbackRequest = useCallback(
+    async (rating: "positive" | "negative", feedbackComment?: string): Promise<boolean> => {
+      if (!feedbackProps) return false;
+      setSubmitting(true);
+      try {
+        const body: Record<string, unknown> = {
+          messageId: message.serverMessageId || message.timestamp,
+          rating,
+          messageContent: message.content,
+        };
+        if (feedbackComment) body.comment = feedbackComment;
+        if (feedbackProps.conversationId != null) body.conversationId = feedbackProps.conversationId;
+
+        const res = await fetch(`/api/stores/${feedbackProps.storeDomain}/feedback`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-session-id": feedbackProps.sessionId,
+          },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) return false;
+        const data = await res.json();
+        return data?.success === true;
+      } catch (err) {
+        console.warn("Failed to submit feedback:", err);
+        return false;
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [feedbackProps, message.serverMessageId, message.timestamp, message.content],
+  );
+
+  const handleThumbsUp = useCallback(async () => {
+    if (feedbackState !== "none") return;
+    setFeedbackState("positive");
+    const ok = await submitFeedbackRequest("positive");
+    if (!ok) setFeedbackState("none");
+  }, [feedbackState, submitFeedbackRequest]);
+
+  const handleThumbsDown = useCallback(async () => {
+    if (feedbackState !== "none") return;
+    setFeedbackState("negative");
+    const ok = await submitFeedbackRequest("negative");
+    if (!ok) {
+      setFeedbackState("none");
+      return;
+    }
+    setShowCommentInput(true);
+  }, [feedbackState, submitFeedbackRequest]);
+
+  const handleSubmitComment = useCallback(async () => {
+    if (comment.trim()) {
+      await submitFeedbackRequest("negative", comment.trim());
+    }
+    setShowCommentInput(false);
+  }, [submitFeedbackRequest, comment]);
+
+  const handleSkipComment = useCallback(() => {
+    setShowCommentInput(false);
+  }, []);
+
+  if (feedbackState !== "none" && !showCommentInput) {
+    return (
+      <div className="flex items-center gap-1.5 mt-1">
+        <span className="text-xs text-muted-foreground">
+          {feedbackState === "positive" ? "Thanks for your feedback!" : "Thanks, we'll work on it."}
+        </span>
+        <span className="text-xs">
+          {feedbackState === "positive" ? (
+            <ThumbsUp className="w-3 h-3 text-green-500 fill-green-500" />
+          ) : (
+            <ThumbsDown className="w-3 h-3 text-red-500 fill-red-500" />
+          )}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 mt-1">
+      {feedbackState === "none" && (
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <button
+            onClick={handleThumbsUp}
+            disabled={submitting}
+            className="p-1.5 rounded-lg hover:bg-secondary/60 text-muted-foreground hover:text-green-600 transition-colors disabled:opacity-50"
+            title="Good response"
+            aria-label="Rate this response as helpful"
+          >
+            <ThumbsUp className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={handleThumbsDown}
+            disabled={submitting}
+            className="p-1.5 rounded-lg hover:bg-secondary/60 text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-50"
+            title="Bad response"
+            aria-label="Rate this response as unhelpful"
+          >
+            <ThumbsDown className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {showCommentInput && (
+        <div className="flex items-center gap-2 animate-in slide-in-from-top-1 duration-200">
+          <input
+            type="text"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="What went wrong? (optional)"
+            className="flex-1 text-xs px-3 py-1.5 rounded-lg bg-secondary/50 border border-border/50 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/30"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSubmitComment();
+            }}
+            autoFocus
+          />
+          <button
+            onClick={handleSubmitComment}
+            disabled={submitting}
+            className="p-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+            title="Submit feedback"
+            aria-label="Submit negative feedback"
+          >
+            <Send className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={handleSkipComment}
+            disabled={submitting}
+            className="p-1.5 rounded-lg hover:bg-secondary/60 text-muted-foreground transition-colors disabled:opacity-50"
+            title="Skip comment"
+            aria-label="Skip comment and submit"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MessageBubbleInner({
+  message,
+  feedbackProps,
+}: {
+  message: ChatMessageDisplay;
+  feedbackProps?: FeedbackProps;
+}) {
   const isUser = message.role === 'user';
   const isRetracted = !!message.retracted;
+  const showFeedback = !isUser && !isRetracted && message.content && feedbackProps;
   
   return (
     <div className={cn(
-      "flex gap-4 w-full animate-in slide-in-from-bottom-2 duration-300",
+      "group flex gap-4 w-full animate-in slide-in-from-bottom-2 duration-300",
       isUser ? "flex-row-reverse" : "flex-row"
     )} role="article" aria-label={isUser ? "Your message" : isRetracted ? "Corrected message" : "Assistant message"}>
       <Avatar className={cn(
@@ -77,6 +246,10 @@ function MessageBubbleInner({ message }: { message: ChatMessageDisplay }) {
             })}
           </div>
         )}
+
+        {showFeedback && (
+          <FeedbackButtons message={message} feedbackProps={feedbackProps} />
+        )}
       </div>
     </div>
   );
@@ -93,6 +266,11 @@ export const MessageBubble = memo(MessageBubbleInner, (prevProps, nextProps) => 
     prev.toolCalls?.length !== next.toolCalls?.length ||
     prev.toolResults?.length !== next.toolResults?.length
   ) {
+    return false;
+  }
+  if (prevProps.feedbackProps?.storeDomain !== nextProps.feedbackProps?.storeDomain ||
+      prevProps.feedbackProps?.sessionId !== nextProps.feedbackProps?.sessionId ||
+      prevProps.feedbackProps?.conversationId !== nextProps.feedbackProps?.conversationId) {
     return false;
   }
   if (prev.toolCalls && next.toolCalls) {

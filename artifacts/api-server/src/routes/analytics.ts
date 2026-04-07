@@ -12,8 +12,10 @@ const GetEnhancedAnalyticsQueryParams = GetAnalyticsQueryParams;
 const GetEnhancedAnalyticsResponse = { parse: (v: unknown) => v };
 const GetDailyQueriesParams = GetAnalyticsParams;
 const GetDailyQueriesResponse = { parse: (v: unknown) => v };
-import { validateStoreDomain } from "../middleware";
+const SubmitFeedbackParams = GetAnalyticsParams;
+import { validateStoreDomain, validateSession } from "../middleware";
 import { validateMerchantAuth } from "../middleware";
+import { logAnalyticsEvent } from "../services/analytics-logger";
 import { sendZodError, sendError } from "../lib/error-response";
 
 type SectionName = "overview" | "daily_chats" | "top_queries" | "tool_usage" | "conversion_funnel" | "top_products";
@@ -170,6 +172,10 @@ router.get("/stores/:storeDomain/analytics/enhanced", validateStoreDomain, valid
     topProductsResult,
     abandonedCartsResult,
     revenueResult,
+    feedbackCountsResult,
+    dailySatisfactionResult,
+    topNegativeQueriesResult,
+    negativeFeedbackLogResult,
   ] = await withTenantScope(params.data.storeDomain, async (scopedDb) => {
     return Promise.all([
       scopedDb
@@ -256,6 +262,61 @@ router.get("/stores/:storeDomain/analytics/enhanced", validateStoreDomain, valid
         })
         .from(analyticsLogsTable)
         .where(and(baseCondition, sql`${analyticsLogsTable.eventType} = 'checkout_completed'`)),
+
+      scopedDb
+        .select({
+          positiveFeedback: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'feedback_positive')::int`,
+          negativeFeedback: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'feedback_negative')::int`,
+        })
+        .from(analyticsLogsTable)
+        .where(and(
+          baseCondition,
+          sql`${analyticsLogsTable.eventType} in ('feedback_positive', 'feedback_negative')`
+        )),
+
+      scopedDb
+        .select({
+          date: sql<string>`${analyticsLogsTable.createdAt}::date::text`,
+          positive: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'feedback_positive')::int`,
+          negative: sql<number>`count(*) filter (where ${analyticsLogsTable.eventType} = 'feedback_negative')::int`,
+        })
+        .from(analyticsLogsTable)
+        .where(and(
+          baseCondition,
+          sql`${analyticsLogsTable.eventType} in ('feedback_positive', 'feedback_negative')`
+        ))
+        .groupBy(sql`${analyticsLogsTable.createdAt}::date`)
+        .orderBy(sql`${analyticsLogsTable.createdAt}::date asc`),
+
+      scopedDb
+        .select({
+          query: sql<string>`lower(trim(${analyticsLogsTable.query}))`,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(analyticsLogsTable)
+        .where(and(
+          baseCondition,
+          sql`${analyticsLogsTable.eventType} = 'feedback_negative'`,
+          sql`${analyticsLogsTable.query} is not null`
+        ))
+        .groupBy(sql`lower(trim(${analyticsLogsTable.query}))`)
+        .orderBy(sql`count(*) desc`)
+        .limit(10),
+
+      scopedDb
+        .select({
+          id: analyticsLogsTable.id,
+          query: analyticsLogsTable.query,
+          metadata: analyticsLogsTable.metadata,
+          createdAt: analyticsLogsTable.createdAt,
+        })
+        .from(analyticsLogsTable)
+        .where(and(
+          baseCondition,
+          sql`${analyticsLogsTable.eventType} = 'feedback_negative'`
+        ))
+        .orderBy(sql`${analyticsLogsTable.createdAt} desc`)
+        .limit(50),
     ]);
   });
 
@@ -278,6 +339,35 @@ router.get("/stores/:storeDomain/analytics/enhanced", validateStoreDomain, valid
   const abandonedCarts = abandonedCartsResult[0]?.count ?? 0;
   const estimatedRevenue = revenueResult[0]?.total ?? 0;
 
+  const positiveFeedback = feedbackCountsResult[0]?.positiveFeedback ?? 0;
+  const negativeFeedback = feedbackCountsResult[0]?.negativeFeedback ?? 0;
+  const totalFeedback = positiveFeedback + negativeFeedback;
+  const satisfactionRate = totalFeedback > 0 ? Math.round((positiveFeedback / totalFeedback) * 10000) / 100 : 0;
+
+  const dailySatisfaction = dailySatisfactionResult.map(r => {
+    const total = r.positive + r.negative;
+    return {
+      date: r.date,
+      positive: r.positive,
+      negative: r.negative,
+      rate: total > 0 ? Math.round((r.positive / total) * 10000) / 100 : 0,
+    };
+  });
+
+  const topNegativeQueries = topNegativeQueriesResult
+    .filter(r => r.query)
+    .map(r => ({ query: r.query, count: r.count }));
+
+  const negativeFeedbackLog = negativeFeedbackLogResult.map(r => {
+    const meta = r.metadata as Record<string, unknown> | null;
+    return {
+      id: r.id,
+      messageContent: r.query || undefined,
+      comment: (meta?.comment as string) || undefined,
+      createdAt: r.createdAt.toISOString(),
+    };
+  });
+
   res.json(
     GetEnhancedAnalyticsResponse.parse({
       totalChats,
@@ -289,6 +379,15 @@ router.get("/stores/:storeDomain/analytics/enhanced", validateStoreDomain, valid
       topProducts,
       abandonedCarts,
       estimatedRevenue,
+      feedbackStats: {
+        totalFeedback,
+        positiveFeedback,
+        negativeFeedback,
+        satisfactionRate,
+        dailySatisfaction,
+        topNegativeQueries,
+      },
+      negativeFeedbackLog,
     })
   );
 });
@@ -578,6 +677,40 @@ router.get("/stores/:storeDomain/analytics/export", validateStoreDomain, validat
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
   res.send(csvContent);
+});
+
+router.post("/stores/:storeDomain/feedback", validateStoreDomain, validateSession, async (req, res): Promise<void> => {
+  const params = SubmitFeedbackParams.safeParse(req.params);
+  if (!params.success) {
+    sendZodError(res, params.error, "POST /stores/:storeDomain/feedback", req.params);
+    return;
+  }
+
+  const { messageId, rating, messageContent, comment, conversationId } = req.body || {};
+
+  if (!messageId || typeof messageId !== "string") {
+    sendError(res, 400, "Missing or invalid 'messageId' field.");
+    return;
+  }
+  if (rating !== "positive" && rating !== "negative") {
+    sendError(res, 400, "Field 'rating' must be 'positive' or 'negative'.");
+    return;
+  }
+
+  const sessionId = req.headers["x-session-id"] as string;
+  const eventType = rating === "positive" ? "feedback_positive" : "feedback_negative";
+
+  const success = await logAnalyticsEvent(params.data.storeDomain, eventType, sessionId, {
+    query: typeof messageContent === "string" ? messageContent : undefined,
+    metadata: {
+      messageId,
+      rating,
+      ...(typeof comment === "string" && comment ? { comment } : {}),
+      ...(typeof conversationId === "number" ? { conversationId } : {}),
+    },
+  });
+
+  res.json({ success });
 });
 
 function formatDateForFilename(d: Date): string {
