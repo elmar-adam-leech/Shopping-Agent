@@ -1,5 +1,5 @@
 import type { MCPTool } from "./mcp-client";
-import { fetchMCPTools } from "./mcp-client";
+import { fetchMCPTools, getVirtualTools } from "./mcp-client";
 import {
   discoverUCPCapabilities,
   generateToolsFromCapabilities,
@@ -86,6 +86,14 @@ export async function listTools(
 
   if (!mcpTools.some((t) => t.name === "get_store_content")) {
     mcpTools.push(storeContentTool);
+  }
+
+  const virtualTools = getVirtualTools();
+  const existingToolNames = new Set(mcpTools.map(t => t.name));
+  for (const vt of virtualTools) {
+    if (!existingToolNames.has(vt.name)) {
+      mcpTools.push(vt);
+    }
   }
 
   return { tools: mcpTools, ucpDoc, negotiation };

@@ -6,7 +6,7 @@ import { logAnalyticsEvent } from "./analytics-logger";
 import type { McpConnection } from "@workspace/db/schema";
 import { logAudit } from "./audit-logger";
 
-const CART_TOOLS = new Set(["create_cart", "add_to_cart", "update_cart"]);
+const CART_TOOLS = new Set(["create_cart", "add_to_cart", "update_cart", "propose_cart_edit"]);
 const CHECKOUT_TOOLS = new Set(["create_checkout", "get_checkout_url"]);
 const CHECKOUT_COMPLETE_TOOLS = new Set(["complete_checkout", "checkout_complete", "process_checkout"]);
 const PRODUCT_TOOLS = new Set(["search_products", "get_product", "get_product_by_handle"]);
@@ -153,6 +153,20 @@ export function createToolExecutor(opts: {
   }
 
   return async function executeAndGuardTool(toolName: string, args: Record<string, unknown>): Promise<string> {
+    if (toolName === "propose_cart_edit") {
+      const action = args.action as string;
+      if ((action === "swap" || action === "variant_change") && !args.newItem) {
+        return JSON.stringify({ error: "newItem is required for swap and variant_change actions" });
+      }
+      logAnalyticsEvent(storeDomain, "tool_call", sessionId, {
+        metadata: { toolName, args: Object.keys(args) },
+      }).catch(() => {});
+      logAnalyticsEvent(storeDomain, "cart_edit_proposed", sessionId, {
+        metadata: { action },
+      }).catch(() => {});
+      return JSON.stringify({ _cartEditPreview: true, ...args });
+    }
+
     const startTime = Date.now();
 
     const orderEventType = ORDER_TOOL_ANALYTICS[toolName];

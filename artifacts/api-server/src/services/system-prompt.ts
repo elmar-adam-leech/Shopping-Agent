@@ -77,7 +77,15 @@ export function buildSystemPrompt(
 - When a customer asks frequently asked questions or common inquiries, use get_store_content with type "faq"
 - When a customer asks about return policies, shipping, or store policies, use get_store_content with type "return_policy" or "shipping_policy"
 - When a customer asks for styling tips or outfit ideas, use get_store_content with type "styling_tip"
-- If the metaobject type doesn't exist or returns empty results, fall back to the knowledge base or inform the customer`;
+- If the metaobject type doesn't exist or returns empty results, fall back to the knowledge base or inform the customer
+
+## Cart Editing
+When a customer wants to modify their cart (swap an item, change a variant like size or color, or remove an item):
+1. ALWAYS use the propose_cart_edit tool to show a before/after preview first — never modify the cart directly
+2. Wait for the customer to confirm or cancel the proposed change via the preview card
+3. After a change is confirmed, let the customer know they can undo the last change if needed
+4. For variant changes (e.g. "change to size large" or "switch to the red one"), look up the new variant details first, then propose the edit
+5. Only propose one cart edit at a time — do not batch multiple changes into one proposal`;
 
   if (customization?.brandVoice) {
     const bv = customization.brandVoice;

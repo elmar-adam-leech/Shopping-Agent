@@ -1,4 +1,4 @@
-import { X, ShoppingBag, Trash2, Plus, Minus, CreditCard } from "lucide-react";
+import { X, ShoppingBag, Trash2, Plus, Minus, CreditCard, Undo2 } from "lucide-react";
 import { useCartStore } from "@/store/use-cart-store";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -69,6 +69,16 @@ export function CartPanel() {
       </ScrollArea>
 
       <div className="p-4 border-t border-border/50 bg-background/50 backdrop-blur-md">
+        {cart.previousSnapshot && (
+          <button
+            onClick={() => cart.undoLastEdit()}
+            className="w-full mb-3 flex items-center justify-center gap-2 py-2 px-3 text-xs font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
+            aria-label="Undo last cart change"
+          >
+            <Undo2 className="w-3.5 h-3.5" aria-hidden="true" />
+            Undo: {cart.lastEditDescription || "last change"}
+          </button>
+        )}
         <div className="space-y-2 mb-4 text-sm">
           <div className="flex justify-between text-muted-foreground">
             <span>Subtotal</span>

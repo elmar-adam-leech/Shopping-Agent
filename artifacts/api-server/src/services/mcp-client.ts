@@ -257,3 +257,53 @@ export function getDefaultTools(): MCPTool[] {
     },
   ];
 }
+
+export function getVirtualTools(): MCPTool[] {
+  return [
+    {
+      name: "propose_cart_edit",
+      description:
+        "Propose a cart modification (swap, variant change, or remove) and show a before/after preview to the customer for confirmation. The customer must confirm or cancel before the change is applied. Use this whenever a customer asks to change, swap, update, or remove a cart item.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          action: {
+            type: "string",
+            enum: ["swap", "variant_change", "remove"],
+            description: "Type of cart edit: swap replaces one item with another, variant_change changes size/color/etc, remove deletes an item",
+          },
+          oldItem: {
+            type: "object",
+            description: "The current item in the cart to be changed",
+            properties: {
+              id: { type: "string", description: "Line item or variant ID" },
+              title: { type: "string", description: "Product title" },
+              variantTitle: { type: "string", description: "Variant details (e.g. 'Blue / Large')" },
+              price: { type: "number", description: "Current price" },
+              imageUrl: { type: "string", description: "Product image URL" },
+              quantity: { type: "number", description: "Current quantity" },
+            },
+            required: ["id", "title", "price"],
+          },
+          newItem: {
+            type: "object",
+            description: "The replacement item (required for swap and variant_change actions, omit for remove)",
+            properties: {
+              id: { type: "string", description: "New variant ID" },
+              title: { type: "string", description: "Product title" },
+              variantTitle: { type: "string", description: "Variant details (e.g. 'Red / Medium')" },
+              price: { type: "number", description: "New price" },
+              imageUrl: { type: "string", description: "Product image URL" },
+            },
+            required: ["id", "title", "price"],
+          },
+          reason: {
+            type: "string",
+            description: "Brief explanation of the proposed change",
+          },
+        },
+        required: ["action", "oldItem"],
+      },
+    },
+  ];
+}

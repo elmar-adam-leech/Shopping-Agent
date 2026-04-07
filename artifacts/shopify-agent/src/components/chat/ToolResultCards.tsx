@@ -2,6 +2,7 @@ import { ProductCard, type ProductCardData } from "./ProductCard";
 import { ProductCarousel } from "./ProductCarousel";
 import { ComparisonTable } from "./ComparisonTable";
 import { CartSummaryCard } from "./CartSummaryCard";
+import { CartEditPreviewCard, type CartEditPreviewData } from "./CartEditPreviewCard";
 import { CollectionCard, type CollectionCardData } from "./CollectionCard";
 import { ArticleCard, type BlogArticleData } from "./ArticleCard";
 import { ArticleCarousel } from "./ArticleCarousel";
@@ -127,6 +128,10 @@ export function ToolResultCards({ toolName, content }: { toolName: string; conte
   if (!parsed || typeof parsed !== 'object') return null;
 
   const data = parsed as Record<string, unknown>;
+
+  if (toolName === 'propose_cart_edit' && data._cartEditPreview) {
+    return <CartEditPreviewCard data={data as unknown as CartEditPreviewData} />;
+  }
 
   if (toolName === 'search_products' || toolName === 'get_product' || toolName === 'compare_products') {
     const products: ProductCardData[] = [];
