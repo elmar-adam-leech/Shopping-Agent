@@ -23,6 +23,8 @@ import type { ConsentCategories } from "@workspace/db/schema";
 import { type UserPreferencesContext } from "../services/system-prompt";
 import { extractAndSavePreferences } from "../services/preference-extractor";
 import { describeImageWithVision, isVisionCapable, validateImageBase64 } from "../services/vision-describe";
+import { getWishlist } from "../services/wishlist-service";
+import type { WishlistItem } from "@workspace/db/schema";
 
 const MAX_USER_MESSAGE_LENGTH = 10_000;
 
@@ -285,6 +287,19 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       }
     }
 
+    let wishlistItems: WishlistItem[] = [];
+    try {
+      wishlistItems = await getWishlist(store.storeDomain, parsed.data.sessionId);
+    } catch (err) {
+      console.warn("[chat] Failed to fetch wishlist:", err instanceof Error ? err.message : err);
+    }
+
+    const isReturningUser = !!(userPreferences && Object.keys(userPreferences).length > 0) && existingMessages.length <= 1;
+
+    const wishlistContext = wishlistItems.length > 0
+      ? { itemCount: wishlistItems.length, itemTitles: wishlistItems.map(i => i.title) }
+      : null;
+
     const chatContext = parsed.data.context ? {
       productHandle: parsed.data.context.productHandle,
       collectionHandle: parsed.data.context.collectionHandle,
@@ -292,9 +307,13 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       searchMode: parsed.data.context.searchMode,
       customerAccountConnected: !!customerAccountConnection,
       customerAccountStoreDomain: customerAccountConnection ? store.storeDomain : undefined,
+      isReturningUser,
+      wishlistContext,
     } : {
       customerAccountConnected: !!customerAccountConnection,
       customerAccountStoreDomain: customerAccountConnection ? store.storeDomain : undefined,
+      isReturningUser,
+      wishlistContext,
     };
 
     let customization = {
@@ -378,6 +397,7 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
       blockedTopics,
       authenticatedToolNames,
       activeConnection: customerAccountConnection,
+      userPreferences,
     });
 
     const stream = streamChatWithProvider(

@@ -8,6 +8,7 @@ import {
   type UCPDiscoveryDocument,
   type UCPNegotiationResult,
 } from "./ucp-client";
+import { getInternalToolDefinitions } from "./internal-tools";
 import { db } from "@workspace/db";
 import { analyticsLogsTable } from "@workspace/db/schema";
 
@@ -89,10 +90,20 @@ export async function listTools(
   }
 
   const virtualTools = getVirtualTools();
+  const internalTools = getInternalToolDefinitions();
   const existingToolNames = new Set(mcpTools.map(t => t.name));
+
   for (const vt of virtualTools) {
     if (!existingToolNames.has(vt.name)) {
       mcpTools.push(vt);
+      existingToolNames.add(vt.name);
+    }
+  }
+
+  for (const tool of internalTools) {
+    if (!existingToolNames.has(tool.name)) {
+      mcpTools.push(tool);
+      existingToolNames.add(tool.name);
     }
   }
 

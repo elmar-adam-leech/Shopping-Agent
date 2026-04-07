@@ -15,6 +15,8 @@ import { DiscountCard, type DiscountCardData } from "./DiscountCard";
 import { SubscriptionCadenceCard, type SubscriptionCadenceData, type CadenceOption } from "./SubscriptionCadenceCard";
 import { PreOrderCard, type PreOrderData } from "./PreOrderCard";
 import { EscalationCard, type EscalationData } from "./EscalationCard";
+import { WishlistCard, type WishlistItemData } from "./WishlistCard";
+import { CrossSellCard } from "./CrossSellCard";
 
 interface BlogData {
   title?: string;
@@ -240,6 +242,39 @@ export function ToolResultCards({ toolName, content }: { toolName: string; conte
       <div className="mt-2">
         <ReturnConfirmationCard returnData={returnData} />
       </div>
+    );
+  }
+
+  if (toolName === 'recommend_products' || toolName === 'get_cross_sell_products') {
+    const products: ProductCardData[] = [];
+    if (data.products && Array.isArray((data.products as Record<string, unknown>).edges)) {
+      for (const edge of (data.products as { edges: Array<{ node: ProductCardData }> }).edges) {
+        products.push(edge.node);
+      }
+    }
+
+    if (products.length === 0) return null;
+
+    const heading = typeof data._source === 'string' && data._source === 'cross_sell'
+      ? (typeof data._heading === 'string' ? data._heading : 'You might also like')
+      : 'Recommended for You';
+
+    return <CrossSellCard products={products} heading={heading} />;
+  }
+
+  if (toolName === 'save_to_wishlist' || toolName === 'get_wishlist' || toolName === 'remove_from_wishlist') {
+    const items = (Array.isArray(data.items) ? data.items : []) as WishlistItemData[];
+    const action = typeof data._action === 'string' ? data._action as 'saved' | 'removed' | 'list' : 'list';
+    const savedItem = data.savedItem ? data.savedItem as WishlistItemData : undefined;
+    const removedTitle = typeof data.removedTitle === 'string' ? data.removedTitle : undefined;
+
+    return (
+      <WishlistCard
+        items={items}
+        action={action}
+        savedItem={savedItem}
+        removedTitle={removedTitle}
+      />
     );
   }
 

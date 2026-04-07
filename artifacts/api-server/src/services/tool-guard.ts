@@ -6,6 +6,8 @@ import { logAnalyticsEvent } from "./analytics-logger";
 import { validateUCPInvokeParams } from "./ucp-client";
 import type { McpConnection } from "@workspace/db/schema";
 import { logAudit } from "./audit-logger";
+import { INTERNAL_TOOL_NAMES, executeInternalTool, type InternalToolContext } from "./internal-tools";
+import type { UserPreferencesContext } from "./system-prompt";
 
 const CART_TOOLS = new Set(["create_cart", "add_to_cart", "update_cart", "propose_cart_edit"]);
 const CHECKOUT_TOOLS = new Set(["create_checkout", "get_checkout_url"]);
@@ -114,8 +116,9 @@ export function createToolExecutor(opts: {
   blockedTopics: string[];
   authenticatedToolNames: Set<string>;
   activeConnection: McpConnection | null;
+  userPreferences?: UserPreferencesContext | null;
 }): (toolName: string, args: Record<string, unknown>) => Promise<string> {
-  const { storeDomain, storefrontToken, sessionId, ucpEnabled, guardSensitivity, blockedTopics, authenticatedToolNames, activeConnection } = opts;
+  const { storeDomain, storefrontToken, sessionId, ucpEnabled, guardSensitivity, blockedTopics, authenticatedToolNames, activeConnection, userPreferences } = opts;
 
   function logToolAnalytics(toolName: string, args: Record<string, unknown>, guardedResult: string): void {
     logAnalyticsEvent(storeDomain, "tool_call", sessionId, {
@@ -194,6 +197,26 @@ export function createToolExecutor(opts: {
     }
 
     const startTime = Date.now();
+
+    if (INTERNAL_TOOL_NAMES.has(toolName)) {
+      try {
+        const internalCtx: InternalToolContext = {
+          storeDomain,
+          storefrontToken,
+          sessionId,
+          ucpEnabled,
+          userPreferences: userPreferences || null,
+        };
+        const result = await executeInternalTool(toolName, args, internalCtx);
+        logAnalyticsEvent(storeDomain, "tool_call", sessionId, {
+          metadata: { toolName, args: Object.keys(args), internal: true },
+        }).catch(() => {});
+        return result;
+      } catch (err) {
+        console.error(`[tool-guard] Internal tool "${toolName}" failed:`, err instanceof Error ? err.message : err);
+        return JSON.stringify({ error: `Internal tool ${toolName} failed` });
+      }
+    }
 
     if (toolName === "ucp_invoke") {
       const service = typeof args.service === "string" ? args.service.trim() : "";

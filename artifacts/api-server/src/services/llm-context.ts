@@ -1,6 +1,6 @@
 import type { ShopKnowledge } from "@workspace/db/schema";
 import type { UCPDiscoveryDocument } from "./ucp-client";
-import { buildSystemPrompt, type StoreCustomization, type UserPreferencesContext } from "./system-prompt";
+import { buildSystemPrompt, type ChatContext, type StoreCustomization, type UserPreferencesContext } from "./system-prompt";
 import type { ChatMessageRecord } from "./conversation-service";
 
 const MESSAGE_WINDOW_SIZE = 20;
@@ -10,7 +10,7 @@ export function buildLLMContext(
   storeDomain: string,
   knowledge: ShopKnowledge[],
   ucpDoc: UCPDiscoveryDocument | null,
-  chatContext?: { productHandle?: string; collectionHandle?: string; cartToken?: string; searchMode?: boolean },
+  chatContext?: ChatContext,
   customization?: StoreCustomization,
   userPreferences?: UserPreferencesContext | null
 ) {

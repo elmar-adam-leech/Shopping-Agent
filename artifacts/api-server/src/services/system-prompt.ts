@@ -29,6 +29,11 @@ const RECOMMENDATION_STRATEGY_LABELS: Record<string, string> = {
   personalized: "Personalize recommendations based on the customer's expressed preferences and browsing context",
 };
 
+export interface WishlistContext {
+  itemCount: number;
+  itemTitles: string[];
+}
+
 export interface ChatContext {
   productHandle?: string;
   collectionHandle?: string;
@@ -36,6 +41,8 @@ export interface ChatContext {
   searchMode?: boolean;
   customerAccountConnected?: boolean;
   customerAccountStoreDomain?: string;
+  isReturningUser?: boolean;
+  wishlistContext?: WishlistContext | null;
 }
 
 export interface StoreCustomization {
@@ -62,6 +69,9 @@ export function buildSystemPrompt(
 - Use the get_store_content tool to fetch metaobject content (size guides, FAQs, styling tips, return policies) when customers ask relevant questions
 - Remember customer preferences mentioned during the conversation
 - Provide expert advice based on the store's knowledge base below
+- Use the recommend_products tool to suggest personalized products based on stored customer preferences
+- Use save_to_wishlist and get_wishlist tools to help customers save and retrieve items for later
+- When a customer adds an item to cart, suggest complementary products they might also like
 
 ## Guidelines
 - Be friendly, professional, and concise
@@ -71,6 +81,9 @@ export function buildSystemPrompt(
 - If you're unsure about something, say so honestly
 - Help customers build complete solutions, not just individual products
 - When adding items to cart, confirm the selection with the customer first
+- When a customer says "save for later", "bookmark", or "add to wishlist", use the save_to_wishlist tool
+- When a customer asks to see saved items, use the get_wishlist tool
+- After a customer adds an item to cart, use the get_cross_sell_products tool with the product's handle to suggest complementary products they might also like
 
 ## Store Content (Metaobjects)
 - When a customer asks about sizing, fit, or "what size should I get?", use get_store_content with type "size_guide" or "size_chart"
@@ -124,6 +137,7 @@ When a customer wants to modify their cart (swap an item, change a variant like 
       prompt += `\n- **${key}**: ${value}`;
     }
     prompt += `\nUse these preferences to personalize your recommendations and responses.`;
+    prompt += `\nWhen this is the start of a conversation, proactively greet this returning customer and offer personalized recommendations using the recommend_products tool based on their preferences.`;
   }
 
   if (ucpDoc) {
@@ -170,6 +184,13 @@ When a customer wants to modify their cart (swap an item, change a variant like 
     }
     if (context.searchMode) {
       prompt += `\nThe customer is using AI-powered search. Focus on finding and presenting relevant products. Use the search_products tool proactively.`;
+    }
+    if (context.wishlistContext && context.wishlistContext.itemCount > 0) {
+      prompt += `\nThe customer has ${context.wishlistContext.itemCount} item${context.wishlistContext.itemCount !== 1 ? "s" : ""} in their wishlist: ${context.wishlistContext.itemTitles.slice(0, 5).join(", ")}${context.wishlistContext.itemCount > 5 ? ` and ${context.wishlistContext.itemCount - 5} more` : ""}.`;
+      prompt += ` You can reference their wishlist items when making suggestions.`;
+    }
+    if (context.isReturningUser) {
+      prompt += `\nThis is a returning customer. Provide a warm, personalized welcome referencing their preferences${context.wishlistContext && context.wishlistContext.itemCount > 0 ? " and wishlist items" : ""}. Consider using the recommend_products tool to suggest new items matching their taste.`;
     }
   }
 
