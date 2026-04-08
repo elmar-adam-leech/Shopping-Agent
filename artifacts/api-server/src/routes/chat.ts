@@ -170,13 +170,17 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
         ? "blocked_topic"
         : guardVerdict.layer === "regex"
           ? "prompt_injection_regex"
-          : "prompt_injection_llm";
+          : guardVerdict.layer === "heuristic"
+            ? "prompt_injection_heuristic"
+            : "prompt_injection_llm";
       console.warn(`[prompt-guard] Blocked attempt (${eventType}/${guardVerdict.layer}) from store="${store.storeDomain}" session="${parsed.data.sessionId}": ${guardVerdict.reason}`);
       logGuardEvent(store.storeDomain, parsed.data.sessionId, eventType, truncatedMessage, {
         layer: guardVerdict.layer,
         category: guardVerdict.category,
         reason: guardVerdict.reason,
         patternsMatched: guardVerdict.patternsMatched,
+        heuristicScore: guardVerdict.heuristicScore,
+        heuristicSignals: guardVerdict.heuristicSignals,
       });
       safeSend(`data: ${JSON.stringify({ type: "conversation_id", data: conversation.id })}\n\n`);
       safeSend(`data: ${JSON.stringify({ type: "text", data: "I'm here to help you shop! Could you rephrase your question about our products or services?" })}\n\n`);

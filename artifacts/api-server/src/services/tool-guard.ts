@@ -65,12 +65,17 @@ async function guardToolResult(
       ? "blocked_topic"
       : toolGuard.layer === "regex"
         ? "tool_injection_regex"
-        : "tool_injection_llm";
+        : toolGuard.layer === "heuristic"
+          ? "tool_injection_heuristic"
+          : "tool_injection_llm";
     console.warn(`[prompt-guard] Blocked tool response (${toolEventType}/${toolGuard.layer}) in "${toolName}": ${toolGuard.reason}`);
     logGuardEvent(storeDomain, sessionId, toolEventType, toolName, {
       layer: toolGuard.layer,
       category: toolGuard.category,
       reason: toolGuard.reason,
+      patternsMatched: toolGuard.patternsMatched,
+      heuristicScore: toolGuard.heuristicScore,
+      heuristicSignals: toolGuard.heuristicSignals,
     });
     return JSON.stringify({ error: "Tool response was filtered for security reasons." });
   }
