@@ -74,3 +74,6 @@ artifacts/mockup-sandbox/src/.generated/
 
 # Load test results
 load-tests/RESULTS.md
+
+# Internal docs
+SECURITY.md
