@@ -185,7 +185,7 @@ export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
                 ? 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300'
                 : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300'
           }`}>
-            {guardSensitivity === 'off' ? 'Disabled' : `${guardSensitivity.charAt(0).toUpperCase() + guardSensitivity.slice(1)} Sensitivity`}
+            {guardSensitivity === 'off' ? 'Baseline Only' : `${guardSensitivity.charAt(0).toUpperCase() + guardSensitivity.slice(1)} Sensitivity`}
           </span>
         </div>
         
@@ -201,12 +201,28 @@ export function LLMConfigForm({ storeDomain }: { storeDomain: string }) {
                 <SelectValue placeholder="Select Sensitivity" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="off">Off - No LLM-based guard</SelectItem>
+                <SelectItem value="off">Off - Baseline protection only</SelectItem>
                 <SelectItem value="low">Low - Block only high-confidence attacks</SelectItem>
                 <SelectItem value="medium">Medium - Balanced protection (recommended)</SelectItem>
                 <SelectItem value="high">High - Aggressive blocking</SelectItem>
               </SelectContent>
             </Select>
+            {guardSensitivity === "off" && (
+              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+                <p className="text-sm text-red-800 dark:text-red-300 font-medium">Security Warning</p>
+                <p className="text-sm text-red-700 dark:text-red-400 mt-1">
+                  Extended prompt injection filters are disabled. Critical baseline protections (system prompt extraction, jailbreak attempts, and data leakage detection) remain active and cannot be turned off.
+                </p>
+              </div>
+            )}
+            {guardSensitivity === "low" && (
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+                <p className="text-sm text-amber-800 dark:text-amber-300 font-medium">Reduced Protection</p>
+                <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                  Low sensitivity only blocks high-confidence attacks. Consider using "Medium" for balanced protection against prompt injection and off-topic manipulation.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-3">

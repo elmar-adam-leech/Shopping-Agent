@@ -1,16 +1,7 @@
-const INJECTION_PATTERNS = [
+const CRITICAL_BASELINE_PATTERNS = [
   /ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)/i,
   /disregard\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)/i,
   /forget\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|rules?)/i,
-  /you\s+are\s+now\s+(a|an)\s+/i,
-  /act\s+as\s+(a|an)\s+(?!customer|shopper|buyer)/i,
-  /system\s*:\s*/i,
-  /\[INST\]/i,
-  /\[\/INST\]/i,
-  /<<SYS>>/i,
-  /<\|im_start\|>/i,
-  /\bdo\s+not\s+follow\s+(your|the)\s+(instructions?|rules?|guidelines?)/i,
-  /override\s+(your|the|all)\s+(instructions?|rules?|guidelines?|prompts?)/i,
   /reveal\s+(your|the)\s+(system\s+)?prompt/i,
   /show\s+(me\s+)?(your|the)\s+(system\s+)?prompt/i,
   /what\s+(is|are)\s+your\s+(system\s+)?(prompt|instructions?|rules?)/i,
@@ -18,7 +9,10 @@ const INJECTION_PATTERNS = [
   /print\s+(your|the)\s+(system\s+)?(prompt|instructions?)/i,
   /\bjailbreak\b/i,
   /\bDAN\s+mode\b/i,
-  /pretend\s+(you\s+)?(are|have)\s+no\s+(restrictions?|limitations?|rules?)/i,
+  /\[INST\]/i,
+  /\[\/INST\]/i,
+  /<<SYS>>/i,
+  /<\|im_start\|>/i,
   /```\s*(system|assistant)\b/i,
   /<\/?system>/i,
   /\[\s*SYSTEM\s*\]/i,
@@ -71,6 +65,17 @@ const INJECTION_PATTERNS = [
   /\binstructions?\s+(?:above|below|hidden|embedded)\s+(?:in|within)\s+(?:the|this)\b/i,
   /\bthe\s+(?:real|true|actual|hidden)\s+instructions?\s+(?:are|say|tell)\b/i,
 ];
+
+const EXTENDED_PATTERNS = [
+  /you\s+are\s+now\s+(a|an)\s+/i,
+  /act\s+as\s+(a|an)\s+(?!customer|shopper|buyer)/i,
+  /system\s*:\s*/i,
+  /\bdo\s+not\s+follow\s+(your|the)\s+(instructions?|rules?|guidelines?)/i,
+  /override\s+(your|the|all)\s+(instructions?|rules?|guidelines?|prompts?)/i,
+  /pretend\s+(you\s+)?(are|have)\s+no\s+(restrictions?|limitations?|rules?)/i,
+];
+
+const INJECTION_PATTERNS = [...CRITICAL_BASELINE_PATTERNS, ...EXTENDED_PATTERNS];
 
 const UNICODE_CONFUSABLE_MAP: Record<string, string> = {
   "\u0430": "a", "\u0435": "e", "\u043E": "o", "\u0440": "p",
@@ -188,6 +193,31 @@ export function runHeuristicScoring(input: string, threshold: number = 0.45): He
     flagged: score >= threshold,
     signals,
   };
+}
+
+export function runBaselineFilter(input: string): { blocked: boolean; patternsMatched: string[]; cleaned: string } {
+  const stripped = stripZeroWidth(input);
+  const normalized = normalizeHomoglyphs(stripped);
+
+  const matched: string[] = [];
+  let cleaned = normalized;
+  for (const pattern of CRITICAL_BASELINE_PATTERNS) {
+    if (pattern.test(cleaned)) {
+      matched.push(pattern.source);
+      cleaned = cleaned.replace(pattern, "[filtered]");
+    }
+  }
+
+  if (matched.length === 0 && normalized !== stripped) {
+    for (const pattern of CRITICAL_BASELINE_PATTERNS) {
+      if (pattern.test(stripped)) {
+        matched.push(pattern.source);
+        cleaned = stripped.replace(pattern, "[filtered]");
+      }
+    }
+  }
+
+  return { blocked: matched.length > 0, patternsMatched: matched, cleaned };
 }
 
 export function runRegexFilter(input: string): { blocked: boolean; patternsMatched: string[]; cleaned: string } {

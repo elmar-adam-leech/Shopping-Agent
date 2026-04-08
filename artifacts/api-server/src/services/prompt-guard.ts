@@ -1,10 +1,10 @@
-import { runRegexFilter, runHeuristicScoring } from "./guard-regex";
+import { runRegexFilter, runBaselineFilter, runHeuristicScoring } from "./guard-regex";
 
 export type GuardSensitivity = "off" | "low" | "medium" | "high";
 
 export interface GuardVerdict {
   allowed: boolean;
-  layer: "regex" | "heuristic" | "none";
+  layer: "baseline" | "regex" | "heuristic" | "none";
   category: "injection" | "blocked_topic" | "none";
   reason?: string;
   patternsMatched?: string[];
@@ -63,6 +63,17 @@ export async function runPromptGuard(
   sensitivity: GuardSensitivity,
   blockedTopics: string[] = []
 ): Promise<GuardVerdict> {
+  const baselineResult = runBaselineFilter(message);
+  if (baselineResult.blocked) {
+    return {
+      allowed: false,
+      layer: "baseline",
+      category: "injection",
+      patternsMatched: baselineResult.patternsMatched,
+      reason: "Message matched critical injection patterns",
+    };
+  }
+
   if (sensitivity === "off") {
     return { allowed: true, layer: "none", category: "none" };
   }
@@ -99,6 +110,17 @@ export async function scanToolResponse(
   sensitivity: GuardSensitivity,
   blockedTopics: string[] = []
 ): Promise<GuardVerdict> {
+  const baselineResult = runBaselineFilter(toolResult);
+  if (baselineResult.blocked) {
+    return {
+      allowed: false,
+      layer: "baseline",
+      category: "injection",
+      patternsMatched: baselineResult.patternsMatched,
+      reason: "Tool response contained critical injection patterns",
+    };
+  }
+
   if (sensitivity === "off") {
     return { allowed: true, layer: "none", category: "none" };
   }
@@ -255,24 +277,27 @@ export async function auditOutput(
   knowledgeContext: string = "",
   sensitivity: GuardSensitivity = "medium"
 ): Promise<OutputAuditResult> {
-  if (sensitivity === "off" || !assistantResponse) {
+  const allTexts = [assistantResponse, ...toolResults].filter(Boolean);
+  if (allTexts.length === 0) {
     return { flagged: false };
   }
 
-  const textsToScan = [assistantResponse, ...toolResults];
-
-  for (const text of textsToScan) {
+  for (const text of allTexts) {
     const dataLeakageMatches = matchPatterns(text, DATA_LEAKAGE_PATTERNS);
     const systemPromptMatches = matchPatterns(text, SYSTEM_PROMPT_LEAK_PATTERNS);
-    const leakMatches = [...dataLeakageMatches, ...systemPromptMatches];
+    const baselineLeakMatches = [...dataLeakageMatches, ...systemPromptMatches];
 
-    if (leakMatches.length > 0) {
+    if (baselineLeakMatches.length > 0) {
       return {
         flagged: true,
-        reason: `Data leakage detected: ${leakMatches.join(", ")}`,
+        reason: `Data leakage detected: ${baselineLeakMatches.join(", ")}`,
         category: "data_leakage",
       };
     }
+  }
+
+  if (sensitivity === "off") {
+    return { flagged: false };
   }
 
   if (sensitivity === "medium" || sensitivity === "high") {
