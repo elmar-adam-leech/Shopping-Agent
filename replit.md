@@ -46,7 +46,7 @@ Key architectural decisions include:
 - **Store Management**: CRUD operations for merchant stores.
 - **Knowledge Management**: CRUD for categorized shop knowledge entries.
 - **Chat**: Real-time SSE streaming for AI chat interactions, persisting conversations.
-- **Analytics Logging**: Internal analytics event logging for various interactions.
+- **Analytics Logging**: Legacy internal analytics event logging (no longer actively used in public-facing features).
 - **Preferences & Personalization**: User preferences are stored per session+store and injected into the LLM system prompt. Includes a preference extractor and UI for managing preferences.
 - **Rich Blog & Metaobject Rendering**: Enhanced display of Shopify blog articles and metaobjects.
 - **Multi-Turn Cart Editing**: Conversational cart modifications with preview and undo support.

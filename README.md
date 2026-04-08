@@ -37,7 +37,7 @@ Shopping-Agent/
 - **Multi-tenancy**: Database queries, MCP calls, and API routes filter by `store_domain`. Strict application-level filtering enforced via middleware and query patterns.
 - **Security**: Least-privilege tokens, shop-origin validation, encrypted storage, prompt injection protection, no cross-tenant data leaks.
 - **AI Layer**: LLM tool-calling with streaming responses via a provider-agnostic adapter pattern.
-- **Persistence**: PostgreSQL + Drizzle ORM for conversations, user preferences, analytics, and tenant metadata. Anonymous `session_id` + `store_domain` partitioning.
+- **Persistence**: PostgreSQL + Drizzle ORM for conversations, user preferences, audit logs, and tenant metadata. Anonymous `session_id` + `store_domain` partitioning.
 
 ## Tech Stack
 
@@ -47,7 +47,7 @@ Shopping-Agent/
 - **Frontend**: React 18 + Vite + Tailwind CSS + shadcn/ui (Radix UI) + wouter (router) + Zustand (state) + TanStack Query (data fetching)
 - **Backend**: Express 5 + TypeScript (MCP client, LLM orchestration, merchant auth, session management)
 - **Chat Widget**: Vanilla HTML/CSS/JavaScript as a Shopify Theme App Extension with Liquid blocks
-- **LLM Providers**: OpenAI, Anthropic, and xAI via a provider-agnostic adapter pattern (default model: `gpt-4o`)
+- **LLM Providers**: OpenAI, Anthropic, xAI, and Google Gemini via a provider-agnostic adapter pattern (default model: `gpt-4o`)
 - **Commerce**: Shopify Storefront MCP (JSON-RPC 2.0), UCP-compliant Checkout MCP, Storefront GraphQL fallback
 - **Auth**: Shopify OAuth (merchant), MCP Customer Accounts OAuth (shopper)
 - **Deployment**: Replit
@@ -82,11 +82,15 @@ Shopping-Agent/
 
 - **MCP Customer Accounts OAuth** (PKCE-based, encrypted token storage, auto-refresh)
 - **Chat with streaming** (SSE-based real-time AI responses with interactive product/collection cards)
-- **Merchant dashboard** (store settings, knowledge management, analytics)
-- **Multi-provider LLM support** (OpenAI, Anthropic, xAI with runtime provider selection)
+- **Merchant dashboard** (store settings, knowledge management, webhook monitoring)
+- **Multi-provider LLM support** (OpenAI, Anthropic, xAI, Google Gemini with runtime provider selection)
+- **Multi-language support** (AI responses adapt to the shopper's language automatically)
 - **Shop knowledge injection** (merchant-defined knowledge injected into LLM system prompts)
+- **Knowledge base sync** (auto-import pages, blog articles, and store policies from Shopify with configurable sync frequency)
+- **Webhooks integration** (real-time product, inventory, and order sync via Shopify webhooks with HMAC-SHA256 verification)
+- **Feedback loop** (thumbs up/down feedback on AI responses with optional comments for continuous improvement)
 - **Prompt injection protection** (sanitization filter active in chat route, blocking guard available)
-- **Load testing suite** (health, sessions, chat, SSE, DB pool, memory, rate limits, analytics, user journeys)
+- **Load testing suite** (health, sessions, chat, SSE, DB pool, memory, rate limits, user journeys)
 - **"Shop For Me" page** (public-facing full-page chat interface at `/shop/{storeDomain}`)
 - **Theme embed modes** (Chat, AI Search, Contextual Assistant, Product Assistant)
 
@@ -106,12 +110,15 @@ Reference:
 
 - Validate `store_domain` on incoming requests and DB queries.
 - Never share state across tenants.
+- PostgreSQL Row-Level Security (RLS) policies for database-level tenant isolation.
 - Encrypt sensitive tokens (LLM API keys, Shopify access tokens) with AES-256-GCM.
 - Prompt injection sanitization on chat inputs, with blocking guard available.
 - Per-endpoint rate limiting on public routes.
 - Timing-safe comparisons for HMAC and secret verification.
+- Webhook HMAC-SHA256 signature verification for all incoming Shopify webhooks.
+- Audit logging for security-sensitive mutations.
+- Soft delete with configurable data retention periods.
 - Error sanitization — no internal details leaked to clients.
-- Analytics logging for MCP/UCP calls and agent actions.
 
 See [SECURITY.md](SECURITY.md) for detailed security architecture documentation.
 

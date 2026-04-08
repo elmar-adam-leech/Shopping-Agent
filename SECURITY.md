@@ -118,6 +118,19 @@ Reference: `artifacts/api-server/src/services/prompt-guard.ts`
 - **Session domain binding**: Shopper sessions are validated against both session ID and `store_domain`
 - **Cache invalidation**: Store deletion triggers invalidation of store, session, merchant session, knowledge, and tools caches for that domain
 
+### PostgreSQL Row-Level Security (RLS)
+
+Database-level tenant isolation is enforced via RLS policies on all tenant-scoped tables:
+
+- **Tables covered**: `conversations`, `sessions`, `analytics_logs`, `shop_knowledge`, `knowledge_versions`, `user_preferences`, `mcp_connections`
+- **Tenant scope**: Policies use the session variable `app.current_store_domain` — all tenant-scoped queries must use `withTenantScope()` which sets this variable inside a transaction (`SET LOCAL`)
+- **Fail-closed**: Without `withTenantScope()`, no rows are visible (default-deny)
+- **FORCE ROW LEVEL SECURITY**: Policies apply even to the table owner role, preventing accidental bypass
+- **Admin bypass**: Administrative/maintenance operations use `withAdminBypass()` which sets `app.rls_bypass = 'on'` inside a transaction for cross-tenant access
+- **Policy types**: Separate SELECT, INSERT, UPDATE, and DELETE policies per table, plus a bypass policy for admin operations
+
+Reference: `lib/db/migrations/0001_rls_policies.sql`
+
 ## Security Headers & CORS
 
 - **Cache-Control**: `no-store, no-cache, must-revalidate, private` on all authenticated routes (routes with Authorization header, merchant cookie, or session ID)
@@ -142,6 +155,7 @@ Reference: `artifacts/api-server/src/lib/error-response.ts`
 `crypto.timingSafeEqual` is used for all security-sensitive comparisons to prevent timing attacks:
 
 - HMAC verification in Shopify OAuth callbacks
+- Webhook HMAC-SHA256 signature verification
 - Dev auth secret comparison
 - Buffer length checks are performed before `timingSafeEqual` to handle mismatched lengths safely
 
@@ -150,6 +164,44 @@ Reference: `artifacts/api-server/src/lib/error-response.ts`
 - **Max iterations guard**: LLM tool-call loops have a configurable maximum iteration limit (default 10) to prevent runaway execution
 - **Markdown sanitization**: All rendered markdown content is sanitized with DOMPurify to prevent XSS
 - **SSE parser safety**: Failed SSE lines use a single-entry retry mechanism (retry once, then discard) to prevent accumulation
+
+## Webhook Signature Verification
+
+All incoming Shopify webhooks are verified using HMAC-SHA256 signature verification:
+
+- **Algorithm**: HMAC-SHA256 using the Shopify API secret as the signing key
+- **Header**: Signature provided in the `X-Shopify-Hmac-SHA256` header
+- **Verification**: Raw request body is hashed and compared against the provided signature
+- **Fail-fast**: Requests with missing or invalid HMAC signatures are rejected with 401 before any processing
+- **Idempotency**: Duplicate webhook deliveries are detected via `X-Shopify-Webhook-Id` and ignored
+- **Delivery logging**: Processed webhook deliveries (success and error) and HMAC failures are logged to the `webhook_delivery_logs` table with processing duration and error details. Duplicate deliveries detected via idempotency are returned early without a delivery log entry.
+- **Supported topics**: `products/create`, `products/update`, `products/delete`, `inventory_levels/update`, `orders/updated`, `app/uninstalled`
+
+Reference: `artifacts/api-server/src/routes/webhooks.ts`, `artifacts/api-server/src/services/webhook-service.ts`
+
+## Audit Logging
+
+Security-sensitive mutations are recorded in a dedicated `audit_logs` table:
+
+- **Tracked actions**: Store creation/updates/deletion, webhook re-registration, knowledge modifications, and other security-relevant operations
+- **Actor types**: `merchant`, `system`, or `customer` — recorded via an enum to distinguish who performed the action
+- **Captured fields**: `store_domain`, `actor`, `actor_id`, `action`, `resource_type`, `resource_id`, `metadata` (JSONB), `ip_address`, and `created_at`
+- **Indexing**: Indexed on `(store_domain, created_at)`, `action`, `(resource_type, resource_id)`, and `(actor, actor_id)` for efficient querying
+- **Non-blocking**: Audit log writes are fire-and-forget to avoid impacting request latency
+
+Reference: `lib/db/src/schema/audit-logs.ts`, `artifacts/api-server/src/services/audit-logger.ts`
+
+## Soft Delete & Data Retention
+
+All user-initiated deletions use soft delete with configurable retention:
+
+- **Mechanism**: Records are marked with a `deleted_at` timestamp rather than being physically removed
+- **Scope**: Applied to stores and related tenant data
+- **Retention period**: Configurable per store via the `data_retention_days` setting (default: 90 days)
+- **Recovery**: Soft-deleted records can be restored within the retention window
+- **Cleanup**: Records past the retention period are eligible for permanent removal
+
+Reference: `lib/db/src/schema/stores.ts`
 
 ## Reporting Security Issues
 
