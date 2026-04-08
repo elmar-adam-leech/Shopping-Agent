@@ -15,6 +15,7 @@ export default function HomePage() {
   const [loggingIn, setLoggingIn] = useState(false);
 
   const isUnauthorized = error && typeof error === 'object' && 'status' in error && (error as { status: number }).status === 401;
+  const isAuthenticated = !isLoading && !isUnauthorized && !error;
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -45,9 +46,11 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <div className="fixed top-4 right-4 z-50">
-        <ThemeToggle />
-      </div>
+      {isAuthenticated && (
+        <div className="fixed top-4 right-4 z-50">
+          <ThemeToggle />
+        </div>
+      )}
       <div className="relative pt-16 sm:pt-24 pb-12 sm:pb-16 px-4 sm:px-6 lg:px-8 overflow-hidden">
         <img
           src={`${import.meta.env.BASE_URL}images/hero-bg.webp`}

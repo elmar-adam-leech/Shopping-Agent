@@ -16,6 +16,7 @@ const EmbedChatPage = lazy(() => import("./pages/embed-chat"));
 const EmbedSearchPage = lazy(() => import("./pages/embed-search"));
 const EmbedAssistantPage = lazy(() => import("./pages/embed-assistant"));
 const EmbedProductPage = lazy(() => import("./pages/embed-product"));
+const AdminPage = lazy(() => import("./pages/admin"));
 const NotFound = lazy(() => import("./pages/not-found"));
 
 const queryClient = new QueryClient({
@@ -53,6 +54,7 @@ function DashboardRoutes() {
         <Switch>
           <Route path="/" component={HomePage} />
           <Route path="/install" component={InstallPage} />
+          <Route path="/_admin/:storeDomain" component={AdminPage} />
           <Route path="/:storeDomain/settings" component={SettingsPage} />
           <Route path="/:storeDomain/chat" component={ChatPage} />
           <Route path="/shop/:storeDomain" component={ShopForMePage} />
