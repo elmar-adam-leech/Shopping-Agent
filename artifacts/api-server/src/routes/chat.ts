@@ -419,7 +419,8 @@ router.post("/stores/:storeDomain/chat", validateStoreDomain, validateSession, a
         parsed.data.sessionId,
         assistantMessageId,
         safeSend,
-        () => { try { res.end(); } catch {} }
+        () => { try { res.end(); } catch {} },
+        guardSensitivity
       );
       return;
     }

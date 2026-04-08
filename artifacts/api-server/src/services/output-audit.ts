@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { conversationsTable, withTenantScope } from "@workspace/db";
-import { auditOutput, logGuardEvent } from "./prompt-guard";
+import { auditOutput, logGuardEvent, type GuardSensitivity } from "./prompt-guard";
 
 const RETRACTION_NOTICE = "⚠️ This response was corrected — please try again.";
 
@@ -14,9 +14,10 @@ export function fireOutputAudit(
   sessionId: string,
   assistantMessageId: string,
   safeSendFn: (data: string) => boolean,
-  endStream: () => void
+  endStream: () => void,
+  sensitivity: GuardSensitivity = "medium"
 ): void {
-  auditOutput(assistantResponse, toolResultTexts, blockedTopics, knowledgeContext)
+  auditOutput(assistantResponse, toolResultTexts, blockedTopics, knowledgeContext, sensitivity)
     .then(async (auditResult) => {
       if (!auditResult.flagged) return;
 
