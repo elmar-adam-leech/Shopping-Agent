@@ -42,7 +42,9 @@ app.use(cors({
     ? allowedOrigins
     : isProduction
       ? false
-      : true,
+      : process.env.REPLIT_DEV_DOMAIN
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+        : false,
 }));
 
 app.use(compress);
